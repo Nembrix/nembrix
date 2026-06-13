@@ -1,0 +1,59 @@
+---
+title: Install
+description: Download and run Nembrix.
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Nembrix ships as a native desktop app for macOS, Windows, and Linux.
+You can also run the web build for fast iteration.
+
+## Desktop
+
+<Tabs>
+  <TabItem label="macOS">
+    Download the latest `.dmg` from
+    [Releases](https://github.com/oesukam/nembrix/releases), open it,
+    drag the app into Applications.
+
+    On first launch, macOS will ask you to confirm an unsigned
+    developer — until we ship a notarized build, right-click the app
+    → **Open**.
+  </TabItem>
+  <TabItem label="Windows">
+    Download the `.msi` installer from
+    [Releases](https://github.com/oesukam/nembrix/releases) and run it.
+  </TabItem>
+  <TabItem label="Linux">
+    `.AppImage` and `.deb` builds are on the
+    [Releases](https://github.com/oesukam/nembrix/releases) page.
+
+    ```sh
+    chmod +x Nembrix.AppImage
+    ./Nembrix.AppImage
+    ```
+  </TabItem>
+</Tabs>
+
+## From source
+
+```sh
+git clone https://github.com/oesukam/nembrix.git
+cd db-client
+yarn install
+yarn tauri dev      # native desktop build
+# or
+yarn dev:all        # browser + sidecar (faster iteration, no Rust rebuild)
+```
+
+The browser dev mode talks to your real Postgres through a small
+Node sidecar at `localhost:1421` — see
+[ARCHITECTURE.md](https://github.com/oesukam/nembrix/blob/main/ARCHITECTURE.md)
+in the repo for the why.
+
+## What you need
+
+- A Postgres server you can reach (locally or over SSH).
+- For SSH tunnels: ssh-agent set up, or a key file you can point us at.
+- Nothing else. There's no required cloud account, no telemetry by
+  default, no daemon.

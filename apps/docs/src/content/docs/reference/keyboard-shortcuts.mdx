@@ -1,0 +1,70 @@
+---
+title: Keyboard shortcuts
+description: Every shortcut in Nembrix, grouped by area.
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+![Shortcuts cheatsheet](/media/keyboard-shortcuts.png)
+
+<Aside type="note">
+On Windows / Linux, swap **⌘** for **Ctrl** throughout. Shift is
+**⇧**, Return is **↵**.
+</Aside>
+
+## Connections
+
+| Shortcut | Action |
+| --- | --- |
+| ⌘N | New connection |
+| ⌘K | Connect current session |
+| ⌘⇧K | Disconnect current session |
+| ⌘⇧L | Manage connections… |
+
+## Tabs
+
+| Shortcut | Action |
+| --- | --- |
+| ⌘T | New query tab |
+| ⌘W | Close current tab |
+
+## Panels
+
+| Shortcut | Action |
+| --- | --- |
+| ⌘0 | Toggle session rail |
+| ⌘1 | Toggle inspector |
+| ⌘2 | Toggle results / output pane |
+
+## Command palette
+
+| Shortcut | Action |
+| --- | --- |
+| ⌘P | Open command palette |
+| ⌘⇧P | Open command palette (alias) |
+
+## Schema
+
+| Shortcut | Action |
+| --- | --- |
+| ⌘R | Refresh schema for current session |
+
+## Editor (query tab focused)
+
+| Shortcut | Action |
+| --- | --- |
+| ⌘↵ | Run current statement (or selection) |
+| ⌘⇧↵ | Run all statements in editor |
+| ⌘. | Cancel running query |
+| ⌘I | Format SQL |
+| ⌘/ | Toggle line comment |
+| ⌘F | Find in editor |
+
+## Save
+
+| Shortcut | Action |
+| --- | --- |
+| ⌘S | Save query (when editor focused) / commit pending cell edits (when grid focused) |
+
+The ⌘S binding is context-sensitive: it routes to whichever pane
+has focus. Same key, two saves.

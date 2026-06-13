@@ -1,0 +1,99 @@
+{
+  "app": {
+    "name": "Nembrix"
+  },
+  "menu": {
+    "connection": {
+      "title": "Connection",
+      "new": "New connection…",
+      "manage": "Manage connections…",
+      "connect": "Connect",
+      "disconnect": "Disconnect",
+      "edit": "Edit connection…",
+      "duplicate": "Duplicate connection",
+      "delete": "Delete connection",
+      "refresh": "Refresh schema",
+      "recent": "Recent"
+    },
+    "file": {
+      "title": "File",
+      "newQueryTab": "New query tab",
+      "newWindow": "New window",
+      "openSavedQuery": "Open saved query…",
+      "saveQuery": "Save query",
+      "saveQueryAs": "Save query as…",
+      "closeTab": "Close tab",
+      "import": "Import…",
+      "export": "Export…",
+      "preferences": "Preferences…"
+    },
+    "view": {
+      "title": "View",
+      "commandPalette": "Command palette",
+      "toggleRail": "Toggle connection rail",
+      "toggleInspector": "Toggle inspector",
+      "toggleResults": "Toggle results pane",
+      "nextTab": "Next tab",
+      "prevTab": "Previous tab"
+    }
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "close": "Close",
+    "delete": "Delete",
+    "apply": "Apply",
+    "applyAll": "Apply all",
+    "discard": "Discard",
+    "retry": "Retry",
+    "ok": "OK",
+    "yes": "Yes",
+    "no": "No",
+    "loading": "Loading…",
+    "running": "Running…",
+    "newConnection": "New connection",
+    "manageConnections": "Manage all…"
+  },
+  "rail": {
+    "noSessions": "No live sessions",
+    "newConnectionTooltip": "New connection",
+    "manageTooltip": "Manage connections",
+    "doubleClickToConnect": "Double-click to connect"
+  },
+  "preferences": {
+    "title": "Preferences",
+    "csv": {
+      "section": "CSV defaults",
+      "nullToken": "NULL token",
+      "delimiter": "Delimiter",
+      "lineEnding": "Line ending",
+      "emptyIsNull": "Treat empty cells as NULL",
+      "emptyIsNullHelp": "Off (default): empty stays as empty string so the empty-vs-null distinction round-trips through CSV."
+    },
+    "language": {
+      "section": "Language",
+      "label": "Interface language",
+      "system": "Match system",
+      "english": "English",
+      "french": "Français"
+    },
+    "restoreDefaults": "Restore defaults"
+  },
+  "filter": {
+    "addFilter": "Add filter",
+    "clearAll": "Clear all",
+    "apply": "Apply",
+    "applyAll": "Apply all",
+    "rowDisabled": "Disable this filter",
+    "rowEnabled": "Enable this filter",
+    "noFilters": "No filters yet. Click + Add filter to start.",
+    "waitForTable": "Wait for the table to load before adding filters."
+  },
+  "grid": {
+    "noResults": "No results yet.",
+    "noRowsMatch": "No rows match — the table or query returned 0 results.",
+    "pendingEdits_one": "{{count}} pending edit",
+    "pendingEdits_other": "{{count}} pending edits",
+    "saveFailed": "Save failed"
+  }
+}

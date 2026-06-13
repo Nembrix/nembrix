@@ -1,0 +1,66 @@
+---
+title: Your first connection
+description: From "I just downloaded this" to running your first query.
+---
+
+## 1. Open Nembrix
+
+The first thing you'll see is an empty rail (the column of connection
+avatars on the left) and a landing pane that says **No recent
+connections yet**.
+
+![Empty landing](/media/empty-landing.png)
+
+## 2. Save a connection
+
+Click **New connection** in the landing pane (or press ⌘N).
+
+The connection form is a single dialog with three sections:
+
+- **General** — name, host, port, user, password, database, SSL mode.
+- **Group** — optional. Use it to bucket related connections (e.g.
+  "Acme prod", "Team Foo").
+- **Environment** — Production / Staging / Development / Test / Other.
+  This drives the avatar tint and the destructive-query confirmation
+  flow. Production gets a bright red ring; the editor will refuse to
+  `DROP TABLE` on it without you typing the connection name first.
+- **SSH tunnel** — optional, covered in [SSH](/ssh/).
+
+Click **Test connection** to verify before saving, or **Save & connect**
+to do it in one shot.
+
+## 3. Pick a table
+
+Once you're connected, the inspector on the right shows the schema
+tree. Click any table to open it in a tab.
+
+![Inspector with a table picked](/media/inspector-table-pick.png)
+
+By default each tab loads the first 200 rows. Bump it with the
+**Limit** dropdown above the grid.
+
+## 4. Filter
+
+Click **+ Add filter** below the toolbar to start a filter chip.
+Each chip has a column, an operator ("=", "contains", "is null", …),
+and a value. The chip's checkbox toggles it on or off without
+deleting it.
+
+[→ Filters](/filters/)
+
+## 5. Edit a cell
+
+Double-click a cell to edit it. The cell turns yellow to signal
+"pending edit" — and a banner at the top of the grid tracks how many
+edits you have queued.
+
+Press ⌘S to commit them all in a single transaction. Postgres
+errors bubble up in a modal with a Retry button.
+
+[→ Editing data](/editing-data/)
+
+## 6. Save what you typed
+
+The SQL editor's tab title turns into an italic dot when there are
+unsaved keystrokes. ⌘S inside the editor saves the query under a name
+(saved queries live in the inspector's **Queries** tab).

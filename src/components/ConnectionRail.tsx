@@ -1,0 +1,146 @@
+import { useEffect, useState } from "react";
+import { Database, ListTree, Plus } from "lucide-react";
+import { useStore } from "@/store";
+import * as api from "@/ipc/commands";
+import ContextMenu, { type ContextItem } from "@/components/ContextMenu";
+import Tooltip from "@/components/Tooltip";
+import { dispatchMenu } from "@/menu/dispatch";
+import { MENU } from "@/menu/ids";
+import { ENV_LABEL, colorFor } from "@/features/connections/environment";
+
+/**
+ * Connect a session to its underlying saved connection. The session id is
+ * what the rest of the app keys against; the underlying api.connect()
+ * takes a saved-connection id, so we resolve via the sessions table.
+ */
+async function connectSessionAndIntrospect(sessionId: string) {
+  const s = useStore.getState();
+  if (s.status[sessionId] === "connected") return;
+  const session = s.sessions.find((sess) => sess.id === sessionId);
+  if (!session) return;
+  s.setStatus(sessionId, "connecting");
+  try {
+    await api.connect(session.connectionId);
+    s.setStatus(sessionId, "connected");
+    const tree = await api.introspect(session.connectionId);
+    s.setSchema(sessionId, tree);
+  } catch {
+    s.setStatus(sessionId, "error");
+  }
+}
+
+export default function ConnectionRail({ onNewConnection }: { onNewConnection: () => void }) {
+  const {
+    connections, setConnections, sessions, status, selectedConnId,
+    selectConn, closeSession, openConnectionManager,
+  } = useStore();
+  const [ctx, setCtx] = useState<{ x: number; y: number; items: ContextItem[] } | null>(null);
+
+  useEffect(() => {
+    api.listConnections().then(setConnections);
+  }, [setConnections]);
+
+  const onSessionContextMenu = (e: React.MouseEvent, sessionId: string, connectionId: string) => {
+    e.preventDefault();
+    selectConn(sessionId);
+    const st = status[sessionId] ?? "disconnected";
+    const items: ContextItem[] = [
+      st === "connected"
+        ? { label: "Disconnect", onClick: () => dispatchMenu(MENU.DISCONNECT) }
+        : { label: "Connect",    onClick: () => void connectSessionAndIntrospect(sessionId) },
+      { label: "Refresh schema", onClick: () => dispatchMenu(MENU.REFRESH_SCHEMA) },
+      { separator: true },
+      { label: "Open another session",
+        onClick: () => {
+          const newId = useStore.getState().openSession(connectionId);
+          void connectSessionAndIntrospect(newId);
+        } },
+      { label: "Edit connection…",    onClick: () => dispatchMenu(MENU.EDIT_CONNECTION) },
+      { separator: true },
+      { label: "Close session", danger: true, onClick: () => closeSession(sessionId) },
+    ];
+    setCtx({ x: e.clientX, y: e.clientY, items });
+  };
+
+  return (
+    <aside className="rail">
+      <div className="rail-list">
+      {sessions.length === 0 && (
+        <div className="rail-empty muted" title="No live sessions">
+          <Database size={20} strokeWidth={1.5} />
+        </div>
+      )}
+      {sessions.map((sess) => {
+        const c = connections.find((cn) => cn.id === sess.connectionId);
+        if (!c) return null;
+        const st = status[sess.id] ?? "disconnected";
+        const active = selectedConnId === sess.id;
+        const db = c.database ?? "—";
+        const summary = `${c.username}@${c.host}:${c.port}${c.database ? "/" + c.database : ""}`;
+        const envLabel = c.environment ? ENV_LABEL[c.environment] : "";
+        const ring = colorFor(c.environment, c.color);
+        const displayName = sess.label ? `${c.name} ${sess.label}` : c.name;
+        const tip = st === "connected"
+          ? `${displayName}${envLabel ? ` · ${envLabel}` : ""} — connected · ${summary}`
+          : `${displayName}${envLabel ? ` · ${envLabel}` : ""} — ${summary}`;
+        const isProd = c.environment === "production";
+        return (
+          <Tooltip key={sess.id} label={tip} shortcut={st === "connected" ? undefined : "Double-click to connect"} side="bottom">
+            <div
+              className={`rail-entry ${active ? "active" : ""} ${isProd ? "is-prod" : ""}`}
+              onClick={() => selectConn(sess.id)}
+              onDoubleClick={() => { selectConn(sess.id); void connectSessionAndIntrospect(sess.id); }}
+              onContextMenu={(e) => onSessionContextMenu(e, sess.id, sess.connectionId)}
+              style={{ ["--env-ring" as never]: ring }}
+            >
+              <div className={`rail-avatar ${st}`}>
+                <Database size={18} strokeWidth={1.75} />
+                <span className="badge" />
+                {/* Quick connect/disconnect hit target. Click selects
+                    AND connects in one go — the rail's session row
+                    only selects on click, double-click connects, but
+                    tooling (and tests) want a single canonical
+                    "connect" button. */}
+                <button
+                  className="rail-connect"
+                  data-testid={active ? "connect-btn" : undefined}
+                  data-state={st}
+                  aria-label={st === "connected" ? "Disconnect" : "Connect"}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    selectConn(sess.id);
+                    if (st === "connected") void dispatchMenu(MENU.DISCONNECT);
+                    else void connectSessionAndIntrospect(sess.id);
+                  }}
+                />
+              </div>
+              <span className="rail-name">{displayName}</span>
+              <span className="rail-db">{db}</span>
+              {c.environment && (
+                <span className="rail-env" style={{ background: ring }}>
+                  {ENV_LABEL[c.environment].toUpperCase()}
+                </span>
+              )}
+            </div>
+          </Tooltip>
+        );
+      })}
+      </div>
+      {/* Bottom action row sits outside the scrollable list so it stays
+          anchored to the bottom even when there are many sessions. */}
+      <div className="rail-actions">
+        <Tooltip label="New connection" shortcut="⌘N" side="top">
+          <div className="rail-add" onClick={onNewConnection}>
+            <Plus size={18} strokeWidth={2} />
+          </div>
+        </Tooltip>
+        <Tooltip label="Manage connections" shortcut="⌘⇧L" side="top">
+          <div className="rail-add" onClick={openConnectionManager} data-testid="rail-manage">
+            <ListTree size={16} strokeWidth={2} />
+          </div>
+        </Tooltip>
+      </div>
+      {ctx && <ContextMenu x={ctx.x} y={ctx.y} items={ctx.items} onClose={() => setCtx(null)} />}
+    </aside>
+  );
+}

@@ -1,0 +1,71 @@
+---
+title: Nembrix
+description: A modern desktop database client for Postgres — fast inspector, editable grid, SSH-first, multi-session.
+template: splash
+hero:
+  tagline: A fast, opinionated database client. Postgres-first, multi-session, scriptable, scriptable, native-feeling.
+  actions:
+    - text: Install
+      link: /install/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/oesukam/nembrix
+      icon: external
+---
+
+import { Card, CardGrid } from "@astrojs/starlight/components";
+
+## Why another database client?
+
+Nembrix is built for engineers who keep three connections open while
+shipping a migration. It treats sessions, schemas, and tabs as first-class
+state, and gets out of the way once you're actually editing rows.
+
+<div class="feature-grid">
+  <div class="feature-card">
+    <h3>Multi-session rail</h3>
+    <p>Multiple live sessions per saved connection, drag-to-reorder, recent connections in one click.</p>
+  </div>
+  <div class="feature-card">
+    <h3>Editable grid</h3>
+    <p>Double-click a cell, edit, ⌘S commits all pending changes in one transaction. Right-click for copy / set NULL.</p>
+  </div>
+  <div class="feature-card">
+    <h3>SSH first</h3>
+    <p>Native russh tunnels with password / key / agent auth and TOFU host verification.</p>
+  </div>
+  <div class="feature-card">
+    <h3>Real EXPLAIN ANALYZE</h3>
+    <p>Heat-colored plan tree, per-node cost or actual time, hot branches surface instantly.</p>
+  </div>
+  <div class="feature-card">
+    <h3>Copy between connections</h3>
+    <p>Move a table — or a whole database — from one live connection to another with FK ordering handled for you.</p>
+  </div>
+  <div class="feature-card">
+    <h3>Filters that read like English</h3>
+    <p>"contains", "is null", "icontains" — operators that match what you mean, with per-row enable toggles.</p>
+  </div>
+</div>
+
+## What's next
+
+<CardGrid>
+  <Card title="Get connected" icon="rocket">
+    Walk through saving your first connection, SSH tunnels, and groups.
+    [→ Getting started](/getting-started/)
+  </Card>
+  <Card title="Work with tables" icon="document">
+    Inspector, the result grid, inline editing, filters, the SQL editor.
+    [→ Tables & data](/inspector/)
+  </Card>
+  <Card title="Schema tools" icon="setting">
+    Structure pane, EXPLAIN, schema diff, ER diagram, role/grant matrix.
+    [→ Schema](/structure/)
+  </Card>
+  <Card title="Reference" icon="open-book">
+    Keyboard shortcuts, filter operators, preferences.
+    [→ Reference](/reference/keyboard-shortcuts/)
+  </Card>
+</CardGrid>

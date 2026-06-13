@@ -1,0 +1,42 @@
+---
+title: Creating objects
+description: Tables, views, materialized views, functions, and schemas from the inspector.
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+The inspector has a **+** button next to the schema picker. It
+opens a dropdown for creating new database objects in the current
+schema.
+
+![Create object dropdown](/media/object-ops-dropdown.png)
+
+## What you can create
+
+- **Table** — opens a form for column name / type / nullable /
+  default / PK. Add rows with **+ Column**.
+- **View** — name + a SQL editor for the `SELECT` body.
+- **Materialized View** — same as View, plus a "Populate now"
+  checkbox that controls `WITH DATA` vs `WITH NO DATA`.
+- **Function** — name, argument list, return type, language
+  (`sql` or `plpgsql`), and a body editor.
+- **Schema** — single field for the schema name.
+
+![New table form](/media/object-ops-new-table.png)
+
+## SQL preview before applying
+
+Every form has an **SQL** tab next to the structured editor. It
+shows the exact `CREATE …` statement Nembrix will run. You can
+copy it out, paste it into a query tab to tweak, or just hit
+**Apply** to execute.
+
+Apply runs in a single statement — no implicit transaction wrap
+because `CREATE` statements already commit on success. If the
+server rejects it, the error surfaces in the dialog and the form
+stays open with your input intact.
+
+<Aside type="tip">
+The inspector refreshes automatically after a successful create,
+so the new object shows up in its group without a manual ⌘R.
+</Aside>

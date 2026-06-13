@@ -1,0 +1,347 @@
+name: Release
+
+# Manual trigger only — no tag/push events. You bump the version,
+# commit, then click "Run workflow" in the Actions tab. The workflow
+# creates a draft GitHub Release tagged v<version>, builds artifacts
+# in parallel across the four target platforms, attaches them to the
+# release, and (when "publish" is true) flips it from draft to public.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version (no leading 'v'). Read from src-tauri/tauri.conf.json if blank."
+        required: false
+        type: string
+      publish:
+        description: "Publish the release immediately (otherwise leave as draft)"
+        required: false
+        default: false
+        type: boolean
+      prerelease:
+        description: "Mark as a pre-release"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+# Cancel an older Release run for the same version if a new one starts —
+# avoids two concurrent runs racing each other when re-clicking the button.
+concurrency:
+  group: release-${{ github.event.inputs.version || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────
+  # Stage 1: prepare the draft release so each platform job can
+  # upload to it. Reads the version from inputs or tauri.conf.json.
+  # ─────────────────────────────────────────────────────────────────
+  prepare:
+    name: Prepare release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      tag: ${{ steps.resolve.outputs.tag }}
+      release_id: ${{ steps.create.outputs.release_id }}
+      upload_url: ${{ steps.create.outputs.upload_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: resolve
+        name: Resolve version
+        shell: bash
+        run: |
+          if [[ -n "${{ github.event.inputs.version }}" ]]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION=$(jq -r .version src-tauri/tauri.conf.json)
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION"    >> "$GITHUB_OUTPUT"
+
+      - id: create
+        name: Create / update draft release
+        uses: actions/github-script@v7
+        env:
+          TAG: ${{ steps.resolve.outputs.tag }}
+          VERSION: ${{ steps.resolve.outputs.version }}
+          PRERELEASE: ${{ github.event.inputs.prerelease }}
+        with:
+          script: |
+            const { TAG, VERSION, PRERELEASE } = process.env;
+            // Find an existing release by tag (so reruns don't pile up
+            // duplicate drafts). Releases endpoint paginates; 100 is
+            // plenty for our cadence.
+            const list = await github.rest.repos.listReleases({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              per_page: 100,
+            });
+            const existing = list.data.find(r => r.tag_name === TAG);
+            let release;
+            if (existing) {
+              core.info(`Reusing existing release ${existing.id} for ${TAG}`);
+              release = existing;
+            } else {
+              core.info(`Creating new draft release for ${TAG}`);
+              const created = await github.rest.repos.createRelease({
+                owner: context.repo.owner,
+                repo:  context.repo.repo,
+                tag_name: TAG,
+                name: `Nembrix ${VERSION}`,
+                draft: true,
+                prerelease: PRERELEASE === "true",
+                generate_release_notes: true,
+              });
+              release = created.data;
+            }
+            core.setOutput("release_id", String(release.id));
+            core.setOutput("upload_url", release.upload_url);
+
+  # ─────────────────────────────────────────────────────────────────
+  # Stage 2: build each target in parallel. Uses tauri-action which
+  # handles the signing (Apple notarize, Windows code-sign) when the
+  # right secrets are present, and falls through cleanly when not.
+  # ─────────────────────────────────────────────────────────────────
+  build:
+    name: Build (${{ matrix.label }})
+    needs: prepare
+    strategy:
+      fail-fast: false  # One platform failing shouldn't kill the others.
+      matrix:
+        include:
+          - label: macOS (universal)
+            os: macos-14
+            target: universal-apple-darwin
+            rust_targets: "x86_64-apple-darwin,aarch64-apple-darwin"
+            args: --target universal-apple-darwin
+          - label: Windows x64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            rust_targets: x86_64-pc-windows-msvc
+            args: ""
+          - label: Linux x86_64
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            rust_targets: x86_64-unknown-linux-gnu
+            args: ""
+          - label: Linux arm64
+            os: ubuntu-22.04
+            target: aarch64-unknown-linux-gnu
+            rust_targets: aarch64-unknown-linux-gnu
+            args: --target aarch64-unknown-linux-gnu
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # ─── Toolchain ─────────────────────────────────────────────
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "yarn"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_targets }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          key: ${{ matrix.target }}
+
+      # ─── Linux build deps ──────────────────────────────────────
+      - name: Install Linux deps
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      # ─── arm64 cross deps (Linux arm64 only) ───────────────────
+      - name: Install arm64 cross-compile deps
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo dpkg --add-architecture arm64
+          # Add ports.ubuntu.com sources for arm64 packages.
+          sudo bash -c 'cat <<EOF > /etc/apt/sources.list.d/arm64.list
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-updates main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-security main restricted universe multiverse
+          EOF'
+          # Restrict the default sources to amd64 so apt doesn't try to
+          # fetch arm64 from the wrong mirror.
+          sudo sed -i 's/^deb /deb [arch=amd64] /' /etc/apt/sources.list
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc-aarch64-linux-gnu \
+            g++-aarch64-linux-gnu \
+            libwebkit2gtk-4.1-dev:arm64 \
+            libssl-dev:arm64 \
+            libayatana-appindicator3-dev:arm64 \
+            librsvg2-dev:arm64
+
+      # ─── Frontend ──────────────────────────────────────────────
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      # ─── Tauri build + sign + upload ───────────────────────────
+      - name: Build & upload
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # ── macOS signing + notarization
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # ── Tauri auto-updater (optional)
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          releaseId: ${{ needs.prepare.outputs.release_id }}
+          args: ${{ matrix.args }}
+          # Pull request builds skip signing/uploading. The tag is set
+          # via the prepare job's tag output; tauri-action attaches the
+          # built artifacts to that release.
+
+      # ─── Windows signing (separate pass — Tauri's signing hook is
+      #     Apple-only; on Windows we sign the produced installers
+      #     after the build with signtool). Only runs when the cert
+      #     secret is present, so unsigned dev releases work fine.
+      - name: Sign Windows installers
+        if: matrix.os == 'windows-latest' && env.WIN_CERT_BASE64 != ''
+        shell: pwsh
+        env:
+          WIN_CERT_BASE64: ${{ secrets.WIN_CERT_BASE64 }}
+          WIN_CERT_PASSWORD: ${{ secrets.WIN_CERT_PASSWORD }}
+        run: |
+          $bytes = [System.Convert]::FromBase64String($env:WIN_CERT_BASE64)
+          $certPath = Join-Path $env:RUNNER_TEMP "cert.pfx"
+          [IO.File]::WriteAllBytes($certPath, $bytes)
+          # Sign every msi + exe produced by tauri-action.
+          $files = Get-ChildItem `
+            -Path src-tauri/target/release/bundle `
+            -Recurse `
+            -Include *.msi,*.exe
+          foreach ($f in $files) {
+            & signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
+              /f $certPath /p $env:WIN_CERT_PASSWORD $f.FullName
+          }
+
+  # ─────────────────────────────────────────────────────────────────
+  # Stage 3a: update the Homebrew tap so `brew install --cask
+  # nembrix` resolves to the new version. Skipped silently if the
+  # HOMEBREW_TAP_TOKEN secret isn't configured.
+  # ─────────────────────────────────────────────────────────────────
+  brew:
+    name: Update Homebrew tap
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.prerelease != 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check tap secret
+        id: gate
+        run: |
+          if [[ -z "${{ secrets.HOMEBREW_TAP_TOKEN }}" ]]; then
+            echo "HOMEBREW_TAP_TOKEN not set; skipping brew tap update." >&2
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Wait for dmg, compute SHA, render cask, push to tap
+        if: steps.gate.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          # Tap repo defaults to <owner>/homebrew-<repo>. Override with
+          # the HOMEBREW_TAP_REPO secret (e.g. "myorg/homebrew-tools").
+          TAP_REPO: ${{ secrets.HOMEBREW_TAP_REPO || format('{0}/homebrew-{1}', github.repository_owner, github.event.repository.name) }}
+        run: |
+          set -euo pipefail
+
+          DMG_URL="https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/DB-Client_${VERSION}_universal.dmg"
+          echo "Fetching $DMG_URL"
+
+          # The dmg upload from the macOS build job races us — poll
+          # until the asset is downloadable (or fail after 5 min).
+          for i in $(seq 1 60); do
+            STATUS=$(curl -s -o dmg.bin -w "%{http_code}" -L -H "Authorization: token ${GH_TOKEN}" "$DMG_URL" || true)
+            if [[ "$STATUS" == "200" ]] && [[ -s dmg.bin ]]; then
+              echo "dmg ready (try $i)"
+              break
+            fi
+            echo "dmg not ready yet (try $i, status=$STATUS); sleeping…"
+            sleep 5
+          done
+          test -s dmg.bin
+
+          SHA=$(sha256sum dmg.bin | awk '{print $1}')
+          echo "sha256: $SHA"
+
+          # Render the cask template.
+          sed \
+            -e "s/__VERSION__/${VERSION}/g" \
+            -e "s/__SHA256__/${SHA}/g" \
+            -e "s/__OWNER__/${OWNER}/g" \
+            -e "s/__REPO__/${REPO}/g" \
+            .cask/nembrix.rb.tmpl > /tmp/nembrix.rb
+
+          # Clone the tap, drop the rendered cask in, commit, push.
+          git config --global user.name  "Nembrix release bot"
+          git config --global user.email "release-bot@users.noreply.github.com"
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/${TAP_REPO}.git" tap
+
+          mkdir -p tap/Casks
+          mv /tmp/nembrix.rb tap/Casks/nembrix.rb
+
+          cd tap
+          git add Casks/nembrix.rb
+          if git diff --cached --quiet; then
+            echo "Cask unchanged; nothing to push."
+          else
+            git commit -m "nembrix ${VERSION}"
+            git push
+            echo "Pushed updated cask to ${TAP_REPO}"
+          fi
+
+  # ─────────────────────────────────────────────────────────────────
+  # Stage 3b: flip from draft → public if requested.
+  # ─────────────────────────────────────────────────────────────────
+  publish:
+    name: Publish release
+    needs: [prepare, build]
+    if: github.event.inputs.publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        env:
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
+        with:
+          script: |
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              release_id: Number(process.env.RELEASE_ID),
+              draft: false,
+            });
+            core.info("Release published.");

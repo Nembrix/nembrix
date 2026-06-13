@@ -1,0 +1,41 @@
+---
+title: Inspector & tables
+description: The schema tree on the right edge of the window.
+---
+
+The Inspector lists the active schema's tables, views, and
+user-defined functions. Three groups, each collapsible. Functions
+default to collapsed because they're usually a small set you only
+occasionally look at.
+
+![Inspector](/media/inspector.png)
+
+## What counts as "user-defined"?
+
+For Functions we filter to `prokind = 'f'` and exclude anything
+owned by an extension (`pg_depend.deptype = 'e'`). So `CREATE
+EXTENSION postgis` doesn't drop hundreds of postgis routines into
+your sidebar — only what your team `CREATE FUNCTION`'d shows up.
+
+## Quick actions
+
+- **Click** a table → opens it in a `table_data` tab. If a tab for
+  the same table is already open, we **refocus and refresh** instead
+  of duplicating.
+- **Right-click** a table → context menu: Open in new query tab,
+  Copy qualified name, Rename / Duplicate / Move / VACUUM / REINDEX
+  / Copy to connection / Drop.
+- **+** button → dropdown to create a new Table / View /
+  Materialized View / Function / Schema in the current schema.
+
+## Searching
+
+The "Search for item…" input above the list does a substring match
+across all three groups simultaneously. ✕ button clears.
+
+## Per-connection layout
+
+Whether each group is collapsed is remembered **per connection** in
+localStorage, so a connection you use for tables-only stays focused
+on tables, and a connection you use for stored-procs work keeps
+Functions open.
