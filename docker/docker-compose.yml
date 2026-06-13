@@ -1,0 +1,46 @@
+# v1 verification fixture:
+#  - postgres:16 on an internal network (no published ports)
+#  - openssh bastion exposes 2222 on the host, can reach pg on internal net
+#  - app must tunnel through ssh to reach the DB — direct connection fails.
+#
+# Usage:
+#   cd docker && docker compose up -d
+#   ssh -L 5432:db:5432 -p 2222 demo@localhost   # smoke-test the tunnel
+#
+# In the app, create a connection with:
+#   host=db port=5432 user=app password=app db=demo
+#   ssh: host=localhost port=2222 user=demo
+#        auth=password password=demo  (strict_host_key=false on first run)
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: demo
+    volumes:
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    networks:
+      - internal
+
+  ssh:
+    image: linuxserver/openssh-server:latest
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: "UTC"
+      PASSWORD_ACCESS: "true"
+      USER_NAME: demo
+      USER_PASSWORD: demo
+      SUDO_ACCESS: "false"
+    ports:
+      - "2222:2222"
+    networks:
+      - internal
+    depends_on:
+      - db
+
+networks:
+  internal:
+    driver: bridge

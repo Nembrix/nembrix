@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Nembrix mark — "forked path", v3 (final).
+
+  Concept: a single connection enters at the top-left, runs as a
+  diagonal across the mark, and forks into two outgoing sessions at
+  the junction. Reads as both a stylized N (left stem + diagonal)
+  and as a multi-session topology diagram (one source, two
+  branches, three endpoint nodes).
+
+  Layout (64×64 viewport, all coordinates on integer or .5 grid):
+    - Left stem: x=13..19, y=12..52 (vertical bar, 6px wide)
+    - Diagonal: from (16, 12) through (32, 32) to (45, 36),
+      drawn as a 6px-wide parallelogram so weight stays constant
+      regardless of angle. Note the diagonal terminates AT the
+      junction circle's center — eliminates the v2 notch.
+    - Junction: filled circle at (45, 36), radius 5.5
+    - Upper fork: 4px-wide path from junction up-right to (54, 22),
+      then capped with an endpoint dot
+    - Lower fork: 4px-wide path from junction down-right to (54, 50),
+      symmetric to the upper fork around the y=36 axis
+    - Source dot at the top of the stem, mirroring the endpoint dots
+      so all three connections (1 source + 2 destinations) have the
+      same visual weight
+
+  Color: same gradient system as v1/v2 so the wordmark and mono
+  variants keep working without re-tuning.
+-->
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 64 64"
+  width="256" height="256"
+  role="img"
+  aria-label="Nembrix"
+>
+  <defs>
+    <linearGradient id="nembrix-bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#6366f1" />
+    </linearGradient>
+    <linearGradient id="nembrix-fg" x1="0" y1="0" x2="0" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#e5edff" />
+    </linearGradient>
+  </defs>
+
+  <rect width="64" height="64" rx="12" fill="url(#nembrix-bg)" />
+
+  <!-- Left stem — the source connection. -->
+  <rect x="13" y="14" width="6" height="38" rx="3" fill="url(#nembrix-fg)" />
+
+  <!--
+    Diagonal. Top edge runs from (13, 14) to (43.5, 36); bottom edge
+    from (19, 14) to (47.5, 36). Drawn so the diagonal's bottom-right
+    vertex sits *behind* the junction circle, hiding any pixel-level
+    seam between them.
+  -->
+  <path
+    d="M 13 14 L 19 14 L 47.5 36 L 43.5 36 Z"
+    fill="url(#nembrix-fg)"
+  />
+
+  <!--
+    Upper fork branch. Starts inside the junction circle and exits
+    to (54, 22). The branch is angled at ~30° above horizontal so
+    it visually pairs with the lower fork at 30° below — together
+    they look like a Y rotated 90°.
+  -->
+  <path
+    d="M 43.5 36 L 51.5 21.5 L 55 23 L 47 37.5 Z"
+    fill="url(#nembrix-fg)"
+  />
+
+  <!--
+    Lower fork branch. Symmetric to the upper around y=36.
+  -->
+  <path
+    d="M 43.5 36 L 51.5 50.5 L 55 49 L 47 34.5 Z"
+    fill="url(#nembrix-fg)"
+  />
+
+  <!--
+    Junction node — the focal point. Drawn last so it sits on top of
+    both fork tails, smoothing the join. Slightly oversized vs. the
+    endpoint dots so the eye reads it as the hub.
+  -->
+  <circle cx="45" cy="36" r="5.5" fill="url(#nembrix-fg)" />
+
+  <!--
+    Endpoint dots: source (top of stem) and the two fork tips.
+    All three the same size, signalling "endpoints are equivalent
+    regardless of direction". 3.2px reads cleanly at 32px renders.
+  -->
+  <circle cx="16" cy="11" r="3.2" fill="url(#nembrix-fg)" />
+  <circle cx="53" cy="22" r="3.2" fill="url(#nembrix-fg)" />
+  <circle cx="53" cy="50" r="3.2" fill="url(#nembrix-fg)" />
+</svg>

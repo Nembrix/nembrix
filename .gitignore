@@ -1,0 +1,15 @@
+target/
+node_modules/
+dist/
+bindings/commands.ts
+src-tauri/gen/
+apps/docs/dist/
+apps/docs/.astro/
+test-results/
+playwright-report/
+.turbo/
+.DS_Store
+*.log
+.env.signing
+*.cer
+.cask/

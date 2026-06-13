@@ -1,0 +1,60 @@
+---
+title: Filter operators
+description: Every operator a FilterChip can emit and the SQL it produces.
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+A **FilterChip** is one row of the filter bar above a grid: a
+column, an operator, and (for most operators) a value. This
+table is the full set of operators it can emit.
+
+![Filter chip operators](/media/filter-operators.png)
+
+## Comparison
+
+| Label | SQL emitted |
+| --- | --- |
+| `=` | `"col" = $1` |
+| `≠` | `"col" <> $1` |
+| `<` | `"col" < $1` |
+| `≤` | `"col" <= $1` |
+| `>` | `"col" > $1` |
+| `≥` | `"col" >= $1` |
+
+## Text — contains family (escaped)
+
+These wrap the user value in `%…%` and escape any `%` or `_`
+characters the user typed, so a literal percent doesn't act as
+a wildcard.
+
+| Label | SQL emitted |
+| --- | --- |
+| contains | `"col" LIKE '%' \|\| $1 \|\| '%'` (with `$1` pre-escaped) |
+| does not contain | `"col" NOT LIKE '%' \|\| $1 \|\| '%'` |
+| contains (case-insensitive) | `"col" ILIKE '%' \|\| $1 \|\| '%'` |
+| does not contain (case-insensitive) | `"col" NOT ILIKE '%' \|\| $1 \|\| '%'` |
+
+## Text — raw (no escape)
+
+These pass the user value through verbatim. `%` and `_` keep
+their wildcard meaning, so this is the operator to pick when you
+want pattern matching.
+
+| Label | SQL emitted |
+| --- | --- |
+| LIKE | `"col" LIKE $1` |
+| ILIKE | `"col" ILIKE $1` |
+
+## Null
+
+| Label | SQL emitted |
+| --- | --- |
+| is null | `"col" IS NULL` |
+| is not null | `"col" IS NOT NULL` |
+
+<Aside type="note">
+The escape behavior is the only thing separating the **contains**
+family from raw **LIKE** / **ILIKE**. Same target SQL keyword,
+different treatment of the user's input.
+</Aside>

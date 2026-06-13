@@ -1,0 +1,48 @@
+---
+title: Multiple sessions
+description: One saved connection, many live sessions.
+---
+
+A **session** is a live connection. The rail on the left shows one
+avatar per session; clicking an avatar selects it as the active
+session for the inspector and any new tabs.
+
+You can have **multiple sessions against the same saved connection**.
+Open another from:
+
+- The rail's context menu → **Open another session**.
+- The Connection Manager → click **Connect again** on a connection
+  that's already live.
+
+Sibling sessions get labeled `#2`, `#3`, … in the rail so they're
+distinguishable.
+
+## Tabs scoped to a session
+
+Every tab's `connId` points at a session, not a saved connection. When
+you close a session (rail context menu → **Close session**), every
+tab that belonged to it closes too.
+
+## Survives restart
+
+Sessions persist to localStorage. On launch we rehydrate them and
+kick off background reconnects — you'll see avatars flip from grey →
+connecting → green over a few hundred milliseconds.
+
+Schemas and statuses are NOT persisted; they're rebuilt by the
+reconnect. Persisting "connected" would be a lie if the connection
+actually failed to come back.
+
+## Status pill
+
+The bottom-left status pill summarizes the active session at a
+glance:
+
+```
+PROD-REPLICA | PostgreSQL | require | shop | shop_orders | 12,453 of 1.2M (est.) · 234 ms
+```
+
+- Connection name → engine → SSL mode → database → active tab title
+  → row count → query timing.
+- "(est.)" appears while the planner's row estimate is showing.
+  Replaced by the exact count when COUNT(*) finishes.

@@ -1,0 +1,63 @@
+---
+title: Roles & grants
+description: pg_roles list with an interactive grant matrix.
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+The Roles tab is a two-pane view: a list of `pg_roles` on the
+left and a grant matrix for the selected role on the right.
+
+![Roles tab](/media/roles.png)
+
+## Role list
+
+Nembrix reads `pg_roles` and renders one row per role,
+including the standard attributes — `superuser`, `inherit`,
+`createrole`, `createdb`, `login`, `replication`,
+`connection limit`, `valid until`. Click a column header to sort.
+
+## The grant tree
+
+Click a role and the right pane fills with a tree:
+
+```
+databases
+  └─ schemas
+       └─ relations
+            └─ privileges (SELECT, INSERT, UPDATE, DELETE,
+                           TRUNCATE, REFERENCES, TRIGGER)
+```
+
+Each privilege has a checkbox. Checked means the role currently
+holds that privilege (either directly or via a group it inherits
+from — inherited grants are marked with a light dot to
+distinguish them).
+
+![Grant tree](/media/roles-grant-tree.png)
+
+## Staging GRANT and REVOKE
+
+Toggle a checkbox and the change is **queued**, not applied.
+Queued grants show up green, queued revokes show up red, and a
+banner at the top of the pane keeps a running count.
+
+When you click **Apply**, Nembrix runs every queued change in
+a single transaction:
+
+```sql
+BEGIN;
+GRANT SELECT ON "public"."users" TO "analytics";
+REVOKE INSERT ON "public"."events" FROM "analytics";
+…
+COMMIT;
+```
+
+If anything fails, the whole transaction rolls back and the queue
+stays intact so you can fix and retry.
+
+<Aside type="note">
+Default privileges (`ALTER DEFAULT PRIVILEGES`) aren't in the
+matrix yet — they show as a read-only section below the tree for
+visibility, but editing them still goes through a query tab.
+</Aside>

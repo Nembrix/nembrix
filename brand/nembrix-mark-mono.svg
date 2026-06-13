@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Monochrome forked-N. Same geometry as the gradient mark; fills are
+  flat so it works in 1-bit contexts (print stamps, status icons,
+  re-encoded social embeds). `currentColor` lets the plate inherit
+  the text color so the same SVG works on dark and light backgrounds
+  without recoloring.
+-->
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 64 64"
+  width="256" height="256"
+  role="img"
+  aria-label="Nembrix"
+>
+  <rect width="64" height="64" rx="12" fill="currentColor" />
+  <rect x="13" y="14" width="6" height="38" rx="3" fill="#ffffff" />
+  <path d="M 13 14 L 19 14 L 47.5 36 L 43.5 36 Z" fill="#ffffff" />
+  <path d="M 43.5 36 L 51.5 21.5 L 55 23 L 47 37.5 Z" fill="#ffffff" />
+  <path d="M 43.5 36 L 51.5 50.5 L 55 49 L 47 34.5 Z" fill="#ffffff" />
+  <circle cx="45" cy="36" r="5.5" fill="#ffffff" />
+  <circle cx="16" cy="11" r="3.2" fill="#ffffff" />
+  <circle cx="53" cy="22" r="3.2" fill="#ffffff" />
+  <circle cx="53" cy="50" r="3.2" fill="#ffffff" />
+</svg>

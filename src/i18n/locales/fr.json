@@ -1,0 +1,99 @@
+{
+  "app": {
+    "name": "Nembrix"
+  },
+  "menu": {
+    "connection": {
+      "title": "Connexion",
+      "new": "Nouvelle connexion…",
+      "manage": "Gérer les connexions…",
+      "connect": "Se connecter",
+      "disconnect": "Se déconnecter",
+      "edit": "Modifier la connexion…",
+      "duplicate": "Dupliquer la connexion",
+      "delete": "Supprimer la connexion",
+      "refresh": "Actualiser le schéma",
+      "recent": "Récentes"
+    },
+    "file": {
+      "title": "Fichier",
+      "newQueryTab": "Nouvel onglet de requête",
+      "newWindow": "Nouvelle fenêtre",
+      "openSavedQuery": "Ouvrir une requête enregistrée…",
+      "saveQuery": "Enregistrer la requête",
+      "saveQueryAs": "Enregistrer la requête sous…",
+      "closeTab": "Fermer l'onglet",
+      "import": "Importer…",
+      "export": "Exporter…",
+      "preferences": "Préférences…"
+    },
+    "view": {
+      "title": "Affichage",
+      "commandPalette": "Palette de commandes",
+      "toggleRail": "Afficher/masquer la barre de connexions",
+      "toggleInspector": "Afficher/masquer l'inspecteur",
+      "toggleResults": "Afficher/masquer les résultats",
+      "nextTab": "Onglet suivant",
+      "prevTab": "Onglet précédent"
+    }
+  },
+  "common": {
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "close": "Fermer",
+    "delete": "Supprimer",
+    "apply": "Appliquer",
+    "applyAll": "Tout appliquer",
+    "discard": "Abandonner",
+    "retry": "Réessayer",
+    "ok": "OK",
+    "yes": "Oui",
+    "no": "Non",
+    "loading": "Chargement…",
+    "running": "Exécution…",
+    "newConnection": "Nouvelle connexion",
+    "manageConnections": "Tout gérer…"
+  },
+  "rail": {
+    "noSessions": "Aucune session active",
+    "newConnectionTooltip": "Nouvelle connexion",
+    "manageTooltip": "Gérer les connexions",
+    "doubleClickToConnect": "Double-cliquer pour se connecter"
+  },
+  "preferences": {
+    "title": "Préférences",
+    "csv": {
+      "section": "Valeurs CSV par défaut",
+      "nullToken": "Jeton NULL",
+      "delimiter": "Séparateur",
+      "lineEnding": "Fin de ligne",
+      "emptyIsNull": "Traiter les cellules vides comme NULL",
+      "emptyIsNullHelp": "Désactivé (par défaut) : une cellule vide reste une chaîne vide, ce qui permet à la distinction vide/null d'être préservée à l'export-import."
+    },
+    "language": {
+      "section": "Langue",
+      "label": "Langue de l'interface",
+      "system": "Suivre le système",
+      "english": "English",
+      "french": "Français"
+    },
+    "restoreDefaults": "Restaurer les valeurs par défaut"
+  },
+  "filter": {
+    "addFilter": "Ajouter un filtre",
+    "clearAll": "Tout effacer",
+    "apply": "Appliquer",
+    "applyAll": "Tout appliquer",
+    "rowDisabled": "Désactiver ce filtre",
+    "rowEnabled": "Activer ce filtre",
+    "noFilters": "Aucun filtre. Cliquez sur + Ajouter un filtre pour commencer.",
+    "waitForTable": "Attendez le chargement de la table avant d'ajouter des filtres."
+  },
+  "grid": {
+    "noResults": "Aucun résultat pour le moment.",
+    "noRowsMatch": "Aucune ligne ne correspond — la table ou la requête a retourné 0 résultat.",
+    "pendingEdits_one": "{{count}} modification en attente",
+    "pendingEdits_other": "{{count}} modifications en attente",
+    "saveFailed": "Échec de l'enregistrement"
+  }
+}

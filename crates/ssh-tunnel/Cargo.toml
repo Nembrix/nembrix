@@ -1,0 +1,25 @@
+[package]
+name = "ssh-tunnel"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+async-trait.workspace = true
+russh.workspace = true
+russh-keys.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tokio-util = { workspace = true, features = ["rt"] }
+serde.workspace = true
+specta.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+hex = "0.4"
+sha2 = "0.10"
+dirs = "5"
+
+[dev-dependencies]
+testcontainers = { workspace = true }
+tokio = { workspace = true, features = ["full", "test-util"] }
+anyhow.workspace = true

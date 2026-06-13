@@ -1,0 +1,49 @@
+---
+title: Command palette
+description: ⌘P fuzzy search across actions, saved queries, and recent SQL.
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Hit **⌘P** (or **⌘⇧P** — both open the same panel) and a search
+box drops down from the top of the window.
+
+![Command palette](/media/palette.png)
+
+## What it searches
+
+The palette indexes three sources and runs a fuzzy match across
+all of them simultaneously:
+
+- **Menu actions** — everything you can reach from a menu or
+  keyboard shortcut. New query tab, Connect, Disconnect, Toggle
+  inspector, Refresh schema, Open preferences, Format SQL, etc.
+- **Saved queries** — every query you've named and saved on the
+  active connection.
+- **Recent SQL** — the last 50 queries you've executed on the
+  active connection, regardless of whether you saved them.
+
+Each result line shows the source as a small badge on the right:
+**Action**, **Saved**, or **Recent**.
+
+## Scoring
+
+The matcher is a standard fuzzy scorer: contiguous matches beat
+scattered ones, prefix matches beat mid-string matches, and a
+recency bias bumps things you've used recently. ↑ / ↓ navigate,
+↵ runs the selected entry, **Esc** dismisses.
+
+## What "run" means per result type
+
+- **Action** — invokes it, same as picking it from the menu.
+- **Saved query** — opens it in a new query tab and runs it.
+- **Recent SQL** — opens it in a new query tab but does **not**
+  auto-run. The thinking is that recent SQL is often something
+  you want to tweak before re-running.
+
+<Aside type="tip">
+The palette is the fastest way to switch sessions: type the
+session name and hit ↵. Connection-management actions
+(Connect / Disconnect / Manage connections…) all surface here
+too.
+</Aside>

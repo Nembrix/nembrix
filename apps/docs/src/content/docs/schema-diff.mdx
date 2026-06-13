@@ -1,0 +1,51 @@
+---
+title: Schema diff
+description: Compare two schemas and emit ALTER statements.
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Schema diff opens a dedicated tab that compares two schemas
+side-by-side. The schemas can live in the **same connection**
+(e.g. `public` vs `staging`) or in **different connections**
+(e.g. dev vs prod).
+
+![Schema diff](/media/schema-diff.png)
+
+## Picking the two sides
+
+The top of the tab has two pickers: **Source** and **Target**.
+Each is a connection + schema combo. Nembrix introspects both
+and runs the diff. Switching either picker re-runs the diff.
+
+## What you see
+
+The result is grouped:
+
+- **Tables added** — in target, missing from source.
+- **Tables removed** — in source, missing from target.
+- **Tables changed** — present on both sides but with different
+  columns. Each row expands to a per-column diff: added columns,
+  removed columns, and changed columns (type, nullable, default).
+
+Views, materialized views, and functions get their own sections
+with the same added / removed / changed buckets.
+
+## Emitting ALTER statements
+
+Each diff row has an **Align** checkbox. Tick the ones you want
+to apply, hit **Generate SQL**, and Nembrix emits a script of
+`CREATE`, `DROP`, and `ALTER` statements that bring the source
+schema in line with the target.
+
+![Generated ALTER script](/media/schema-diff-alter.png)
+
+The script opens in a new query tab against the source
+connection. Nothing runs automatically — you review, edit if
+needed, and execute it like any other query.
+
+<Aside type="caution">
+The generator doesn't try to preserve data through destructive
+changes. `DROP COLUMN` and type changes that aren't implicit casts
+will lose or refuse data; eyeball the script before running.
+</Aside>
