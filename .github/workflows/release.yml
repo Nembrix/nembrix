@@ -541,7 +541,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          DMG_URL="https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/DB-Client_${VERSION}_universal.dmg"
+          DMG_URL="https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/Nembrix_${VERSION}_universal.dmg"
           echo "Fetching $DMG_URL"
 
           # The dmg upload from the macOS build job races us — poll
