@@ -36,3 +36,14 @@ updates:
       # commitlint/husky, etc.) to cut review overhead.
       dev-dependencies:
         dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
+      # Group routine production bumps (minor + patch) into one PR.
+      # Majors are intentionally excluded so they each get their own PR
+      # for careful review of breaking changes.
+      production-dependencies:
+        dependency-type: "production"
+        update-types:
+          - "minor"
+          - "patch"
