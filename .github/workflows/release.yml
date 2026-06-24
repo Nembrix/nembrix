@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version (no leading 'v'). Read from src-tauri/tauri.conf.json if blank."
+        description: "Version (no leading 'v'). Read from apps/desktop/src-tauri/tauri.conf.json if blank."
         required: false
         type: string
       publish:
@@ -56,7 +56,7 @@ jobs:
           if [[ -n "${{ github.event.inputs.version }}" ]]; then
             VERSION="${{ github.event.inputs.version }}"
           else
-            VERSION=$(jq -r .version src-tauri/tauri.conf.json)
+            VERSION=$(jq -r .version apps/desktop/src-tauri/tauri.conf.json)
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION"    >> "$GITHUB_OUTPUT"
@@ -112,22 +112,55 @@ jobs:
       fail-fast: false  # One platform failing shouldn't kill the others.
       matrix:
         include:
+          # ── macOS ──────────────────────────────────────────────
           - label: macOS (universal)
+            slug: macos-universal
             os: macos-14
             target: universal-apple-darwin
             rust_targets: "x86_64-apple-darwin,aarch64-apple-darwin"
             args: --target universal-apple-darwin
+          - label: macOS Intel (x86_64)
+            slug: macos-x86_64
+            os: macos-14
+            target: x86_64-apple-darwin
+            rust_targets: x86_64-apple-darwin
+            args: --target x86_64-apple-darwin
+          - label: macOS Apple Silicon (aarch64)
+            slug: macos-aarch64
+            os: macos-14
+            target: aarch64-apple-darwin
+            rust_targets: aarch64-apple-darwin
+            args: --target aarch64-apple-darwin
+
+          # ── Windows ────────────────────────────────────────────
           - label: Windows x64
+            slug: windows-x86_64
             os: windows-latest
             target: x86_64-pc-windows-msvc
             rust_targets: x86_64-pc-windows-msvc
             args: ""
+          - label: Windows x86 (32-bit)
+            slug: windows-i686
+            os: windows-latest
+            target: i686-pc-windows-msvc
+            rust_targets: i686-pc-windows-msvc
+            args: --target i686-pc-windows-msvc
+          - label: Windows ARM64
+            slug: windows-aarch64
+            os: windows-latest
+            target: aarch64-pc-windows-msvc
+            rust_targets: aarch64-pc-windows-msvc
+            args: --target aarch64-pc-windows-msvc
+
+          # ── Linux (each emits .deb, .AppImage, .rpm) ───────────
           - label: Linux x86_64
+            slug: linux-x86_64
             os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             rust_targets: x86_64-unknown-linux-gnu
             args: ""
           - label: Linux arm64
+            slug: linux-aarch64
             os: ubuntu-22.04
             target: aarch64-unknown-linux-gnu
             rust_targets: aarch64-unknown-linux-gnu
@@ -148,7 +181,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri -> target
+          workspaces: apps/desktop -> apps/desktop/target
           key: ${{ matrix.target }}
 
       # ─── Linux build deps ──────────────────────────────────────
@@ -166,7 +199,8 @@ jobs:
             libssl-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev \
-            patchelf
+            patchelf \
+            rpm
 
       # ─── arm64 cross deps (Linux arm64 only) ───────────────────
       - name: Install arm64 cross-compile deps
@@ -213,6 +247,10 @@ jobs:
         with:
           releaseId: ${{ needs.prepare.outputs.release_id }}
           args: ${{ matrix.args }}
+          # The frontend project + Tauri shell both live under the
+          # desktop app workspace. tauri-action runs `yarn build`
+          # from this path, so vite + tsc see the right tsconfig.
+          projectPath: apps/desktop
           # Pull request builds skip signing/uploading. The tag is set
           # via the prepare job's tag output; tauri-action attaches the
           # built artifacts to that release.
@@ -222,7 +260,7 @@ jobs:
       #     after the build with signtool). Only runs when the cert
       #     secret is present, so unsigned dev releases work fine.
       - name: Sign Windows installers
-        if: matrix.os == 'windows-latest' && env.WIN_CERT_BASE64 != ''
+        if: startsWith(matrix.os, 'windows') && env.WIN_CERT_BASE64 != ''
         shell: pwsh
         env:
           WIN_CERT_BASE64: ${{ secrets.WIN_CERT_BASE64 }}
@@ -231,15 +269,206 @@ jobs:
           $bytes = [System.Convert]::FromBase64String($env:WIN_CERT_BASE64)
           $certPath = Join-Path $env:RUNNER_TEMP "cert.pfx"
           [IO.File]::WriteAllBytes($certPath, $bytes)
-          # Sign every msi + exe produced by tauri-action.
+          # Sign every msi + exe produced by tauri-action. Cross-target
+          # builds land under apps/desktop/target/<triple>/release/bundle,
+          # so we search the whole target tree.
           $files = Get-ChildItem `
-            -Path src-tauri/target/release/bundle `
+            -Path apps/desktop/target `
             -Recurse `
             -Include *.msi,*.exe
           foreach ($f in $files) {
             & signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
               /f $certPath /p $env:WIN_CERT_PASSWORD $f.FullName
           }
+
+      # ─── Collect bundles into release/<slug>/ ───────────────────
+      # Walk apps/desktop/target/**/release/bundle and pull out every
+      # installer/package format Tauri emits. The exact subfolder layout
+      # varies by target (universal vs single-triple), so we glob the
+      # whole tree rather than hard-coding paths.
+      - name: Collect bundles (unix)
+        if: ${{ !startsWith(matrix.os, 'windows') }}
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          SLUG: ${{ matrix.slug }}
+        run: |
+          set -euo pipefail
+          DEST="release/${VERSION}/${SLUG}"
+          mkdir -p "$DEST"
+          # -path is the simplest portable way to scope the search.
+          find apps/desktop/target -type f -path '*/release/bundle/*' \
+            \( -name '*.dmg' \
+            -o -name '*.app.tar.gz' \
+            -o -name '*.deb' \
+            -o -name '*.rpm' \
+            -o -name '*.AppImage' \
+            -o -name '*.msi' \
+            -o -name '*.exe' \) \
+            -exec cp -v {} "$DEST/" \;
+          echo "── contents of $DEST ──"
+          ls -la "$DEST" || true
+
+      - name: Collect bundles (windows)
+        if: startsWith(matrix.os, 'windows')
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          SLUG: ${{ matrix.slug }}
+        run: |
+          $dest = "release/$env:VERSION/$env:SLUG"
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          $files = Get-ChildItem `
+            -Path apps/desktop/target `
+            -Recurse `
+            -Include *.msi,*.exe `
+            | Where-Object { $_.FullName -match 'release[\\/]bundle[\\/]' }
+          foreach ($f in $files) {
+            Copy-Item -Path $f.FullName -Destination $dest -Force
+            Write-Host "copied $($f.FullName)"
+          }
+          Get-ChildItem $dest
+
+      - name: Upload bundles as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nembrix-${{ needs.prepare.outputs.version }}-${{ matrix.slug }}
+          path: release/${{ needs.prepare.outputs.version }}/${{ matrix.slug }}/
+          if-no-files-found: warn
+          retention-days: 30
+
+  # ─────────────────────────────────────────────────────────────────
+  # Stage 2.5: gather every per-platform artifact, generate a
+  # checksums.txt (sha256 of every file) and a structured
+  # manifest.json, and attach both to the GitHub Release alongside
+  # the loose installer assets that tauri-action already uploaded.
+  # ─────────────────────────────────────────────────────────────────
+  manifest:
+    name: Attach checksums + manifest
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pulls every artifact uploaded by the matrix build jobs into
+      # ./release/<version>/<slug>/<files…> — same layout the build
+      # jobs produced locally.
+      - name: Download all platform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: nembrix-${{ needs.prepare.outputs.version }}-*
+          path: release/${{ needs.prepare.outputs.version }}
+          merge-multiple: false
+
+      - name: Generate checksums.txt and manifest.json
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          cd "release/${VERSION}"
+
+          # Strip the "nembrix-<version>-" prefix from artifact dir
+          # names so the folder layout is release/<version>/<slug>/.
+          for d in nembrix-${VERSION}-*/; do
+            slug="${d#nembrix-${VERSION}-}"
+            slug="${slug%/}"
+            mv "$d" "$slug"
+          done
+
+          ls -laR
+
+          # SHA256 every file (paths relative to the version folder).
+          : > checksums.txt
+          find . -type f \
+            ! -name checksums.txt \
+            ! -name manifest.json \
+            -print0 \
+          | sort -z \
+          | xargs -0 sha256sum > checksums.txt
+          echo "── checksums.txt ──"
+          cat checksums.txt
+
+          # Build a structured manifest. Each entry: platform, arch,
+          # file (relative path), size in bytes, sha256.
+          python3 - "$VERSION" <<'PY' > manifest.json
+          import hashlib, json, os, sys
+          version = sys.argv[1]
+          entries = []
+          for slug in sorted(os.listdir('.')):
+              if not os.path.isdir(slug):
+                  continue
+              # slug is e.g. "macos-universal", "windows-x86_64".
+              parts = slug.split('-', 1)
+              platform = parts[0]
+              arch = parts[1] if len(parts) > 1 else ''
+              for fname in sorted(os.listdir(slug)):
+                  fpath = os.path.join(slug, fname)
+                  if not os.path.isfile(fpath):
+                      continue
+                  h = hashlib.sha256()
+                  with open(fpath, 'rb') as f:
+                      for chunk in iter(lambda: f.read(1 << 20), b''):
+                          h.update(chunk)
+                  entries.append({
+                      'platform': platform,
+                      'arch': arch,
+                      'slug': slug,
+                      'file': fname,
+                      'size': os.path.getsize(fpath),
+                      'sha256': h.hexdigest(),
+                  })
+          print(json.dumps({
+              'version': version,
+              'artifacts': entries,
+          }, indent=2))
+          PY
+          echo "── manifest.json ──"
+          cat manifest.json
+
+      - name: Upload checksums + manifest to the Release
+        uses: actions/github-script@v7
+        env:
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const { RELEASE_ID, VERSION } = process.env;
+            const dir = `release/${VERSION}`;
+            const files = ['checksums.txt', 'manifest.json'];
+
+            // Drop any prior copies on the release so reruns don't
+            // collide on the same name (GitHub rejects duplicates).
+            const assets = await github.rest.repos.listReleaseAssets({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              release_id: Number(RELEASE_ID),
+              per_page: 100,
+            });
+            for (const a of assets.data) {
+              if (files.includes(a.name)) {
+                core.info(`Deleting existing asset ${a.name} (id ${a.id})`);
+                await github.rest.repos.deleteReleaseAsset({
+                  owner: context.repo.owner,
+                  repo:  context.repo.repo,
+                  asset_id: a.id,
+                });
+              }
+            }
+
+            for (const name of files) {
+              const p = path.join(dir, name);
+              const data = fs.readFileSync(p);
+              core.info(`Uploading ${name} (${data.length} bytes)`);
+              await github.rest.repos.uploadReleaseAsset({
+                owner: context.repo.owner,
+                repo:  context.repo.repo,
+                release_id: Number(RELEASE_ID),
+                name,
+                data,
+              });
+            }
 
   # ─────────────────────────────────────────────────────────────────
   # Stage 3a: update the Homebrew tap so `brew install --cask
@@ -329,7 +558,7 @@ jobs:
   # ─────────────────────────────────────────────────────────────────
   publish:
     name: Publish release
-    needs: [prepare, build]
+    needs: [prepare, build, manifest]
     if: github.event.inputs.publish == 'true'
     runs-on: ubuntu-latest
     steps:

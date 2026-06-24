@@ -2,7 +2,6 @@
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
   "globalDependencies": [
-    "tsconfig.json",
     ".env",
     ".env.*"
   ],

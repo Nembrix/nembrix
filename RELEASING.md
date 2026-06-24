@@ -165,17 +165,17 @@ DB-Client_<version>_arm64.AppImage
 
 ## Icons
 
-Source: `src-tauri/icons/source.png` (1024×1024).
+Source: `src-tauri/icons/source.png` (1024×1024), generated from the
+Nembrix brand mark (`brand/nembrix-mark.svg`) composited onto a
+dark-slate rounded-square plate by `scripts/gen-icon-source.ts`.
 
-Replace with a real icon when you have one, then regenerate the
-platform variants:
+Regenerate the source + all platform variants in one step:
 
 ```sh
-yarn tauri icon src-tauri/icons/source.png
+yarn gen-icon
 ```
 
-`gen-placeholder-icon.ts` was used to produce the initial source.
-You can delete that script once you replace it.
+Re-run whenever the brand mark changes.
 
 ## Pre-release checklist
 
