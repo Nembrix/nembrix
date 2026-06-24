@@ -1,0 +1,38 @@
+version: 2
+
+updates:
+  # ─── GitHub Actions ────────────────────────────────────────────────
+  # Keeps the SHA-pinned `uses:` refs in .github/workflows/* current.
+  # Dependabot reads the `# vX.Y.Z` comment next to each pinned SHA,
+  # bumps both the SHA and the comment, and opens a PR.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      # Match the repo's Conventional Commits convention (commitlint).
+      prefix: "ci"
+    groups:
+      # One PR per week for all routine action bumps instead of one PR
+      # per action — less noise, still reviewable.
+      actions:
+        patterns:
+          - "*"
+
+  # ─── npm (yarn workspaces) ─────────────────────────────────────────
+  # Root manifest covers the workspace; Dependabot resolves workspace
+  # packages from the single yarn.lock at the repo root.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore"
+      prefix-development: "chore"
+    groups:
+      # Group dev-only tooling bumps together (linters, build tools,
+      # commitlint/husky, etc.) to cut review overhead.
+      dev-dependencies:
+        dependency-type: "development"

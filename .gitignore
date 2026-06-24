@@ -18,3 +18,11 @@ playwright-report/
 # tauri.conf.json (it isn't sensitive); the key files themselves stay out.
 .updater-key
 .updater-key.pub
+
+# Package manager — this is a yarn workspace. Keep foreign lockfiles out
+# so they don't drift against yarn.lock or confuse Dependabot / CI.
+package-lock.json
+npm-shrinkwrap.json
+pnpm-lock.yaml
+bun.lockb
+bun.lock

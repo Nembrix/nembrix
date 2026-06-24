@@ -1,0 +1,117 @@
+name: Pre-release (nightly)
+
+# On every merge to main, refresh a single rolling "nightly" pre-release
+# that points at the latest main and whose notes are regenerated from the
+# PRs/commits merged since the last stable release. No binaries are built
+# here — that stays on the manual Release workflow (release.yml). This is
+# notes + metadata only, so it's cheap enough to run on every push.
+#
+# The result: a always-current `nightly` pre-release on the Releases page
+# reflecting what's on main right now, with a changelog driven by the
+# (validated) PR titles.
+
+on:
+  push:
+    branches: [main]
+    # Skip pushes that only touch things that can't change the build/notes
+    # in a way worth re-cutting nightly for. Tweak as needed.
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+
+# Don't let two merges in quick succession race on the same rolling tag.
+# cancel-in-progress is fine here: the newest merge wins and supersedes
+# an in-flight older run.
+concurrency:
+  group: prerelease-nightly
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  # The single rolling tag reused for every nightly. Recreated each run so
+  # it always points at the current main.
+  NIGHTLY_TAG: nightly
+
+jobs:
+  nightly:
+    name: Refresh nightly pre-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+
+      - id: meta
+        name: Resolve version + commit
+        shell: bash
+        run: |
+          VERSION=$(jq -r .version apps/desktop/src-tauri/tauri.conf.json)
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          echo "version=$VERSION"     >> "$GITHUB_OUTPUT"
+          echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+
+      # Re-point the rolling tag at the current commit. Force-update so the
+      # nightly always tracks the tip of main.
+      - name: Move nightly tag to HEAD
+        shell: bash
+        run: |
+          git config user.name  "Nembrix release bot"
+          git config user.email "release-bot@users.noreply.github.com"
+          git tag -f "$NIGHTLY_TAG"
+          git push -f origin "refs/tags/${NIGHTLY_TAG}"
+
+      - name: Create or update the nightly pre-release
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          TAG: ${{ env.NIGHTLY_TAG }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          SHORT_SHA: ${{ steps.meta.outputs.short_sha }}
+        with:
+          script: |
+            const { TAG, VERSION, SHORT_SHA } = process.env;
+            const { owner, repo } = context.repo;
+
+            const name = `Nightly (${VERSION} @ ${SHORT_SHA})`;
+            const common = {
+              owner, repo,
+              tag_name: TAG,
+              target_commitish: context.sha,
+              name,
+              draft: false,
+              prerelease: true,
+            };
+
+            // Auto-generate notes from merged PRs since the last release.
+            // generate_release_notes on create works; for updates we ask
+            // the API to (re)generate explicitly so notes stay current.
+            const notes = await github.rest.repos.generateReleaseNotes({
+              owner, repo,
+              tag_name: TAG,
+              target_commitish: context.sha,
+            });
+            const body =
+              `> ⚠️ **Pre-release build of \`main\`** — automatically updated on every merge.\n` +
+              `> Commit \`${SHORT_SHA}\`. For stable, see the latest non-pre-release.\n\n` +
+              notes.data.body;
+
+            // Find an existing nightly release for this tag and update it
+            // in place, otherwise create it. Reusing the same release id
+            // keeps a single rolling entry on the Releases page.
+            const list = await github.rest.repos.listReleases({
+              owner, repo, per_page: 100,
+            });
+            const existing = list.data.find(r => r.tag_name === TAG);
+
+            if (existing) {
+              core.info(`Updating existing nightly release ${existing.id}`);
+              await github.rest.repos.updateRelease({
+                ...common,
+                release_id: existing.id,
+                body,
+              });
+            } else {
+              core.info(`Creating new nightly release for ${TAG}`);
+              await github.rest.repos.createRelease({ ...common, body });
+            }
