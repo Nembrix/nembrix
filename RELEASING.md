@@ -40,6 +40,10 @@ variables → Actions`). When a secret is missing, the relevant signing
 step is **skipped** rather than failing — so you can ship an unsigned
 test build before all the certs are in place.
 
+> For the click-by-click procedure to produce the certificates and load
+> these secrets (export the `.p12`, app-specific password, `gh secret
+> set` commands), see **[docs/release-signing.md](docs/release-signing.md)**.
+
 ### macOS code signing + notarization
 
 | Secret | What it is | How to get it |
@@ -81,14 +85,14 @@ the rest of the release ships normally.
 
 **One-time tap setup:**
 
-1. Create a new public repo named `homebrew-db-client` (the
+1. Create a new public repo named `homebrew-nembrix` (the
    `homebrew-` prefix is mandatory — Homebrew finds taps by name).
 2. Initialize it with an empty `Casks/` directory.
 3. Add a basic README. Recommended:
    ```sh
    echo "# Homebrew tap for Nembrix" > README.md
    echo "" >> README.md
-   echo "brew install --cask <user>/db-client/db-client" >> README.md
+   echo "brew install --cask <user>/nembrix/nembrix" >> README.md
    ```
 4. Generate a fine-grained PAT scoped to that single repo with
    contents:write permission. Add it as `HOMEBREW_TAP_TOKEN` here.
@@ -96,19 +100,19 @@ the rest of the release ships normally.
 After the first release, users install with:
 
 ```sh
-brew tap <user>/db-client
-brew install --cask db-client
+brew tap <user>/nembrix
+brew install --cask nembrix
 ```
 
 Or in one line:
 
 ```sh
-brew install --cask <user>/db-client/db-client
+brew install --cask <user>/nembrix/nembrix
 ```
 
-The cask template lives at `.cask/db-client.rb.tmpl`. The workflow
+The cask template lives at `.cask/nembrix.rb.tmpl`. The workflow
 substitutes `__VERSION__`, `__SHA256__`, `__OWNER__`, `__REPO__`
-at release time and pushes the rendered file to `Casks/db-client.rb`
+at release time and pushes the rendered file to `Casks/nembrix.rb`
 in the tap repo.
 
 Pre-release builds (`prerelease: true`) **skip** the brew update — we
@@ -185,13 +189,13 @@ Every artifact `tauri-action` produces lands on the GitHub Release
 automatically. Filenames follow Tauri's defaults:
 
 ```
-DB-Client_<version>_universal.dmg
-DB-Client_<version>_universal.app.tar.gz
-DB-Client_<version>_x64_en-US.msi
-DB-Client_<version>_x64-setup.exe
-DB-Client_<version>_amd64.AppImage
-DB-Client_<version>_amd64.deb
-DB-Client_<version>_arm64.AppImage
+Nembrix_<version>_universal.dmg
+Nembrix_<version>_universal.app.tar.gz
+Nembrix_<version>_x64_en-US.msi
+Nembrix_<version>_x64-setup.exe
+Nembrix_<version>_amd64.AppImage
+Nembrix_<version>_amd64.deb
+Nembrix_<version>_arm64.AppImage
 ```
 
 Plus the updater manifest and per-bundle signatures (when
