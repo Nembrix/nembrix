@@ -229,6 +229,22 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
+      # ─── Updater endpoint ──────────────────────────────────────
+      # tauri.conf.json ships the updater endpoint with __OWNER__/__REPO__
+      # placeholders so the repo is forkable without editing config. Bake
+      # the actual repo coordinates in here, just before the build, from
+      # the GitHub context. The pubkey is already committed (it isn't
+      # secret); only the matching TAURI_SIGNING_PRIVATE_KEY secret signs.
+      - name: Set updater endpoint
+        shell: bash
+        run: |
+          CONF=apps/desktop/src-tauri/tauri.conf.json
+          tmp=$(mktemp)
+          sed -e "s/__OWNER__/${{ github.repository_owner }}/g" \
+              -e "s/__REPO__/${{ github.event.repository.name }}/g" \
+              "$CONF" > "$tmp" && mv "$tmp" "$CONF"
+          echo "Updater endpoint:"; grep -A1 endpoints "$CONF"
+
       # ─── Tauri build + sign + upload ───────────────────────────
       - name: Build & upload
         uses: tauri-apps/tauri-action@v0
@@ -241,7 +257,10 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # ── Tauri auto-updater (optional)
+          # ── Tauri auto-updater: signs the update bundles + latest.json.
+          #    When TAURI_SIGNING_PRIVATE_KEY is unset the build still
+          #    produces installers, but the .sig files (and thus a working
+          #    updater) are skipped — ship the key secret to enable updates.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
@@ -251,6 +270,11 @@ jobs:
           # desktop app workspace. tauri-action runs `yarn build`
           # from this path, so vite + tsc see the right tsconfig.
           projectPath: apps/desktop
+          # Generate latest.json (the updater manifest) from the artifacts
+          # actually built and attach it to the release. The app's updater
+          # endpoint points at this file — no hand-maintained manifest, no
+          # drift between what shipped and what the updater advertises.
+          includeUpdaterJson: true
           # Pull request builds skip signing/uploading. The tag is set
           # via the prepare job's tag output; tauri-action attaches the
           # built artifacts to that release.

@@ -241,6 +241,7 @@ export function registerAllMenuHandlers() {
     window.open("https://github.com/oesukam/nembrix/blob/main/README.md", "_blank");
   });
   registerMenu(MENU.HELP_SHORTCUTS, () => s().openShortcuts());
+  registerMenu(MENU.HELP_CHECK_UPDATES, () => s().checkForUpdates());
   registerMenu(MENU.HELP_REPORT_ISSUE, () => {
     window.open("https://github.com/oesukam/nembrix/issues/new", "_blank");
   });

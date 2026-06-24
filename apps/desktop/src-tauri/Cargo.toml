@@ -18,12 +18,18 @@ tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-os = "2"
+# Auto-updater: checks a signed manifest on the GitHub release, downloads
+# and installs the new bundle. `process` is its companion — `relaunch()`
+# restarts the app after the install is staged.
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 tauri-specta = { version = "2.0.0-rc", features = ["typescript"] }
 specta.workspace = true
 specta-typescript = "0.0.7"
 
 db-core.workspace = true
 db-postgres.workspace = true
+db-mongo.workspace = true
 ssh-tunnel.workspace = true
 secrets.workspace = true
 sql-format.workspace = true

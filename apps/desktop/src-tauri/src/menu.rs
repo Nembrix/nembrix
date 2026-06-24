@@ -174,6 +174,7 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .item(&MenuItemBuilder::with_id("help.docs", "Documentation").build(app)?)
         .item(&MenuItemBuilder::with_id("help.shortcuts", "Keyboard Shortcuts").build(app)?)
         .separator()
+        .item(&MenuItemBuilder::with_id("help.check_updates", "Check for Updates…").build(app)?)
         .item(&MenuItemBuilder::with_id("help.report_issue", "Report an Issue…").build(app)?)
         .build()?;
 

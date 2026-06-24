@@ -15,9 +15,19 @@ const ENGINES: { key: EngineKey; label: string; supported: boolean }[] = [
   { key: "postgres", label: "PostgreSQL", supported: true },
   { key: "mysql",    label: "MySQL",      supported: false },
   { key: "sqlite",   label: "SQLite",     supported: false },
-  { key: "mongo",    label: "MongoDB",    supported: false },
+  { key: "mongo",    label: "MongoDB",    supported: true },
   { key: "redis",    label: "Redis",      supported: false },
 ];
+
+/** The well-known default port per engine, applied when the user switches
+ *  engines so they don't have to remember 27017 vs 5432. */
+const DEFAULT_PORT: Record<EngineKey, number> = {
+  postgres: 5432,
+  mysql: 3306,
+  sqlite: 0,
+  mongo: 27017,
+  redis: 6379,
+};
 
 /** Build a libpq-style URI from the current form values. The password
  *  is intentionally omitted from the *display* string (Test/Connect
@@ -77,7 +87,7 @@ function recordToInput(c: ConnectionRecord): ConnectionInput {
   return {
     id: c.id,
     name: c.name,
-    engine: "postgres",
+    engine: (c.engine as ConnectionInput["engine"]) || "postgres",
     host: c.host,
     port: c.port,
     username: c.username,
@@ -266,7 +276,9 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <Database size={15} />
-          <span>{editing ? `Edit ${editing.name}` : "New PostgreSQL connection"}</span>
+          <span>{editing
+            ? `Edit ${editing.name}`
+            : `New ${ENGINES.find((e) => e.key === v.engine)?.label ?? "database"} connection`}</span>
           <span style={{ flex: 1 }} />
           <button className="icon-btn" onClick={onClose} aria-label="Close">
             <X size={14} />
@@ -282,7 +294,15 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
               onChange={(e) => {
                 const next = e.target.value as ConnectionInput["engine"];
                 const found = ENGINES.find((g) => g.key === next);
-                if (found?.supported) patch({ engine: next });
+                if (!found?.supported) return;
+                // Snap the port to the new engine's default, but only if the
+                // current port is still some engine's default (i.e. the user
+                // hasn't typed a custom one we'd be clobbering).
+                const portIsDefault = Object.values(DEFAULT_PORT).includes(v.port);
+                patch({
+                  engine: next,
+                  ...(portIsDefault ? { port: DEFAULT_PORT[next as EngineKey] } : {}),
+                });
               }}
             >
               {ENGINES.map((e) => (

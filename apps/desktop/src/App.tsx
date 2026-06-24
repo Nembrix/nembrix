@@ -9,6 +9,7 @@ import EmptyTabArea from "@/components/EmptyTabArea";
 import ShortcutsModal from "@/components/ShortcutsModal";
 import PreferencesDialog from "@/features/preferences/PreferencesDialog";
 import AboutDialog from "@/components/AboutDialog";
+import UpdateDialog from "@/features/updater/UpdateDialog";
 import CommandPalette from "@/components/CommandPalette";
 import QueryTab from "@/features/query/QueryTab";
 import TableDataTab from "@/features/table_data/TableDataTab";
@@ -159,6 +160,7 @@ export default function App() {
       <ShortcutsModal />
       {preferencesOpen && <PreferencesDialog onClose={closePreferences} />}
       <AboutDialog />
+      <UpdateDialog />
       <CommandPalette />
     </div>
   );
