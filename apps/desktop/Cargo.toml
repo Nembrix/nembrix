@@ -8,6 +8,7 @@ members = [
     "src-tauri",
     "crates/db-core",
     "crates/db-postgres",
+    "crates/db-mongo",
     "crates/ssh-tunnel",
     "crates/secrets",
     "crates/sql-format",
@@ -21,7 +22,7 @@ publish = false
 
 [workspace.dependencies]
 testcontainers = "0.23"
-testcontainers-modules = { version = "0.11", features = ["postgres"] }
+testcontainers-modules = { version = "0.11", features = ["postgres", "mongo"] }
 
 async-trait = "0.1"
 tokio = { version = "1", features = ["full"] }
@@ -33,7 +34,7 @@ anyhow = "1"
 uuid = { version = "1", features = ["v4", "serde"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-specta = { version = "2.0.0-rc", features = ["serde", "serde_json", "uuid", "chrono"] }
+specta = { version = "2.0.0-rc", features = ["derive", "serde", "serde_json", "uuid", "chrono"] }
 chrono = { version = "0.4", features = ["serde"] }
 
 sqlx = { version = "0.8", default-features = false, features = [
@@ -46,6 +47,13 @@ sqlx = { version = "0.8", default-features = false, features = [
 ] }
 deadpool-postgres = "0.14"
 tokio-postgres = { version = "0.7", features = ["with-chrono-0_4", "with-uuid-1", "with-serde_json-1"] }
+
+# Mongo. The driver bundles its own connection pooling, so unlike the
+# Postgres path there's no sqlx-style Pool to manage by hand. We use
+# mongodb's re-exported `bson` everywhere (mongodb 3.x defaults to
+# bson 3) so a single bson version flows through the public API — no
+# separate top-level `bson` dep, which would risk a v2/v3 type split.
+mongodb = "3"
 
 # Pinned to 0.43.x — 0.44 reorganized the public re-exports and 0.45
 # renamed several auth methods. Migrating is a sizeable lift we don't
@@ -61,6 +69,7 @@ sqlformat = "0.2"
 
 db-core = { path = "crates/db-core" }
 db-postgres = { path = "crates/db-postgres" }
+db-mongo = { path = "crates/db-mongo" }
 ssh-tunnel = { path = "crates/ssh-tunnel" }
 secrets = { path = "crates/secrets" }
 sql-format = { path = "crates/sql-format" }

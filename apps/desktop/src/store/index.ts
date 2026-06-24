@@ -199,6 +199,8 @@ interface State {
   historyTick: number;
   /** Bumped when a saved query is added/removed/updated. */
   savedQueriesTick: number;
+  /** Bumped by Help → Check for Updates… to drive a manual update check. */
+  updateCheckTick: number;
 
   setConnections: (cs: ConnectionRecord[]) => void;
   setStatus: (id: string, s: State["status"][string]) => void;
@@ -247,6 +249,11 @@ interface State {
   openPalette: () => void;
   closePalette: () => void;
   togglePalette: () => void;
+  /** Bumped to ask the updater to run a manual check (Help → Check for
+   *  Updates…). The UpdateDialog watches this and re-checks on each bump,
+   *  surfacing "you're up to date" even when no update is found — unlike
+   *  the silent on-launch check, which stays quiet. */
+  checkForUpdates: () => void;
 
   fireEditorAction: (a: EditorAction) => void;
   bumpHistory: () => void;
@@ -288,6 +295,7 @@ export const useStore = create<State>((set, get) => ({
   editorAction: null,
   historyTick: 0,
   savedQueriesTick: 0,
+  updateCheckTick: 0,
 
   setConnections: (cs) => set({ connections: cs }),
   setStatus: (id, s) => set((st) => ({ status: { ...st.status, [id]: s } })),
@@ -401,6 +409,7 @@ export const useStore = create<State>((set, get) => ({
   openPalette: () => set({ paletteOpen: true }),
   closePalette: () => set({ paletteOpen: false }),
   togglePalette: () => set((st) => ({ paletteOpen: !st.paletteOpen })),
+  checkForUpdates: () => set((st) => ({ updateCheckTick: st.updateCheckTick + 1 })),
 
   fireEditorAction: (a) =>
     set((st) => ({ editorAction: a, editorTick: st.editorTick + 1 })),

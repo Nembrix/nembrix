@@ -88,6 +88,7 @@ export const MENU = {
   // Help
   HELP_DOCS: "help.docs",
   HELP_SHORTCUTS: "help.shortcuts",
+  HELP_CHECK_UPDATES: "help.check_updates",
   HELP_REPORT_ISSUE: "help.report_issue",
   HELP_ABOUT: "help.about",
 } as const;
@@ -216,6 +217,7 @@ export const MENUS: MenuGroup[] = [
       { id: MENU.HELP_DOCS, label: "Documentation" },
       { id: MENU.HELP_SHORTCUTS, label: "Keyboard Shortcuts" },
       { separator: true },
+      { id: MENU.HELP_CHECK_UPDATES, label: "Check for Updates…" },
       { id: MENU.APP_RELOAD, label: "Reload App", accel: "⌘⇧R" },
       { separator: true },
       { id: MENU.HELP_REPORT_ISSUE, label: "Report an Issue…" },

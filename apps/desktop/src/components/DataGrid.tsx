@@ -10,6 +10,7 @@ import { rewriteSqlWithFilters } from "@/features/grid/filter-sql";
 import { scopeKey, getWidth, setWidth } from "@/components/grid-column-widths";
 import ContextMenu, { type ContextItem } from "@/components/ContextMenu";
 import { buildUpdate, cellToText, pkValuesFor, valueLiteral } from "@/components/grid_edit";
+import ExportDialog from "@/features/export/ExportDialog";
 import * as api from "@/ipc/commands";
 
 const ROW_H = 22;
@@ -101,6 +102,9 @@ export default function DataGrid({ tab }: { tab: Tab }) {
   const [focusedRow, setFocusedRow] = useState<number | null>(null);
   /** Right-click context menu state. */
   const [cellCtx, setCellCtx] = useState<{ x: number; y: number; items: ContextItem[] } | null>(null);
+  /** When true, the export dialog is open. The dialog itself handles the
+   *  loaded-rows-vs-re-query-all choice and the native save flow. */
+  const [exportOpen, setExportOpen] = useState(false);
   /** Whether we're currently committing pending edits — disables the
    *  Save button so we don't double-fire. */
   const [savingEdits, setSavingEdits] = useState(false);
@@ -466,6 +470,11 @@ export default function DataGrid({ tab }: { tab: Tab }) {
           rows[rowIdx].map(cellToText).join("\t"),
         ) },
       { separator: true },
+      // Export the result set (CSV / JSON / SQL) via the save dialog. The
+      // dialog re-queries all rows when this grid is backed by a table
+      // (sourceRelation set); otherwise it exports the loaded rows.
+      { label: "Export…", onClick: () => setExportOpen(true) },
+      { separator: true },
       editable
         ? { label: "Edit", onClick: () => setEditing({ row: rowIdx, col: colIdx }) }
         : { label: "Edit (no PK on table)", onClick: () => {} },
@@ -801,6 +810,16 @@ export default function DataGrid({ tab }: { tab: Tab }) {
           y={cellCtx.y}
           items={cellCtx.items}
           onClose={() => setCellCtx(null)}
+        />
+      )}
+
+      {exportOpen && (
+        <ExportDialog
+          source={tab.sourceRelation}
+          connId={tab.connId}
+          columns={cols}
+          rows={rows}
+          onClose={() => setExportOpen(false)}
         />
       )}
 

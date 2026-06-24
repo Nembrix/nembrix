@@ -114,16 +114,47 @@ in the tap repo.
 Pre-release builds (`prerelease: true`) **skip** the brew update — we
 don't want `brew install` to point at beta dmgs.
 
-### Tauri auto-updater (optional, future)
+### Tauri auto-updater
 
-If you wire up the Tauri updater later:
+The app ships with the auto-updater **wired** (Help → "Check for Updates…",
+plus a silent check on launch). It reads a signed `latest.json` from the
+GitHub Release; the release workflow generates that manifest from the exact
+artifacts it built (`includeUpdaterJson: true`), so there's nothing to
+hand-maintain.
 
 | Secret | What it is |
 | --- | --- |
-| `TAURI_SIGNING_PRIVATE_KEY` | Private key for signing update bundles |
-| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Password for the private key |
+| `TAURI_SIGNING_PRIVATE_KEY` | Private key for signing update bundles. **Required** for updates to work — without it the build still ships installers, but no `.sig` files, so clients reject the update. |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Password for the private key (empty if you generated it without one). |
 
-Generated via `yarn tauri signer generate -- -w ~/.tauri/db-client.key`.
+**One-time key setup:**
+
+1. Generate a keypair:
+   ```sh
+   yarn tauri signer generate -w ~/.tauri/nembrix-updater.key
+   ```
+   (We generated one during initial setup; the **public** half is already
+   committed in `src-tauri/tauri.conf.json` under `plugins.updater.pubkey`.
+   Only regenerate if you're rotating keys — and if you do, update that
+   pubkey in lockstep or existing installs can't verify new updates.)
+
+2. Add the **private** key as the `TAURI_SIGNING_PRIVATE_KEY` secret:
+   ```sh
+   base64 -i ~/.tauri/nembrix-updater.key | pbcopy   # paste into the secret
+   ```
+   (Or paste the file contents directly — tauri-action accepts either.)
+
+3. If you set a password during generation, add it as
+   `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
+
+The updater endpoint in `tauri.conf.json` carries `__OWNER__`/`__REPO__`
+placeholders so the repo stays forkable; the release workflow's
+"Set updater endpoint" step bakes in the real coordinates at build time
+from the GitHub context.
+
+> ⚠️ Keep the private key safe and backed up. If you lose it you cannot
+> sign updates that existing installs will accept — users would have to
+> reinstall from scratch to get back on the update channel.
 
 ## Platforms
 
@@ -161,6 +192,14 @@ DB-Client_<version>_x64-setup.exe
 DB-Client_<version>_amd64.AppImage
 DB-Client_<version>_amd64.deb
 DB-Client_<version>_arm64.AppImage
+```
+
+Plus the updater manifest and per-bundle signatures (when
+`TAURI_SIGNING_PRIVATE_KEY` is set):
+
+```
+latest.json                 # the updater reads this
+*.sig                        # detached minisign signatures, one per bundle
 ```
 
 ## Icons

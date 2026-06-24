@@ -65,6 +65,10 @@ export default function ExportDialog({ source, connId, columns, rows, onClose }:
     const base = source ? `${source.schema}.${source.table}` : "export";
     return `${base}.${suggestExt(format)}`;
   }, [source, format]);
+  // Whether we can pop a real save dialog (name + location). True in the
+  // desktop app (native dialog) and in Chromium browsers that expose the
+  // File System Access API; false only on the legacy anchor-download path.
+  const canChooseSavePath = isTauri || hasSaveFilePicker();
 
   const toggle = (name: string) =>
     setIncluded((cur) => cur.includes(name) ? cur.filter((c) => c !== name) : [...cur, name]);
@@ -349,7 +353,7 @@ export default function ExportDialog({ source, connId, columns, rows, onClose }:
             disabled={working || included.length === 0}
             onClick={run}
           >
-            {working ? "Exporting…" : isTauri ? "Save to file…" : "Download"}
+            {working ? "Exporting…" : canChooseSavePath ? "Save to file…" : "Download"}
           </button>
         </div>
       </div>
@@ -394,7 +398,34 @@ async function saveToDisk(text: string, filename: string, format: ExportFormat):
     await writeTextFile(path, text);
     return path;
   }
-  // Browser: trigger a download via an anchor + Blob URL.
+  // Browser with the File System Access API (Chromium-based webviews):
+  // open a real save dialog so the user can pick the name and location,
+  // mirroring the native Tauri flow. Returns the chosen filename.
+  if (hasSaveFilePicker()) {
+    try {
+      const handle = await window.showSaveFilePicker!({
+        suggestedName: filename,
+        types: [{
+          description: format.toUpperCase(),
+          accept: { [mimeType(format)]: [`.${suggestExt(format)}`] },
+        }],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(text);
+      await writable.close();
+      // `handle.name` is the name the user actually chose/typed.
+      return handle.name ?? filename;
+    } catch (e) {
+      // AbortError = the user dismissed the picker; treat as cancel so the
+      // caller stays on the form rather than showing a spurious error.
+      if (e instanceof DOMException && e.name === "AbortError") return null;
+      throw e;
+    }
+  }
+
+  // Last resort (no picker support): anchor + Blob URL download. The
+  // browser decides the name/location, so we report a best-effort
+  // "Downloads/<filename>" for the success view.
   const blob = new Blob([text], { type: mimeType(format) });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -404,8 +435,11 @@ async function saveToDisk(text: string, filename: string, format: ExportFormat):
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  // We don't actually know the OS path the browser chose, so report a
-  // best-effort "in your Downloads folder" so the success view says
-  // something useful.
   return `Downloads/${filename}`;
+}
+
+/** Whether the browser exposes the File System Access save picker. Tauri
+ *  has its own native dialog, so this only matters for browser/dev mode. */
+function hasSaveFilePicker(): boolean {
+  return typeof window !== "undefined" && typeof window.showSaveFilePicker === "function";
 }

@@ -1,5 +1,7 @@
 use crate::state::{AppState, LiveConn};
 use chrono::Utc;
+use db_core::DynConn;
+use db_mongo::{MongoConfig, MongoConn};
 use db_postgres::{PgConfig, PgConn, PgSsl};
 use secrets::{ConnectionRecord, SecretSlot, SshRecord};
 use serde::{Deserialize, Serialize};
@@ -130,32 +132,87 @@ pub async fn connect(state: State<'_, AppState>, id: Uuid) -> Result<(), String>
         (rec.host.clone(), rec.port, None)
     };
 
-    let ssl_mode = match rec.ssl_mode.as_str() {
-        "disable" => PgSsl::Disable,
-        "require" => PgSsl::Require,
-        _ => PgSsl::Prefer,
-    };
-
-    let cfg = PgConfig {
+    let db = build_driver(
+        &rec.engine,
         host,
         port,
-        user: rec.username.clone(),
-        password: db_password,
-        database: rec.database.clone(),
-        ssl_mode,
-        application_name: Some("nembrix".into()),
-        statement_timeout_ms: None,
-    };
+        &rec.username,
+        db_password,
+        rec.database.clone(),
+        &rec.ssl_mode,
+        "nembrix",
+        None,
+    )
+    .await?;
 
-    let db = PgConn::connect(cfg).await.map_err(|e| e.to_string())?;
-    state.conns.write().await.insert(
-        id,
-        LiveConn {
-            db: db as _,
-            tunnel,
-        },
-    );
+    state.conns.write().await.insert(id, LiveConn { db, tunnel });
     Ok(())
+}
+
+/// Construct a live driver for an engine. Shared by `connect` (long-lived,
+/// no timeout) and `test_connection` (short-lived, with a connect timeout so
+/// an unreachable host fails fast). Returns the engine-agnostic `DynConn` the
+/// rest of the app speaks to.
+#[allow(clippy::too_many_arguments)]
+async fn build_driver(
+    engine: &str,
+    host: String,
+    port: u16,
+    username: &str,
+    password: Option<String>,
+    database: Option<String>,
+    ssl_mode: &str,
+    app_name: &str,
+    connect_timeout_ms: Option<u64>,
+) -> Result<DynConn, String> {
+    match engine {
+        "postgres" => {
+            let ssl_mode = match ssl_mode {
+                "disable" => PgSsl::Disable,
+                "require" => PgSsl::Require,
+                _ => PgSsl::Prefer,
+            };
+            let pg = PgConn::connect(PgConfig {
+                host,
+                port,
+                user: username.to_string(),
+                password,
+                database,
+                ssl_mode,
+                application_name: Some(app_name.to_string()),
+                // Postgres has its own statement timeout knob; the connect
+                // timeout used by test_connection doesn't map onto it, so we
+                // keep its prior behaviour (5s statement timeout on test).
+                statement_timeout_ms: connect_timeout_ms.map(|_| 5_000),
+            })
+            .await
+            .map_err(|e| e.to_string())?;
+            Ok(pg as DynConn)
+        }
+        "mongo" => {
+            // Mongo has no libpq-style ssl_mode ladder — anything other than
+            // "disable" turns TLS on. `username` empty ⇒ unauthenticated.
+            let mongo = MongoConn::connect(MongoConfig {
+                host,
+                port,
+                user: (!username.is_empty()).then(|| username.to_string()),
+                password,
+                database,
+                // Credentials are checked against `admin` unless the
+                // connection itself targets another auth database. The
+                // connection form doesn't expose authSource yet, so default
+                // it; advanced users can switch via runCommand once in.
+                auth_source: Some("admin".to_string()),
+                tls: ssl_mode != "disable",
+                app_name: Some(app_name.to_string()),
+                connect_timeout_ms,
+            })
+            .await
+            .map_err(|e| e.to_string())?;
+            Ok(mongo as DynConn)
+        }
+        other => Err(format!("unsupported engine: {other}")),
+    }
 }
 
 #[tauri::command]
@@ -203,25 +260,19 @@ pub async fn test_connection(input: ConnectionInput) -> Result<u64, String> {
         (input.host.clone(), input.port, None)
     };
 
-    let pg = PgConn::connect(PgConfig {
+    let db = build_driver(
+        &input.engine,
         host,
         port,
-        user: input.username,
-        password: input.password,
-        database: input.database,
-        ssl_mode: match input.ssl_mode.as_str() {
-            "disable" => PgSsl::Disable,
-            "require" => PgSsl::Require,
-            _ => PgSsl::Prefer,
-        },
-        application_name: Some("nembrix-test".into()),
-        statement_timeout_ms: Some(5_000),
-    })
-    .await
-    .map_err(|e| e.to_string())?;
-    db_core::DbConnection::ping(pg.as_ref())
-        .await
-        .map_err(|e| e.to_string())?;
+        &input.username,
+        input.password,
+        input.database,
+        &input.ssl_mode,
+        "nembrix-test",
+        Some(5_000),
+    )
+    .await?;
+    db.ping().await.map_err(|e| e.to_string())?;
     Ok(started.elapsed().as_millis() as u64)
 }
 

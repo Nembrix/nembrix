@@ -1,1 +1,1 @@
-{"default":{"identifier":"default","description":"Default capabilities for the main window","local":true,"windows":["main"],"permissions":["core:default","shell:allow-open","dialog:default","fs:default","os:default"]}}
+{"default":{"identifier":"default","description":"Default capabilities for the main window","local":true,"windows":["main"],"permissions":["core:default","shell:allow-open","dialog:default","fs:default","os:default","updater:default","process:default"]}}
