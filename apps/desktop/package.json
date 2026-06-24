@@ -28,7 +28,7 @@
     "@codemirror/state": "^6.4.1",
     "@codemirror/view": "^6.28.0",
     "@tanstack/react-table": "^8.20.0",
-    "@tanstack/react-virtual": "^3.10.0",
+    "@tanstack/react-virtual": "^3.14.3",
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-dialog": "^2.0.0",
     "@tauri-apps/plugin-fs": "^2.0.0",
