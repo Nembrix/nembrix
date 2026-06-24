@@ -14,9 +14,14 @@ export default defineConfig({
       // Pagefind is bundled by default — searchable static text out of the box.
       // No Algolia signup required.
       customCss: ["./src/styles/custom.css"],
-      social: {
-        github: "https://github.com/oesukam/nembrix",
-      },
+      // Starlight 0.32+ uses an array of link objects (was an object map).
+      social: [
+        {
+          icon: "github",
+          label: "GitHub",
+          href: "https://github.com/oesukam/nembrix",
+        },
+      ],
       sidebar: [
         {
           label: "Get started",
