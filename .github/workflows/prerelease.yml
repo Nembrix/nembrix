@@ -62,15 +62,27 @@ jobs:
           git tag -f "$NIGHTLY_TAG"
           git push -f origin "refs/tags/${NIGHTLY_TAG}"
 
+      # Changelog from Conventional Commits, filtered by cliff.toml (drops
+      # ci/test/chore/style/build and *(ci)/*(test)/… scopes). `--unreleased`
+      # covers everything merged since the last stable v* tag — the rolling
+      # `nightly` tag is in cliff.toml's skip_tags, so it isn't a boundary.
+      - id: cliff
+        name: Generate nightly notes (git-cliff)
+        uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5 # v4.8.0
+        with:
+          config: cliff.toml
+          args: --unreleased --strip header
+
       - name: Create or update the nightly pre-release
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           TAG: ${{ env.NIGHTLY_TAG }}
           VERSION: ${{ steps.meta.outputs.version }}
           SHORT_SHA: ${{ steps.meta.outputs.short_sha }}
+          NOTES: ${{ steps.cliff.outputs.content }}
         with:
           script: |
-            const { TAG, VERSION, SHORT_SHA } = process.env;
+            const { TAG, VERSION, SHORT_SHA, NOTES } = process.env;
             const { owner, repo } = context.repo;
 
             const name = `Nightly (${VERSION} @ ${SHORT_SHA})`;
@@ -83,18 +95,22 @@ jobs:
               prerelease: true,
             };
 
-            // Auto-generate notes from merged PRs since the last release.
-            // generate_release_notes on create works; for updates we ask
-            // the API to (re)generate explicitly so notes stay current.
-            const notes = await github.rest.repos.generateReleaseNotes({
-              owner, repo,
-              tag_name: TAG,
-              target_commitish: context.sha,
-            });
+            // Notes come from the git-cliff step (Conventional Commits,
+            // ci/test/chore filtered out). Fall back to GitHub's PR-based
+            // auto-notes only if cliff produced nothing for the range.
+            let changelog = (NOTES || "").trim();
+            if (!changelog) {
+              const notes = await github.rest.repos.generateReleaseNotes({
+                owner, repo,
+                tag_name: TAG,
+                target_commitish: context.sha,
+              });
+              changelog = notes.data.body;
+            }
             const body =
               `> ⚠️ **Pre-release build of \`main\`** — automatically updated on every merge.\n` +
               `> Commit \`${SHORT_SHA}\`. For stable, see the latest non-pre-release.\n\n` +
-              notes.data.body;
+              changelog;
 
             // Find an existing nightly release for this tag and update it
             // in place, otherwise create it. Reusing the same release id

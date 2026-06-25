@@ -57,6 +57,9 @@ jobs:
       upload_url: ${{ steps.create.outputs.upload_url }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          # git-cliff needs the full history + tags to compute the range.
+          fetch-depth: 0
 
       - id: resolve
         name: Resolve version
@@ -70,6 +73,17 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION"    >> "$GITHUB_OUTPUT"
 
+      # Build the changelog body from Conventional Commits. cliff.toml filters
+      # out ci/test/chore/style/build (and *(ci)/*(test)/… scopes), so the
+      # notes only carry user-facing changes. `--unreleased --tag` renders the
+      # commits since the previous v* tag under the version being cut.
+      - id: cliff
+        name: Generate release notes (git-cliff)
+        uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5 # v4.8.0
+        with:
+          config: cliff.toml
+          args: --unreleased --tag ${{ steps.resolve.outputs.tag }} --strip header
+
       - id: create
         name: Create / update draft release
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -77,9 +91,10 @@ jobs:
           TAG: ${{ steps.resolve.outputs.tag }}
           VERSION: ${{ steps.resolve.outputs.version }}
           PRERELEASE: ${{ github.event.inputs.prerelease }}
+          NOTES: ${{ steps.cliff.outputs.content }}
         with:
           script: |
-            const { TAG, VERSION, PRERELEASE } = process.env;
+            const { TAG, VERSION, PRERELEASE, NOTES } = process.env;
             // Find an existing release by tag (so reruns don't pile up
             // duplicate drafts). Releases endpoint paginates; 100 is
             // plenty for our cadence.
@@ -89,9 +104,20 @@ jobs:
               per_page: 100,
             });
             const existing = list.data.find(r => r.tag_name === TAG);
+            // Fall back to GitHub's auto-notes only if git-cliff produced
+            // nothing (e.g. no user-facing commits in the range).
+            const body = (NOTES || "").trim();
             let release;
             if (existing) {
               core.info(`Reusing existing release ${existing.id} for ${TAG}`);
+              if (body) {
+                await github.rest.repos.updateRelease({
+                  owner: context.repo.owner,
+                  repo:  context.repo.repo,
+                  release_id: existing.id,
+                  body,
+                });
+              }
               release = existing;
             } else {
               core.info(`Creating new draft release for ${TAG}`);
@@ -102,7 +128,8 @@ jobs:
                 name: `Nembrix ${VERSION}`,
                 draft: true,
                 prerelease: PRERELEASE === "true",
-                generate_release_notes: true,
+                body: body || undefined,
+                generate_release_notes: !body,
               });
               release = created.data;
             }

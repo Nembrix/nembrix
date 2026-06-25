@@ -1,0 +1,71 @@
+# git-cliff configuration — generates release notes from Conventional Commits.
+#
+# Used by .github/workflows/release.yml (stable) and prerelease.yml (nightly)
+# to build changelog bodies. Replaces GitHub's PR-title-based auto-notes so
+# that ci/test/chore/style/build commits are filtered out automatically — the
+# changelog only carries user-facing change types.
+#
+# Commit types match commitlint.config.js's type-enum. Anything skipped here
+# (skip = true) never appears in the notes.
+
+[changelog]
+# Rendered with Tera templating. Header/body/footer are concatenated.
+header = ""
+body = """
+{% if version %}\
+## {{ version | trim_start_matches(pat="v") }}{% if previous and previous.version %} — _changes since {{ previous.version }}_{% endif %}
+{% else %}\
+## Unreleased
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | upper_first }}
+{% for commit in commits %}
+- {% if commit.scope %}**{{ commit.scope }}**: {% endif %}{{ commit.message | upper_first }}{% if commit.breaking %} ⚠️ **BREAKING**{% endif %}\
+{% endfor %}
+{% endfor %}\n
+"""
+trim = true
+footer = ""
+
+[git]
+# Parse commits as Conventional Commits.
+conventional_commits = true
+# Drop commits that don't parse as conventional (merge commits, "Release vX",
+# etc.) so they never leak into the notes.
+filter_unconventional = true
+# Don't split a commit body into multiple changelog entries.
+split_commits = false
+
+# Map / filter commit types. `skip = true` excludes the type entirely.
+# Parsers run top-to-bottom; the first match wins, so the scope-skip rules
+# come first to catch non-user-facing work that was typed `fix(ci):`,
+# `fix(test):`, etc. — the scope, not the type, marks it as noise.
+commit_parsers = [
+  # Skip by scope first, regardless of type (e.g. fix(ci):, fix(test):,
+  # fix(lint): — lint cleanup is not a user-facing bug fix).
+  { message = "^\\w+\\((ci|test|build|chore|release|deps|lint)\\)", skip = true },
+  # Then map by type.
+  { message = "^feat",     group = "Features" },
+  { message = "^fix",      group = "Bug Fixes" },
+  { message = "^perf",     group = "Performance" },
+  { message = "^revert",   group = "Reverts" },
+  { message = "^docs",     group = "Documentation" },
+  { message = "^refactor", group = "Refactor" },
+  # Filtered out of release notes — these are not user-facing.
+  { message = "^chore",    skip = true },
+  { message = "^ci",       skip = true },
+  { message = "^test",     skip = true },
+  { message = "^style",    skip = true },
+  { message = "^build",    skip = true },
+  # Anything else conventional but unmatched: drop it.
+  { message = ".*",        skip = true },
+]
+
+# Treat "!" / "BREAKING CHANGE:" as breaking regardless of type.
+protect_breaking_commits = true
+# Sort newest-first within each group.
+sort_commits = "newest"
+# Only include tags shaped like vX.Y.Z (plus the rolling "nightly" tag is
+# excluded so it doesn't act as a release boundary).
+tag_pattern = "v[0-9]*"
+skip_tags = "nightly"
