@@ -517,14 +517,7 @@
     "@codemirror/view" "^6.37.0"
     crelt "^1.0.5"
 
-"@codemirror/state@^6.0.0", "@codemirror/state@^6.1.1", "@codemirror/state@^6.6.0":
-  version "6.6.0"
-  resolved "https://registry.npmjs.org/@codemirror/state/-/state-6.6.0.tgz"
-  integrity sha512-4nbvra5R5EtiCzr9BTHiTLc+MLXK2QGiAVYMyi8PkQd3SR+6ixar/Q/01Fa21TBIDOZXgeWV4WppsQolSreAPQ==
-  dependencies:
-    "@marijn/find-cluster-break" "^1.0.0"
-
-"@codemirror/state@^6.7.0":
+"@codemirror/state@^6.0.0", "@codemirror/state@^6.1.1", "@codemirror/state@^6.6.0", "@codemirror/state@^6.7.0":
   version "6.7.0"
   resolved "https://registry.npmjs.org/@codemirror/state/-/state-6.7.0.tgz#624c3504dc3d04e727dd49711fb75244e675e8e7"
   integrity sha512-Zbl9NyscLMZkfXPQnNAIIAFftidrA1UbcJEIMp24C0Bukc2I5T8wJS0wsXYsnDOqCFJUeJ1BITGNs5CqPDSmSg==
@@ -541,12 +534,12 @@
     "@codemirror/view" "^6.0.0"
     "@lezer/highlight" "^1.0.0"
 
-"@codemirror/view@^6.0.0", "@codemirror/view@^6.17.0", "@codemirror/view@^6.23.0", "@codemirror/view@^6.27.0", "@codemirror/view@^6.28.0", "@codemirror/view@^6.37.0", "@codemirror/view@^6.42.0":
-  version "6.43.1"
-  resolved "https://registry.npmjs.org/@codemirror/view/-/view-6.43.1.tgz"
-  integrity sha512-+BIjw/AG3tDQ4pJgTLPYdAW25eDE66YsvM4LKyVPgGzVgZ4a9Wj1SRX8kPVKgBDdPt8oHtZ15F0qx7p0oOHdHw==
+"@codemirror/view@^6.0.0", "@codemirror/view@^6.17.0", "@codemirror/view@^6.23.0", "@codemirror/view@^6.27.0", "@codemirror/view@^6.37.0", "@codemirror/view@^6.42.0", "@codemirror/view@^6.43.3":
+  version "6.43.3"
+  resolved "https://registry.yarnpkg.com/@codemirror/view/-/view-6.43.3.tgz#7c1986996870b23e4f05968b6b9567401afd8774"
+  integrity sha512-MwEwCAr/o0agJefhC2+reBv5kfOQpMcDRUNQrRYZgWlhH8IwQcerMZrpqWyUFSyO0ebgN2cnh/w87F7G4BGSng==
   dependencies:
-    "@codemirror/state" "^6.6.0"
+    "@codemirror/state" "^6.7.0"
     crelt "^1.0.6"
     style-mod "^4.1.0"
     w3c-keyname "^2.2.4"
@@ -2107,10 +2100,10 @@
   resolved "https://registry.npmjs.org/@tanstack/virtual-core/-/virtual-core-3.17.1.tgz#4f57146d1c27ce7ee973f1af7fe948a139a51d79"
   integrity sha512-VZyW2Uiml5tmBZwPGrSD3Sz73OxzljQMCmzYHsUTPEuTsERf5xwa+uWb01xEzkz3ZSYTjj8NEb/mKHvgKxyZdA==
 
-"@tauri-apps/api@^2.0.0", "@tauri-apps/api@^2.10.1", "@tauri-apps/api@^2.11.0", "@tauri-apps/api@^2.8.0":
-  version "2.11.0"
-  resolved "https://registry.npmjs.org/@tauri-apps/api/-/api-2.11.0.tgz"
-  integrity sha512-7CinYODhky9lmO23xHnUFv0Xt43fbtWMyxZcLcRBlFkcgXKuEirBvHpmtJ89YMhyeGcq20Wuc47Fa4XjyniywA==
+"@tauri-apps/api@^2.10.1", "@tauri-apps/api@^2.11.0", "@tauri-apps/api@^2.11.1", "@tauri-apps/api@^2.8.0":
+  version "2.11.1"
+  resolved "https://registry.yarnpkg.com/@tauri-apps/api/-/api-2.11.1.tgz#cd6b13fc26403ca095a02e39ecdbec8048d2872d"
+  integrity sha512-M2FPuYND2m+wh5hfW9ZpSdxMPdEJovPBWwoHJmwUpysTYNHaOkVFN419m/K0LIgjb/7KU2vBgsUepJWugQCvAA==
 
 "@tauri-apps/cli-darwin-arm64@2.11.2":
   version "2.11.2"
