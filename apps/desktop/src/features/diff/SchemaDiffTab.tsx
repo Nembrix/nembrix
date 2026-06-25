@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowRight, Play, RefreshCcw } from "lucide-react";
 import type { Tab } from "@/store";
 import { useStore } from "@/store";
@@ -26,7 +26,9 @@ export default function SchemaDiffTab({ tab }: { tab: Tab }) {
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState(false);
 
-  async function ensureTree(connId: string) {
+  // useCallback so the effects below can depend on it with a stable
+  // reference instead of re-running every render.
+  const ensureTree = useCallback(async (connId: string) => {
     if (!connId) return;
     if (schemas[connId]) return;
     if (status[connId] !== "connected") return;
@@ -35,11 +37,11 @@ export default function SchemaDiffTab({ tab }: { tab: Tab }) {
     } catch (e) {
       setError(String(e));
     }
-  }
+  }, [schemas, status, setSchema]);
 
   // Fetch on connect if we haven't already.
-  useEffect(() => { void ensureTree(leftConnId); }, [leftConnId]);
-  useEffect(() => { void ensureTree(rightConnId); }, [rightConnId]);
+  useEffect(() => { void ensureTree(leftConnId); }, [leftConnId, ensureTree]);
+  useEffect(() => { void ensureTree(rightConnId); }, [rightConnId, ensureTree]);
 
   const leftTree  = schemas[leftConnId];
   const rightTree = schemas[rightConnId];

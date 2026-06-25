@@ -57,8 +57,11 @@ function widthForColumn(
 export default function DataGrid({ tab }: { tab: Tab }) {
   const { schemas, updateTab, readOnly } = useStore();
   const isReadOnly = !!readOnly[tab.connId];
-  const cols = tab.columns ?? [];
-  const rawRows = tab.rows ?? [];
+  // Wrap the `?? []` fallbacks in useMemo so they keep a stable reference
+  // across renders — otherwise every render makes a fresh array literal,
+  // which churns the deps of the memos below.
+  const cols = useMemo(() => tab.columns ?? [], [tab.columns]);
+  const rawRows = useMemo(() => tab.rows ?? [], [tab.rows]);
   // Client-side sort state. `null` means natural row order (server-side).
   // Cycling: null → asc → desc → null on repeated header clicks.
   const [sort, setSort] = useState<{ col: number; dir: "asc" | "desc" } | null>(null);
@@ -110,7 +113,7 @@ export default function DataGrid({ tab }: { tab: Tab }) {
   const [savingEdits, setSavingEdits] = useState(false);
   const [saveErr, setSaveErr] = useState<string | null>(null);
 
-  const pendingEdits = tab.pendingEdits ?? {};
+  const pendingEdits = useMemo(() => tab.pendingEdits ?? {}, [tab.pendingEdits]);
   const pendingInserts = tab.pendingInserts ?? [];
   const pendingCount = Object.keys(pendingEdits).length + pendingInserts.length;
   /** Row indexes that have at least one pending cell edit — used for
@@ -226,7 +229,7 @@ export default function DataGrid({ tab }: { tab: Tab }) {
   // fixed total (not 100%) keeps the absolute row tables and the in-flow
   // header/body tables identical in width.
   const totalTableW = totalColW + fillerW;
-  const pinned = tab.pinned ?? [];
+  const pinned = useMemo(() => tab.pinned ?? [], [tab.pinned]);
   const pinnedSet = useMemo(() => new Set(pinned), [pinned]);
 
   const displayOrder = useMemo(() => {

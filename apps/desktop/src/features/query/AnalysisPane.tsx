@@ -2,7 +2,7 @@ import { useState } from "react";
 import { AlertTriangle, ChevronDown, ChevronRight, GitFork, List, Play, Zap } from "lucide-react";
 import * as api from "@/ipc/commands";
 import { compactNumber, heatLevel, parseExplainJson, type ExplainResult, type PlanNode } from "./explain";
-import { formatMs } from "@/components/RunningTimer";
+import { formatMs } from "@/lib/format-ms";
 import { ExplainGraph } from "./ExplainGraph";
 
 /**

@@ -43,6 +43,10 @@ export default function ConnectionManagerDialog({ onClose }: { onClose: () => vo
    * deliberately avoid a separate store slice for groups since they're
    * UI-only — the dialog is the only consumer. */
   const [groupsTick, setGroupsTick] = useState(0);
+  // groupsTick is an intentional manual re-fetch trigger: loadGroups()
+  // reads localStorage (non-reactive), and bumpGroups() forces a re-read
+  // after we mutate group state. The dep is deliberate, not redundant.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const groupsState = useMemo(() => loadGroups(), [groupsTick]);
   const bumpGroups = () => setGroupsTick((t) => t + 1);
 

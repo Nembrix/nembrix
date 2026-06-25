@@ -14,7 +14,7 @@
 
 import { useMemo } from "react";
 import { compactNumber, heatLevel, type ExplainResult, type PlanNode } from "./explain";
-import { formatMs } from "@/components/RunningTimer";
+import { formatMs } from "@/lib/format-ms";
 
 const NODE_W = 160;
 const NODE_H = 64;
