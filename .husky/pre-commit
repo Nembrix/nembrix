@@ -1,0 +1,31 @@
+# Auto-format + lint staged code before committing, so CI never fails on
+# formatting alone. Only runs the relevant formatter for the kinds of
+# files actually staged, then re-stages what it changed.
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+[ -z "$staged" ] && exit 0
+
+# ── Rust ──────────────────────────────────────────────────────────────
+# cargo fmt formats the whole workspace (it's fast); re-stage any .rs that
+# changed. Mirrors the CI `cargo fmt --all --check` gate.
+if echo "$staged" | grep -q '\.rs$'; then
+  if command -v cargo >/dev/null 2>&1; then
+    (cd apps/desktop/src-tauri && cargo fmt --all)
+    echo "$staged" | grep '\.rs$' | xargs -I{} git add {} 2>/dev/null || true
+  else
+    echo "husky: cargo not found — skipping rustfmt" >&2
+  fi
+fi
+
+# ── Frontend (ESLint --fix on staged TS/TSX in the desktop app) ───────
+ts_staged=$(echo "$staged" | grep -E '^apps/desktop/.*\.(ts|tsx)$' || true)
+if [ -n "$ts_staged" ]; then
+  # eslint resolves the flat config from apps/desktop; pass repo-relative
+  # paths stripped to the workspace root.
+  files=$(echo "$ts_staged" | sed 's#^apps/desktop/##')
+  (cd apps/desktop && yarn --silent eslint --fix $files) || {
+    echo "husky: eslint --fix reported unfixable errors — commit blocked" >&2
+    exit 1
+  }
+  echo "$ts_staged" | xargs -I{} git add {} 2>/dev/null || true
+fi

@@ -48,9 +48,17 @@ pub enum ParseError {
     #[error("unknown db helper `{0}`")]
     UnknownHelper(String),
     #[error("`{method}` expects {expected} argument(s), got {got}")]
-    Arity { method: String, expected: &'static str, got: usize },
+    Arity {
+        method: String,
+        expected: &'static str,
+        got: usize,
+    },
     #[error("argument {idx} to `{method}` must be {expected}")]
-    BadArgType { method: String, idx: usize, expected: &'static str },
+    BadArgType {
+        method: String,
+        idx: usize,
+        expected: &'static str,
+    },
     #[error("could not parse argument JSON: {0}")]
     Json(String),
     #[error("unbalanced or malformed call: {0}")]
@@ -73,23 +81,71 @@ pub struct FindOpts {
 /// touches the network.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Command {
-    Find { collection: String, opts: FindOpts },
+    Find {
+        collection: String,
+        opts: FindOpts,
+    },
     /// `findOne` is `find` with limit 1; we keep it distinct so the driver
     /// can shape the result as a single document if it wants to.
-    FindOne { collection: String, filter: Document, projection: Option<Document> },
-    Aggregate { collection: String, pipeline: Vec<Document> },
-    CountDocuments { collection: String, filter: Document },
-    EstimatedDocumentCount { collection: String },
-    Distinct { collection: String, field: String, filter: Document },
-    InsertOne { collection: String, doc: Document },
-    InsertMany { collection: String, docs: Vec<Document> },
-    UpdateOne { collection: String, filter: Document, update: Document, upsert: bool },
-    UpdateMany { collection: String, filter: Document, update: Document, upsert: bool },
-    ReplaceOne { collection: String, filter: Document, replacement: Document, upsert: bool },
-    DeleteOne { collection: String, filter: Document },
-    DeleteMany { collection: String, filter: Document },
+    FindOne {
+        collection: String,
+        filter: Document,
+        projection: Option<Document>,
+    },
+    Aggregate {
+        collection: String,
+        pipeline: Vec<Document>,
+    },
+    CountDocuments {
+        collection: String,
+        filter: Document,
+    },
+    EstimatedDocumentCount {
+        collection: String,
+    },
+    Distinct {
+        collection: String,
+        field: String,
+        filter: Document,
+    },
+    InsertOne {
+        collection: String,
+        doc: Document,
+    },
+    InsertMany {
+        collection: String,
+        docs: Vec<Document>,
+    },
+    UpdateOne {
+        collection: String,
+        filter: Document,
+        update: Document,
+        upsert: bool,
+    },
+    UpdateMany {
+        collection: String,
+        filter: Document,
+        update: Document,
+        upsert: bool,
+    },
+    ReplaceOne {
+        collection: String,
+        filter: Document,
+        replacement: Document,
+        upsert: bool,
+    },
+    DeleteOne {
+        collection: String,
+        filter: Document,
+    },
+    DeleteMany {
+        collection: String,
+        filter: Document,
+    },
     /// `db.runCommand({...})` — pass-through to the database command surface.
-    RunCommand { command: Document },
+    RunCommand {
+        command: Document,
+    },
     /// `db.getCollectionNames()` — admin helper, handled without a query.
     GetCollectionNames,
 }
@@ -124,9 +180,7 @@ struct Segment {
 pub fn parse(src: &str) -> Result<Command> {
     let src = strip_comments(src);
     let trimmed = src.trim().trim_end_matches(';').trim();
-    let rest = trimmed
-        .strip_prefix("db")
-        .ok_or(ParseError::NotADbCall)?;
+    let rest = trimmed.strip_prefix("db").ok_or(ParseError::NotADbCall)?;
     // `db` must be followed by `.` — reject `dbsomething`.
     let rest = rest.strip_prefix('.').ok_or(ParseError::NotADbCall)?;
 
@@ -196,22 +250,35 @@ fn parse_collection_call(coll: String, segments: &[Segment]) -> Result<Command> 
             opts.filter = filter;
             opts.projection = projection;
             apply_find_modifiers(&mut opts, tail)?;
-            Ok(Command::Find { collection: coll, opts })
+            Ok(Command::Find {
+                collection: coll,
+                opts,
+            })
         }
         "findOne" => {
             let (filter, projection) = parse_filter_projection(head, "findOne")?;
             reject_trailing(tail, "findOne")?;
-            Ok(Command::FindOne { collection: coll, filter, projection })
+            Ok(Command::FindOne {
+                collection: coll,
+                filter,
+                projection,
+            })
         }
         "aggregate" => {
             let pipeline = parse_pipeline(head)?;
             reject_trailing(tail, "aggregate")?;
-            Ok(Command::Aggregate { collection: coll, pipeline })
+            Ok(Command::Aggregate {
+                collection: coll,
+                pipeline,
+            })
         }
         "count" | "countDocuments" => {
             let filter = parse_optional_doc(head, "countDocuments")?;
             reject_trailing(tail, "countDocuments")?;
-            Ok(Command::CountDocuments { collection: coll, filter })
+            Ok(Command::CountDocuments {
+                collection: coll,
+                filter,
+            })
         }
         "estimatedDocumentCount" => {
             reject_trailing(tail, "estimatedDocumentCount")?;
@@ -221,53 +288,92 @@ fn parse_collection_call(coll: String, segments: &[Segment]) -> Result<Command> 
             let args = parse_args(&head.args_src)?;
             let field = match args.first() {
                 Some(Bson::String(s)) => s.clone(),
-                _ => return Err(ParseError::BadArgType {
-                    method: "distinct".into(), idx: 0, expected: "a field-name string",
-                }),
+                _ => {
+                    return Err(ParseError::BadArgType {
+                        method: "distinct".into(),
+                        idx: 0,
+                        expected: "a field-name string",
+                    })
+                }
             };
             let filter = match args.get(1) {
                 Some(Bson::Document(d)) => d.clone(),
                 None => Document::new(),
-                _ => return Err(ParseError::BadArgType {
-                    method: "distinct".into(), idx: 1, expected: "a filter document",
-                }),
+                _ => {
+                    return Err(ParseError::BadArgType {
+                        method: "distinct".into(),
+                        idx: 1,
+                        expected: "a filter document",
+                    })
+                }
             };
             reject_trailing(tail, "distinct")?;
-            Ok(Command::Distinct { collection: coll, field, filter })
+            Ok(Command::Distinct {
+                collection: coll,
+                field,
+                filter,
+            })
         }
         "insertOne" => {
             let doc = parse_one_doc(head, "insertOne")?;
             reject_trailing(tail, "insertOne")?;
-            Ok(Command::InsertOne { collection: coll, doc })
+            Ok(Command::InsertOne {
+                collection: coll,
+                doc,
+            })
         }
         "insertMany" => {
             let docs = parse_doc_array(head, "insertMany")?;
             reject_trailing(tail, "insertMany")?;
-            Ok(Command::InsertMany { collection: coll, docs })
+            Ok(Command::InsertMany {
+                collection: coll,
+                docs,
+            })
         }
         "updateOne" | "updateMany" => {
             let (filter, update, upsert) = parse_update(head)?;
             reject_trailing(tail, &head.method)?;
             if head.method == "updateOne" {
-                Ok(Command::UpdateOne { collection: coll, filter, update, upsert })
+                Ok(Command::UpdateOne {
+                    collection: coll,
+                    filter,
+                    update,
+                    upsert,
+                })
             } else {
-                Ok(Command::UpdateMany { collection: coll, filter, update, upsert })
+                Ok(Command::UpdateMany {
+                    collection: coll,
+                    filter,
+                    update,
+                    upsert,
+                })
             }
         }
         "replaceOne" => {
             let (filter, replacement, upsert) = parse_update(head)?;
             reject_trailing(tail, "replaceOne")?;
-            Ok(Command::ReplaceOne { collection: coll, filter, replacement, upsert })
+            Ok(Command::ReplaceOne {
+                collection: coll,
+                filter,
+                replacement,
+                upsert,
+            })
         }
         "deleteOne" => {
             let filter = parse_optional_doc(head, "deleteOne")?;
             reject_trailing(tail, "deleteOne")?;
-            Ok(Command::DeleteOne { collection: coll, filter })
+            Ok(Command::DeleteOne {
+                collection: coll,
+                filter,
+            })
         }
         "deleteMany" => {
             let filter = parse_optional_doc(head, "deleteMany")?;
             reject_trailing(tail, "deleteMany")?;
-            Ok(Command::DeleteMany { collection: coll, filter })
+            Ok(Command::DeleteMany {
+                collection: coll,
+                filter,
+            })
         }
         other => Err(ParseError::UnknownMethod(other.to_string())),
     }
@@ -309,16 +415,24 @@ fn parse_filter_projection(seg: &Segment, method: &str) -> Result<(Document, Opt
     let filter = match args.first() {
         None => Document::new(),
         Some(Bson::Document(d)) => d.clone(),
-        Some(_) => return Err(ParseError::BadArgType {
-            method: method.into(), idx: 0, expected: "a filter document",
-        }),
+        Some(_) => {
+            return Err(ParseError::BadArgType {
+                method: method.into(),
+                idx: 0,
+                expected: "a filter document",
+            })
+        }
     };
     let projection = match args.get(1) {
         None => None,
         Some(Bson::Document(d)) => Some(d.clone()),
-        Some(_) => return Err(ParseError::BadArgType {
-            method: method.into(), idx: 1, expected: "a projection document",
-        }),
+        Some(_) => {
+            return Err(ParseError::BadArgType {
+                method: method.into(),
+                idx: 1,
+                expected: "a projection document",
+            })
+        }
     };
     Ok((filter, projection))
 }
@@ -329,7 +443,9 @@ fn parse_update(seg: &Segment) -> Result<(Document, Document, bool)> {
     let args = parse_args(&seg.args_src)?;
     if args.len() < 2 {
         return Err(ParseError::Arity {
-            method: seg.method.clone(), expected: "2 or 3", got: args.len(),
+            method: seg.method.clone(),
+            expected: "2 or 3",
+            got: args.len(),
         });
     }
     let filter = as_doc(&args[0], &seg.method, 0)?;
@@ -349,12 +465,16 @@ fn parse_pipeline(seg: &Segment) -> Result<Vec<Document>> {
             .map(|b| match b {
                 Bson::Document(d) => Ok(d),
                 _ => Err(ParseError::BadArgType {
-                    method: "aggregate".into(), idx: 0, expected: "an array of stage documents",
+                    method: "aggregate".into(),
+                    idx: 0,
+                    expected: "an array of stage documents",
                 }),
             })
             .collect(),
         _ => Err(ParseError::BadArgType {
-            method: "aggregate".into(), idx: 0, expected: "a pipeline array",
+            method: "aggregate".into(),
+            idx: 0,
+            expected: "a pipeline array",
         }),
     }
 }
@@ -363,8 +483,16 @@ fn parse_one_doc(seg: &Segment, method: &str) -> Result<Document> {
     let args = parse_args(&seg.args_src)?;
     match args.into_iter().next() {
         Some(Bson::Document(d)) => Ok(d),
-        Some(_) => Err(ParseError::BadArgType { method: method.into(), idx: 0, expected: "a document" }),
-        None => Err(ParseError::Arity { method: method.into(), expected: "1", got: 0 }),
+        Some(_) => Err(ParseError::BadArgType {
+            method: method.into(),
+            idx: 0,
+            expected: "a document",
+        }),
+        None => Err(ParseError::Arity {
+            method: method.into(),
+            expected: "1",
+            got: 0,
+        }),
     }
 }
 
@@ -374,7 +502,11 @@ fn parse_optional_doc(seg: &Segment, method: &str) -> Result<Document> {
     match args.into_iter().next() {
         None => Ok(Document::new()),
         Some(Bson::Document(d)) => Ok(d),
-        Some(_) => Err(ParseError::BadArgType { method: method.into(), idx: 0, expected: "a document" }),
+        Some(_) => Err(ParseError::BadArgType {
+            method: method.into(),
+            idx: 0,
+            expected: "a document",
+        }),
     }
 }
 
@@ -385,10 +517,18 @@ fn parse_doc_array(seg: &Segment, method: &str) -> Result<Vec<Document>> {
             .into_iter()
             .map(|b| match b {
                 Bson::Document(d) => Ok(d),
-                _ => Err(ParseError::BadArgType { method: method.into(), idx: 0, expected: "an array of documents" }),
+                _ => Err(ParseError::BadArgType {
+                    method: method.into(),
+                    idx: 0,
+                    expected: "an array of documents",
+                }),
             })
             .collect(),
-        _ => Err(ParseError::BadArgType { method: method.into(), idx: 0, expected: "an array of documents" }),
+        _ => Err(ParseError::BadArgType {
+            method: method.into(),
+            idx: 0,
+            expected: "an array of documents",
+        }),
     }
 }
 
@@ -398,14 +538,22 @@ fn parse_i64_arg(seg: &Segment, method: &str) -> Result<i64> {
         Some(Bson::Int32(n)) => Ok(*n as i64),
         Some(Bson::Int64(n)) => Ok(*n),
         Some(Bson::Double(f)) => Ok(*f as i64),
-        _ => Err(ParseError::BadArgType { method: method.into(), idx: 0, expected: "an integer" }),
+        _ => Err(ParseError::BadArgType {
+            method: method.into(),
+            idx: 0,
+            expected: "an integer",
+        }),
     }
 }
 
 fn as_doc(b: &Bson, method: &str, idx: usize) -> Result<Document> {
     match b {
         Bson::Document(d) => Ok(d.clone()),
-        _ => Err(ParseError::BadArgType { method: method.into(), idx, expected: "a document" }),
+        _ => Err(ParseError::BadArgType {
+            method: method.into(),
+            idx,
+            expected: "a document",
+        }),
     }
 }
 
@@ -422,10 +570,7 @@ fn parse_args(args_src: &str) -> Result<Vec<Bson>> {
     let value: serde_json::Value =
         serde_json::from_str(&json).map_err(|e| ParseError::Json(e.to_string()))?;
     match value {
-        serde_json::Value::Array(items) => Ok(items
-            .into_iter()
-            .map(json_to_bson)
-            .collect()),
+        serde_json::Value::Array(items) => Ok(items.into_iter().map(json_to_bson).collect()),
         _ => unreachable!("we wrapped in [] above"),
     }
 }
@@ -509,16 +654,28 @@ fn split_segments(mut s: &str) -> Result<Vec<Segment>> {
         if let Some(rest) = after.strip_prefix('(') {
             // Find the matching close paren.
             let (args, remainder) = take_balanced(rest)?;
-            out.push(Segment { method: ident, args_src: args });
+            out.push(Segment {
+                method: ident,
+                args_src: args,
+            });
             // Skip an optional `.` joining to the next segment.
-            s = remainder.trim_start().strip_prefix('.').unwrap_or(remainder);
+            s = remainder
+                .trim_start()
+                .strip_prefix('.')
+                .unwrap_or(remainder);
         } else if let Some(rest) = after.strip_prefix('.') {
             // A bare identifier (collection) followed by another segment.
-            out.push(Segment { method: ident, args_src: "\0bare".into() });
+            out.push(Segment {
+                method: ident,
+                args_src: "\0bare".into(),
+            });
             s = rest;
         } else {
             // Bare identifier with nothing after — e.g. `db.users`.
-            out.push(Segment { method: ident, args_src: "\0bare".into() });
+            out.push(Segment {
+                method: ident,
+                args_src: "\0bare".into(),
+            });
             s = "";
         }
     }

@@ -15,10 +15,7 @@ use tauri::{AppHandle, Runtime, Wry};
 
 #[tauri::command]
 #[specta::specta]
-pub fn update_menu_state(
-    app: AppHandle<Wry>,
-    disabled_ids: Vec<String>,
-) -> Result<(), String> {
+pub fn update_menu_state(app: AppHandle<Wry>, disabled_ids: Vec<String>) -> Result<(), String> {
     let menu = app.menu().ok_or("no menu installed")?;
     let disabled: HashSet<String> = disabled_ids.into_iter().collect();
     walk_and_apply(&menu.items().map_err(|e| e.to_string())?, &disabled)?;

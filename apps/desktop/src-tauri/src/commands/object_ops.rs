@@ -15,14 +15,14 @@ pub struct OpPreviewWire {
 
 impl From<ops::OpPreview> for OpPreviewWire {
     fn from(p: ops::OpPreview) -> Self {
-        Self { sql: p.sql, warnings: p.warnings }
+        Self {
+            sql: p.sql,
+            warnings: p.warnings,
+        }
     }
 }
 
-async fn pg_pool(
-    state: &AppState,
-    conn_id: Uuid,
-) -> Result<Pool<Postgres>, String> {
+async fn pg_pool(state: &AppState, conn_id: Uuid) -> Result<Pool<Postgres>, String> {
     let g = state.conns.read().await;
     let live = g.get(&conn_id).ok_or("not connected")?;
     let pg = live
@@ -37,10 +37,7 @@ async fn pg_pool(
 
 #[tauri::command]
 #[specta::specta]
-pub async fn preview_rename_database(
-    from: String,
-    to: String,
-) -> Result<OpPreviewWire, String> {
+pub async fn preview_rename_database(from: String, to: String) -> Result<OpPreviewWire, String> {
     ops::preview_rename_database(&from, &to)
         .map(Into::into)
         .map_err(|e| e.to_string())
@@ -74,7 +71,10 @@ pub async fn apply_database_op(
     forbidden_target: Option<String>,
 ) -> Result<(), String> {
     let pool = pg_pool(&state, conn_id).await?;
-    let p = ops::OpPreview { sql: preview.sql, warnings: preview.warnings };
+    let p = ops::OpPreview {
+        sql: preview.sql,
+        warnings: preview.warnings,
+    };
     ops::apply(&pool, &p, forbidden_target.as_deref())
         .await
         .map_err(|e| e.to_string())
@@ -84,10 +84,7 @@ pub async fn apply_database_op(
 
 #[tauri::command]
 #[specta::specta]
-pub async fn preview_rename_schema(
-    from: String,
-    to: String,
-) -> Result<OpPreviewWire, String> {
+pub async fn preview_rename_schema(from: String, to: String) -> Result<OpPreviewWire, String> {
     ops::preview_rename_schema(&from, &to)
         .map(Into::into)
         .map_err(|e| e.to_string())
@@ -154,6 +151,9 @@ pub async fn apply_object_op(
     preview: OpPreviewWire,
 ) -> Result<(), String> {
     let pool = pg_pool(&state, conn_id).await?;
-    let p = ops::OpPreview { sql: preview.sql, warnings: preview.warnings };
+    let p = ops::OpPreview {
+        sql: preview.sql,
+        warnings: preview.warnings,
+    };
     ops::apply(&pool, &p, None).await.map_err(|e| e.to_string())
 }

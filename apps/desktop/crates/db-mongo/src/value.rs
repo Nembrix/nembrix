@@ -91,7 +91,10 @@ pub fn bson_to_cell(b: &Bson) -> CellValue {
         // Lossless string forms for the numeric/temporal types that don't
         // round-trip through JSON cleanly — same contract as Postgres `Raw`.
         Bson::Decimal128(d) => CellValue::Raw(d.to_string()),
-        Bson::DateTime(dt) => CellValue::Raw(dt.try_to_rfc3339_string().unwrap_or_else(|_| dt.to_string())),
+        Bson::DateTime(dt) => CellValue::Raw(
+            dt.try_to_rfc3339_string()
+                .unwrap_or_else(|_| dt.to_string()),
+        ),
         Bson::Timestamp(ts) => CellValue::Raw(format!("Timestamp({}, {})", ts.time, ts.increment)),
         Bson::Binary(bin) => CellValue::Bytes(bin.bytes.clone()),
         // Structural / exotic: hand to the JSON tree via relaxed extended JSON.

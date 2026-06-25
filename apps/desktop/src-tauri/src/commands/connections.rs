@@ -76,7 +76,10 @@ pub async fn save_connection(
         created_at: now,
         updated_at: now,
     };
-    state.store.upsert_connection(&rec).map_err(|e| e.to_string())?;
+    state
+        .store
+        .upsert_connection(&rec)
+        .map_err(|e| e.to_string())?;
     if let Some(pw) = input.password.as_deref() {
         secrets::put_secret(id, SecretSlot::DbPassword, pw).map_err(|e| e.to_string())?;
     }
@@ -145,7 +148,11 @@ pub async fn connect(state: State<'_, AppState>, id: Uuid) -> Result<(), String>
     )
     .await?;
 
-    state.conns.write().await.insert(id, LiveConn { db, tunnel });
+    state
+        .conns
+        .write()
+        .await
+        .insert(id, LiveConn { db, tunnel });
     Ok(())
 }
 
@@ -301,7 +308,11 @@ fn build_ssh_auth(id: Uuid, ssh: &SshRecord) -> Result<SshAuth, String> {
 fn map_tunnel_err(e: TunnelError) -> String {
     // The frontend pattern-matches on a typed prefix to surface TOFU prompts.
     match e {
-        TunnelError::UnknownHost { host, fingerprint, alg } => {
+        TunnelError::UnknownHost {
+            host,
+            fingerprint,
+            alg,
+        } => {
             format!("UNKNOWN_HOST::{host}::{fingerprint}::{alg}")
         }
         TunnelError::HostKeyMismatch { host } => format!("HOST_KEY_MISMATCH::{host}"),

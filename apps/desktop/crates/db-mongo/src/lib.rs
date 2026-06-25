@@ -234,7 +234,10 @@ impl MongoConn {
         let drv = |e: mongodb::error::Error| DbError::Driver(e.to_string());
         match cmd {
             Command::InsertOne { collection, doc } => {
-                self.collection(collection).insert_one(doc.clone()).await.map_err(drv)?;
+                self.collection(collection)
+                    .insert_one(doc.clone())
+                    .await
+                    .map_err(drv)?;
                 Ok(1)
             }
             Command::InsertMany { collection, docs } => {
@@ -245,7 +248,12 @@ impl MongoConn {
                     .map_err(drv)?;
                 Ok(res.inserted_ids.len() as u64)
             }
-            Command::UpdateOne { collection, filter, update, upsert } => {
+            Command::UpdateOne {
+                collection,
+                filter,
+                update,
+                upsert,
+            } => {
                 let res = self
                     .collection(collection)
                     .update_one(filter.clone(), update.clone())
@@ -254,7 +262,12 @@ impl MongoConn {
                     .map_err(drv)?;
                 Ok(res.modified_count + res.upserted_id.is_some() as u64)
             }
-            Command::UpdateMany { collection, filter, update, upsert } => {
+            Command::UpdateMany {
+                collection,
+                filter,
+                update,
+                upsert,
+            } => {
                 let res = self
                     .collection(collection)
                     .update_many(filter.clone(), update.clone())
@@ -263,7 +276,12 @@ impl MongoConn {
                     .map_err(drv)?;
                 Ok(res.modified_count + res.upserted_id.is_some() as u64)
             }
-            Command::ReplaceOne { collection, filter, replacement, upsert } => {
+            Command::ReplaceOne {
+                collection,
+                filter,
+                replacement,
+                upsert,
+            } => {
                 let res = self
                     .collection(collection)
                     .replace_one(filter.clone(), replacement.clone())
@@ -273,11 +291,19 @@ impl MongoConn {
                 Ok(res.modified_count + res.upserted_id.is_some() as u64)
             }
             Command::DeleteOne { collection, filter } => {
-                let res = self.collection(collection).delete_one(filter.clone()).await.map_err(drv)?;
+                let res = self
+                    .collection(collection)
+                    .delete_one(filter.clone())
+                    .await
+                    .map_err(drv)?;
                 Ok(res.deleted_count)
             }
             Command::DeleteMany { collection, filter } => {
-                let res = self.collection(collection).delete_many(filter.clone()).await.map_err(drv)?;
+                let res = self
+                    .collection(collection)
+                    .delete_many(filter.clone())
+                    .await
+                    .map_err(drv)?;
                 Ok(res.deleted_count)
             }
             // A read sent to execute() — run it for its side effect-free
@@ -317,7 +343,11 @@ async fn run_read(
             let cursor = action.await.map_err(drv)?;
             stream_documents(cursor, sink).await
         }
-        Command::FindOne { collection, filter, projection } => {
+        Command::FindOne {
+            collection,
+            filter,
+            projection,
+        } => {
             let coll = db.collection::<Document>(&collection);
             let mut action = coll.find(filter).limit(1);
             if let Some(p) = projection {
@@ -326,7 +356,10 @@ async fn run_read(
             let cursor = action.await.map_err(drv)?;
             stream_documents(cursor, sink).await
         }
-        Command::Aggregate { collection, pipeline } => {
+        Command::Aggregate {
+            collection,
+            pipeline,
+        } => {
             let cursor = db
                 .collection::<Document>(&collection)
                 .aggregate(pipeline)
@@ -350,17 +383,32 @@ async fn run_read(
                 .map_err(drv)?;
             emit_scalar(sink, "count", CellValue::Int(n as i64)).await
         }
-        Command::Distinct { collection, field, filter } => {
+        Command::Distinct {
+            collection,
+            field,
+            filter,
+        } => {
             let values = db
                 .collection::<Document>(&collection)
                 .distinct(&field, filter)
                 .await
                 .map_err(drv)?;
-            let columns = vec![ColMeta { name: field, type_name: "bson".into(), nullable: true }];
-            let rows = values.iter().map(|b| vec![value::bson_to_cell(b)]).collect();
-            sink.send(RowBatch { columns: Some(columns), rows, done: true })
-                .await
-                .ok();
+            let columns = vec![ColMeta {
+                name: field,
+                type_name: "bson".into(),
+                nullable: true,
+            }];
+            let rows = values
+                .iter()
+                .map(|b| vec![value::bson_to_cell(b)])
+                .collect();
+            sink.send(RowBatch {
+                columns: Some(columns),
+                rows,
+                done: true,
+            })
+            .await
+            .ok();
             Ok(())
         }
         Command::RunCommand { command } => {
@@ -370,9 +418,13 @@ async fn run_read(
             acc.observe(&res);
             let columns = acc.columns();
             let row = acc.row(&res);
-            sink.send(RowBatch { columns: Some(columns), rows: vec![row], done: true })
-                .await
-                .ok();
+            sink.send(RowBatch {
+                columns: Some(columns),
+                rows: vec![row],
+                done: true,
+            })
+            .await
+            .ok();
             Ok(())
         }
         Command::GetCollectionNames => {
@@ -381,11 +433,22 @@ async fn run_read(
                 .list_collection_names()
                 .await
                 .map_err(drv)?;
-            let columns = vec![ColMeta { name: "name".into(), type_name: "string".into(), nullable: false }];
-            let rows = names.into_iter().map(|n| vec![CellValue::Text(n)]).collect();
-            sink.send(RowBatch { columns: Some(columns), rows, done: true })
-                .await
-                .ok();
+            let columns = vec![ColMeta {
+                name: "name".into(),
+                type_name: "string".into(),
+                nullable: false,
+            }];
+            let rows = names
+                .into_iter()
+                .map(|n| vec![CellValue::Text(n)])
+                .collect();
+            sink.send(RowBatch {
+                columns: Some(columns),
+                rows,
+                done: true,
+            })
+            .await
+            .ok();
             Ok(())
         }
         _ => Err(DbError::Unsupported("command is not a read")),
@@ -402,10 +465,7 @@ async fn run_read(
 /// documents won't get their own column. In practice the first 200 docs of a
 /// collection almost always cover the field set; this keeps the wire contract
 /// identical to SQL without a schema-renegotiation protocol.
-async fn stream_documents(
-    mut cursor: mongodb::Cursor<Document>,
-    sink: &RowSink,
-) -> DbResult<()> {
+async fn stream_documents(mut cursor: mongodb::Cursor<Document>, sink: &RowSink) -> DbResult<()> {
     let mut acc = ColumnAccumulator::new();
     let mut buf: Vec<Document> = Vec::with_capacity(STREAM_BATCH);
     let mut sent_first = false;
@@ -441,17 +501,35 @@ async fn flush(
     sent_first: &mut bool,
     done: bool,
 ) {
-    let columns = if *sent_first { None } else { Some(acc.columns()) };
+    let columns = if *sent_first {
+        None
+    } else {
+        Some(acc.columns())
+    };
     let rows = buf.iter().map(|d| acc.row(d)).collect();
     buf.clear();
     *sent_first = true;
-    let _ = sink.send(RowBatch { columns, rows, done }).await;
+    let _ = sink
+        .send(RowBatch {
+            columns,
+            rows,
+            done,
+        })
+        .await;
 }
 
 async fn emit_scalar(sink: &RowSink, name: &str, v: CellValue) -> DbResult<()> {
-    let columns = vec![ColMeta { name: name.into(), type_name: "int".into(), nullable: false }];
-    sink.send(RowBatch { columns: Some(columns), rows: vec![value::scalar_row(v)], done: true })
-        .await
-        .ok();
+    let columns = vec![ColMeta {
+        name: name.into(),
+        type_name: "int".into(),
+        nullable: false,
+    }];
+    sink.send(RowBatch {
+        columns: Some(columns),
+        rows: vec![value::scalar_row(v)],
+        done: true,
+    })
+    .await
+    .ok();
     Ok(())
 }

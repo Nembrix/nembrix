@@ -28,9 +28,11 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let app_menu: Submenu<R> = SubmenuBuilder::new(app, &pkg.name)
         .item(&PredefinedMenuItem::about(app, Some("About"), Some(about))?)
         .separator()
-        .item(&MenuItemBuilder::with_id("app.preferences", "Preferences…")
-            .accelerator("CmdOrCtrl+,")
-            .build(app)?)
+        .item(
+            &MenuItemBuilder::with_id("app.preferences", "Preferences…")
+                .accelerator("CmdOrCtrl+,")
+                .build(app)?,
+        )
         .separator()
         .services()
         .separator()
@@ -42,26 +44,50 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .build()?;
 
     let file_menu: Submenu<R> = SubmenuBuilder::new(app, "File")
-        .item(&MenuItemBuilder::with_id("file.new_connection", "New Connection…")
-            .accelerator("CmdOrCtrl+N").build(app)?)
-        .item(&MenuItemBuilder::with_id("file.new_query_tab", "New Query Tab")
-            .accelerator("CmdOrCtrl+T").build(app)?)
-        .item(&MenuItemBuilder::with_id("file.new_window", "New Window")
-            .accelerator("CmdOrCtrl+Shift+N").build(app)?)
+        .item(
+            &MenuItemBuilder::with_id("file.new_connection", "New Connection…")
+                .accelerator("CmdOrCtrl+N")
+                .build(app)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("file.new_query_tab", "New Query Tab")
+                .accelerator("CmdOrCtrl+T")
+                .build(app)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("file.new_window", "New Window")
+                .accelerator("CmdOrCtrl+Shift+N")
+                .build(app)?,
+        )
         .separator()
-        .item(&MenuItemBuilder::with_id("file.open_saved_query", "Open Saved Query…")
-            .accelerator("CmdOrCtrl+O").build(app)?)
-        .item(&MenuItemBuilder::with_id("file.save_query", "Save Query")
-            .accelerator("CmdOrCtrl+S").build(app)?)
-        .item(&MenuItemBuilder::with_id("file.save_query_as", "Save Query As…")
-            .accelerator("CmdOrCtrl+Shift+S").build(app)?)
+        .item(
+            &MenuItemBuilder::with_id("file.open_saved_query", "Open Saved Query…")
+                .accelerator("CmdOrCtrl+O")
+                .build(app)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("file.save_query", "Save Query")
+                .accelerator("CmdOrCtrl+S")
+                .build(app)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("file.save_query_as", "Save Query As…")
+                .accelerator("CmdOrCtrl+Shift+S")
+                .build(app)?,
+        )
         .separator()
         .item(&MenuItemBuilder::with_id("file.import", "Import…").build(app)?)
         .item(&MenuItemBuilder::with_id("file.export", "Export…").build(app)?)
         .separator()
-        .item(&MenuItemBuilder::with_id("file.close_tab", "Close Tab")
-            .accelerator("CmdOrCtrl+W").build(app)?)
-        .item(&PredefinedMenuItem::close_window(app, Some("Close Window"))?)
+        .item(
+            &MenuItemBuilder::with_id("file.close_tab", "Close Tab")
+                .accelerator("CmdOrCtrl+W")
+                .build(app)?,
+        )
+        .item(&PredefinedMenuItem::close_window(
+            app,
+            Some("Close Window"),
+        )?)
         .build()?;
 
     let edit_menu: Submenu<R> = SubmenuBuilder::new(app, "Edit")
@@ -73,48 +99,87 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .paste()
         .select_all()
         .separator()
-        .item(&MenuItemBuilder::with_id("edit.find", "Find…")
-            .accelerator("CmdOrCtrl+F").build(app)?)
-        .item(&MenuItemBuilder::with_id("edit.find_next", "Find Next")
-            .accelerator("CmdOrCtrl+G").build(app)?)
-        .item(&MenuItemBuilder::with_id("edit.replace", "Find & Replace…")
-            .accelerator("CmdOrCtrl+Alt+F").build(app)?)
+        .item(
+            &MenuItemBuilder::with_id("edit.find", "Find…")
+                .accelerator("CmdOrCtrl+F")
+                .build(app)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("edit.find_next", "Find Next")
+                .accelerator("CmdOrCtrl+G")
+                .build(app)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("edit.replace", "Find & Replace…")
+                .accelerator("CmdOrCtrl+Alt+F")
+                .build(app)?,
+        )
         .build()?;
 
     let view_menu: Submenu<R> = SubmenuBuilder::new(app, "View")
-        .item(&MenuItemBuilder::with_id("view.command_palette", "Command Palette…")
-            .accelerator("CmdOrCtrl+P").build(app)?)
+        .item(
+            &MenuItemBuilder::with_id("view.command_palette", "Command Palette…")
+                .accelerator("CmdOrCtrl+P")
+                .build(app)?,
+        )
         .separator()
-        .item(&MenuItemBuilder::with_id("view.toggle_rail", "Toggle Connection Rail")
-            .accelerator("CmdOrCtrl+0").build(app)?)
-        .item(&MenuItemBuilder::with_id("view.toggle_inspector", "Toggle Inspector")
-            .accelerator("CmdOrCtrl+1").build(app)?)
-        .item(&MenuItemBuilder::with_id("view.toggle_results", "Toggle Results Pane")
-            .accelerator("CmdOrCtrl+2").build(app)?)
+        .item(
+            &MenuItemBuilder::with_id("view.toggle_rail", "Toggle Connection Rail")
+                .accelerator("CmdOrCtrl+0")
+                .build(app)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("view.toggle_inspector", "Toggle Inspector")
+                .accelerator("CmdOrCtrl+1")
+                .build(app)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("view.toggle_results", "Toggle Results Pane")
+                .accelerator("CmdOrCtrl+2")
+                .build(app)?,
+        )
         .separator()
-        .item(&MenuItemBuilder::with_id("view.next_tab", "Next Tab")
-            .accelerator("Ctrl+Tab").build(app)?)
-        .item(&MenuItemBuilder::with_id("view.prev_tab", "Previous Tab")
-            .accelerator("Ctrl+Shift+Tab").build(app)?)
+        .item(
+            &MenuItemBuilder::with_id("view.next_tab", "Next Tab")
+                .accelerator("Ctrl+Tab")
+                .build(app)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("view.prev_tab", "Previous Tab")
+                .accelerator("Ctrl+Shift+Tab")
+                .build(app)?,
+        )
         .separator()
         .fullscreen()
         .build()?;
 
     let connection_menu: Submenu<R> = SubmenuBuilder::new(app, "Connection")
-        .item(&MenuItemBuilder::with_id("conn.manage", "Manage Connections…")
-            .accelerator("CmdOrCtrl+Shift+L").build(app)?)
+        .item(
+            &MenuItemBuilder::with_id("conn.manage", "Manage Connections…")
+                .accelerator("CmdOrCtrl+Shift+L")
+                .build(app)?,
+        )
         .separator()
-        .item(&MenuItemBuilder::with_id("conn.connect", "Connect")
-            .accelerator("CmdOrCtrl+K").build(app)?)
-        .item(&MenuItemBuilder::with_id("conn.disconnect", "Disconnect")
-            .accelerator("CmdOrCtrl+Shift+K").build(app)?)
+        .item(
+            &MenuItemBuilder::with_id("conn.connect", "Connect")
+                .accelerator("CmdOrCtrl+K")
+                .build(app)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("conn.disconnect", "Disconnect")
+                .accelerator("CmdOrCtrl+Shift+K")
+                .build(app)?,
+        )
         .separator()
         .item(&MenuItemBuilder::with_id("conn.edit", "Edit Connection…").build(app)?)
         .item(&MenuItemBuilder::with_id("conn.duplicate", "Duplicate Connection").build(app)?)
         .item(&MenuItemBuilder::with_id("conn.delete", "Delete Connection").build(app)?)
         .separator()
-        .item(&MenuItemBuilder::with_id("conn.refresh_schema", "Refresh Schema")
-            .accelerator("CmdOrCtrl+R").build(app)?)
+        .item(
+            &MenuItemBuilder::with_id("conn.refresh_schema", "Refresh Schema")
+                .accelerator("CmdOrCtrl+R")
+                .build(app)?,
+        )
         .build()?;
 
     let database_menu: Submenu<R> = SubmenuBuilder::new(app, "Database")
@@ -129,8 +194,11 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .build()?;
 
     let table_menu: Submenu<R> = SubmenuBuilder::new(app, "Table")
-        .item(&MenuItemBuilder::with_id("table.new", "New Table…")
-            .accelerator("CmdOrCtrl+Alt+N").build(app)?)
+        .item(
+            &MenuItemBuilder::with_id("table.new", "New Table…")
+                .accelerator("CmdOrCtrl+Alt+N")
+                .build(app)?,
+        )
         .item(&MenuItemBuilder::with_id("table.rename", "Rename Table…").build(app)?)
         .item(&MenuItemBuilder::with_id("table.duplicate", "Duplicate Table…").build(app)?)
         .item(&MenuItemBuilder::with_id("table.move_schema", "Move to Schema…").build(app)?)
@@ -146,20 +214,35 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .build()?;
 
     let query_menu: Submenu<R> = SubmenuBuilder::new(app, "Query")
-        .item(&MenuItemBuilder::with_id("query.run_current", "Run Current")
-            .accelerator("CmdOrCtrl+Return").build(app)?)
-        .item(&MenuItemBuilder::with_id("query.run_all", "Run All")
-            .accelerator("CmdOrCtrl+Shift+Return").build(app)?)
-        .item(&MenuItemBuilder::with_id("query.cancel", "Cancel Running Query")
-            .accelerator("CmdOrCtrl+.").build(app)?)
+        .item(
+            &MenuItemBuilder::with_id("query.run_current", "Run Current")
+                .accelerator("CmdOrCtrl+Return")
+                .build(app)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("query.run_all", "Run All")
+                .accelerator("CmdOrCtrl+Shift+Return")
+                .build(app)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("query.cancel", "Cancel Running Query")
+                .accelerator("CmdOrCtrl+.")
+                .build(app)?,
+        )
         .separator()
-        .item(&MenuItemBuilder::with_id("query.format", "Format / Beautify")
-            .accelerator("CmdOrCtrl+I").build(app)?)
+        .item(
+            &MenuItemBuilder::with_id("query.format", "Format / Beautify")
+                .accelerator("CmdOrCtrl+I")
+                .build(app)?,
+        )
         .item(&MenuItemBuilder::with_id("query.explain", "EXPLAIN").build(app)?)
         .item(&MenuItemBuilder::with_id("query.explain_analyze", "EXPLAIN ANALYZE").build(app)?)
         .separator()
-        .item(&MenuItemBuilder::with_id("query.toggle_comment", "Toggle Line Comment")
-            .accelerator("CmdOrCtrl+/").build(app)?)
+        .item(
+            &MenuItemBuilder::with_id("query.toggle_comment", "Toggle Line Comment")
+                .accelerator("CmdOrCtrl+/")
+                .build(app)?,
+        )
         .item(&MenuItemBuilder::with_id("query.toggle_limit", "Toggle Row Limit").build(app)?)
         .build()?;
 
@@ -180,9 +263,16 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
 
     let menu = MenuBuilder::new(app)
         .items(&[
-            &app_menu, &file_menu, &edit_menu, &view_menu,
-            &connection_menu, &database_menu, &table_menu,
-            &query_menu, &window_menu, &help_menu,
+            &app_menu,
+            &file_menu,
+            &edit_menu,
+            &view_menu,
+            &connection_menu,
+            &database_menu,
+            &table_menu,
+            &query_menu,
+            &window_menu,
+            &help_menu,
         ])
         .build()?;
 

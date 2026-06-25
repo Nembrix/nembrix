@@ -224,12 +224,7 @@ pub trait DbConnection: Send + Sync {
 
     /// Streamed read. The driver pushes [`RowBatch`]es into `sink` and returns
     /// a handle the caller can later pass to [`cancel`](Self::cancel).
-    async fn stream(
-        &self,
-        query: &str,
-        params: Params,
-        sink: RowSink,
-    ) -> DbResult<QueryHandle>;
+    async fn stream(&self, query: &str, params: Params, sink: RowSink) -> DbResult<QueryHandle>;
 
     async fn cancel(&self, handle: QueryHandle) -> DbResult<()>;
 

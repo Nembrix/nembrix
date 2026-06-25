@@ -2,8 +2,8 @@
 //! editor's autocomplete and sidebar tree can be populated up front.
 
 use db_core::{
-    ColumnNode, DatabaseNode, DbError, DbResult, ForeignKey, FunctionNode, IndexNode,
-    RelationNode, SchemaNode, SchemaTree,
+    ColumnNode, DatabaseNode, DbError, DbResult, ForeignKey, FunctionNode, IndexNode, RelationNode,
+    SchemaNode, SchemaTree,
 };
 use sqlx::{Pool, Postgres, Row};
 use std::collections::BTreeMap;
@@ -197,9 +197,7 @@ pub async fn introspect(pool: &Pool<Postgres>) -> DbResult<SchemaTree> {
     for r in &pk_rows {
         let sc: String = r.get("table_schema");
         let tn: String = r.get("table_name");
-        pks.entry((sc, tn))
-            .or_default()
-            .push(r.get("column_name"));
+        pks.entry((sc, tn)).or_default().push(r.get("column_name"));
     }
 
     let mut fks_by_table: BTreeMap<(String, String), Vec<ForeignKey>> = BTreeMap::new();
@@ -207,7 +205,9 @@ pub async fn introspect(pool: &Pool<Postgres>) -> DbResult<SchemaTree> {
         let sc: String = r.get("schema");
         let tn: String = r.get("table_name");
         let cols: Vec<String> = r.try_get::<Vec<String>, _>("columns").unwrap_or_default();
-        let ref_cols: Vec<String> = r.try_get::<Vec<String>, _>("ref_columns").unwrap_or_default();
+        let ref_cols: Vec<String> = r
+            .try_get::<Vec<String>, _>("ref_columns")
+            .unwrap_or_default();
         fks_by_table.entry((sc, tn)).or_default().push(ForeignKey {
             name: r.get("name"),
             columns: cols,
@@ -238,12 +238,18 @@ pub async fn introspect(pool: &Pool<Postgres>) -> DbResult<SchemaTree> {
         let args: String = r.get::<Option<String>, _>("args").unwrap_or_default();
         funcs_by_schema.entry(sc).or_default().push(FunctionNode {
             name: r.get("name"),
-            return_type: r.get::<Option<String>, _>("return_type").unwrap_or_default(),
+            return_type: r
+                .get::<Option<String>, _>("return_type")
+                .unwrap_or_default(),
             argument_types: args
                 .split(',')
                 .filter_map(|s| {
                     let s = s.trim();
-                    if s.is_empty() { None } else { Some(s.to_string()) }
+                    if s.is_empty() {
+                        None
+                    } else {
+                        Some(s.to_string())
+                    }
                 })
                 .collect(),
         });
@@ -277,7 +283,12 @@ pub async fn introspect(pool: &Pool<Postgres>) -> DbResult<SchemaTree> {
             let tables = tables_by_schema.remove(&name).unwrap_or_default();
             let views = views_by_schema.remove(&name).unwrap_or_default();
             let functions = funcs_by_schema.remove(&name).unwrap_or_default();
-            SchemaNode { name, tables, views, functions }
+            SchemaNode {
+                name,
+                tables,
+                views,
+                functions,
+            }
         })
         .collect();
 

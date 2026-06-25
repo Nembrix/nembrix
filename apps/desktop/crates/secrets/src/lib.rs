@@ -121,7 +121,9 @@ impl Store {
         db.pragma_update(None, "journal_mode", "WAL")?;
         db.pragma_update(None, "foreign_keys", "ON")?;
         migrate(&db)?;
-        Ok(Self { db: std::sync::Mutex::new(db) })
+        Ok(Self {
+            db: std::sync::Mutex::new(db),
+        })
     }
 
     pub fn list_connections(&self) -> Result<Vec<ConnectionRecord>> {
@@ -209,7 +211,10 @@ impl Store {
                 c.ssh.as_ref().map(|s| s.user.clone()),
                 c.ssh.as_ref().map(|s| s.auth_kind.clone()),
                 c.ssh.as_ref().and_then(|s| s.key_path.clone()),
-                c.ssh.as_ref().map(|s| s.strict_host_key as i64).unwrap_or(0),
+                c.ssh
+                    .as_ref()
+                    .map(|s| s.strict_host_key as i64)
+                    .unwrap_or(0),
                 c.color,
                 c.created_at.to_rfc3339(),
                 c.updated_at.to_rfc3339(),
@@ -221,8 +226,10 @@ impl Store {
     }
 
     pub fn delete_connection(&self, id: Uuid) -> Result<()> {
-        self.db.lock().unwrap()
-            .execute("DELETE FROM connections WHERE id = ?1", params![id.to_string()])?;
+        self.db.lock().unwrap().execute(
+            "DELETE FROM connections WHERE id = ?1",
+            params![id.to_string()],
+        )?;
         let _ = delete_secret(id, SecretSlot::DbPassword);
         let _ = delete_secret(id, SecretSlot::SshPassword);
         let _ = delete_secret(id, SecretSlot::SshKeyPassphrase);
@@ -344,8 +351,10 @@ impl Store {
     }
 
     pub fn delete_saved_query(&self, id: Uuid) -> Result<()> {
-        self.db.lock().unwrap()
-            .execute("DELETE FROM saved_queries WHERE id = ?1", params![id.to_string()])?;
+        self.db.lock().unwrap().execute(
+            "DELETE FROM saved_queries WHERE id = ?1",
+            params![id.to_string()],
+        )?;
         Ok(())
     }
 }

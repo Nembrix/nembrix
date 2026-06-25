@@ -12,8 +12,9 @@ use tokio::sync::mpsc;
 
 #[test]
 fn parse_find_with_modifiers() {
-    let cmd = parse::parse("db.users.find({ age: { $gt: 21 } }).sort({ name: 1 }).limit(50).skip(10)")
-        .expect("parse");
+    let cmd =
+        parse::parse("db.users.find({ age: { $gt: 21 } }).sort({ name: 1 }).limit(50).skip(10)")
+            .expect("parse");
     match cmd {
         Command::Find { collection, opts } => {
             assert_eq!(collection, "users");
@@ -45,7 +46,10 @@ fn parse_aggregate_pipeline() {
     )
     .expect("parse");
     match cmd {
-        Command::Aggregate { collection, pipeline } => {
+        Command::Aggregate {
+            collection,
+            pipeline,
+        } => {
             assert_eq!(collection, "orders");
             assert_eq!(pipeline.len(), 2);
             assert_eq!(pipeline[0], doc! { "$match": { "paid": true } });
@@ -61,7 +65,12 @@ fn parse_update_many_with_upsert() {
     )
     .expect("parse");
     match cmd {
-        Command::UpdateMany { collection, filter, update, upsert } => {
+        Command::UpdateMany {
+            collection,
+            filter,
+            update,
+            upsert,
+        } => {
             assert_eq!(collection, "users");
             assert_eq!(filter, doc! { "active": false });
             assert_eq!(update, doc! { "$set": { "archived": true } });
@@ -82,10 +91,8 @@ fn parse_single_quotes_and_trailing_commas() {
 
 #[test]
 fn parse_strips_comments() {
-    let cmd = parse::parse(
-        "// find active users\ndb.users.find({ active: true }) /* inline */",
-    )
-    .expect("parse");
+    let cmd = parse::parse("// find active users\ndb.users.find({ active: true }) /* inline */")
+        .expect("parse");
     assert!(matches!(cmd, Command::Find { .. }));
 }
 
@@ -93,7 +100,11 @@ fn parse_strips_comments() {
 fn parse_distinct() {
     let cmd = parse::parse("db.users.distinct(\"country\", { active: true })").expect("parse");
     match cmd {
-        Command::Distinct { collection, field, filter } => {
+        Command::Distinct {
+            collection,
+            field,
+            filter,
+        } => {
             assert_eq!(collection, "users");
             assert_eq!(field, "country");
             assert_eq!(filter, doc! { "active": true });
@@ -165,7 +176,10 @@ async fn insert_then_find_streams_documents() -> anyhow::Result<()> {
     let f = common::start_mongo().await?;
 
     f.conn
-        .execute(r#"db.people.insertMany([{ name: "ada", age: 36 }, { name: "alan", age: 41 }])"#, vec![])
+        .execute(
+            r#"db.people.insertMany([{ name: "ada", age: 36 }, { name: "alan", age: 41 }])"#,
+            vec![],
+        )
         .await
         .map_err(|e| anyhow::anyhow!("{e}"))?;
 
@@ -200,7 +214,11 @@ async fn find_filter_and_count() -> anyhow::Result<()> {
     let (rows, done) = drain(rx).await;
     assert!(done);
     assert_eq!(rows.len(), 1);
-    assert!(matches!(rows[0][0], CellValue::Int(2)), "got: {:?}", rows[0][0]);
+    assert!(
+        matches!(rows[0][0], CellValue::Int(2)),
+        "got: {:?}",
+        rows[0][0]
+    );
     Ok(())
 }
 
@@ -241,7 +259,11 @@ async fn introspect_lists_collections_and_infers_columns() -> anyhow::Result<()>
         .await
         .map_err(|e| anyhow::anyhow!("{e}"))?;
 
-    let tree = f.conn.introspect().await.map_err(|e| anyhow::anyhow!("{e}"))?;
+    let tree = f
+        .conn
+        .introspect()
+        .await
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
     let db = tree
         .databases
         .iter()
@@ -276,7 +298,10 @@ async fn cancel_stops_a_stream() -> anyhow::Result<()> {
     // A $where with an infinite-ish sleep keeps the cursor busy server-side.
     // Even if it returns quickly, cancel() must not error on a known handle.
     f.conn
-        .execute(r#"db.big.insertMany([{ a: 1 }, { a: 2 }, { a: 3 }])"#, vec![])
+        .execute(
+            r#"db.big.insertMany([{ a: 1 }, { a: 2 }, { a: 3 }])"#,
+            vec![],
+        )
         .await
         .map_err(|e| anyhow::anyhow!("{e}"))?;
     let (tx, _rx) = mpsc::channel::<RowBatch>(1);
@@ -286,7 +311,10 @@ async fn cancel_stops_a_stream() -> anyhow::Result<()> {
         .await
         .map_err(|e| anyhow::anyhow!("{e}"))?;
     // Cancelling a known handle succeeds; cancelling it twice is UnknownHandle.
-    f.conn.cancel(handle).await.map_err(|e| anyhow::anyhow!("{e}"))?;
+    f.conn
+        .cancel(handle)
+        .await
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
     assert!(f.conn.cancel(handle).await.is_err());
     Ok(())
 }

@@ -10,7 +10,11 @@ fn uppercases_keywords_by_default() {
 
 #[test]
 fn respects_tab_indent() {
-    let cfg = FormatConfig { indent: IndentStyle::Tabs, uppercase: true, lines_between_queries: 1 };
+    let cfg = FormatConfig {
+        indent: IndentStyle::Tabs,
+        uppercase: true,
+        lines_between_queries: 1,
+    };
     let out = format("select a, b from t", cfg);
     // sqlformat indents subsequent columns; we just verify a tab made it in.
     assert!(out.contains('\t') || out.lines().count() >= 1);
@@ -18,7 +22,11 @@ fn respects_tab_indent() {
 
 #[test]
 fn separates_multiple_queries() {
-    let cfg = FormatConfig { indent: IndentStyle::Spaces2, uppercase: true, lines_between_queries: 2 };
+    let cfg = FormatConfig {
+        indent: IndentStyle::Spaces2,
+        uppercase: true,
+        lines_between_queries: 2,
+    };
     let out = format("select 1; select 2;", cfg);
     assert!(out.matches("SELECT").count() >= 2);
 }

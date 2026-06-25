@@ -57,7 +57,11 @@ async fn introspect_returns_foreign_keys() -> anyhow::Result<()> {
     .execute(f.conn.pool())
     .await?;
     let tree = f.conn.introspect().await?;
-    let public = &tree.databases[0].schemas.iter().find(|s| s.name == "public").unwrap();
+    let public = &tree.databases[0]
+        .schemas
+        .iter()
+        .find(|s| s.name == "public")
+        .unwrap();
     let o = public.tables.iter().find(|t| t.name == "o").unwrap();
     assert_eq!(o.foreign_keys.len(), 1);
     let fk = &o.foreign_keys[0];
@@ -80,7 +84,10 @@ async fn stream_emits_batches_and_finishes() -> anyhow::Result<()> {
     .await?;
 
     let (tx, mut rx) = mpsc::channel::<RowBatch>(16);
-    let _h = f.conn.stream("SELECT v FROM k ORDER BY v", vec![], tx).await?;
+    let _h = f
+        .conn
+        .stream("SELECT v FROM k ORDER BY v", vec![], tx)
+        .await?;
     let mut total = 0usize;
     let mut last_done = false;
     while let Some(batch) = rx.recv().await {
@@ -100,10 +107,7 @@ async fn cancel_stops_a_long_query() -> anyhow::Result<()> {
     require_docker!();
     let f = common::start_pg().await?;
     let (tx, mut rx) = mpsc::channel::<RowBatch>(4);
-    let handle = f
-        .conn
-        .stream("SELECT pg_sleep(10)", vec![], tx)
-        .await?;
+    let handle = f.conn.stream("SELECT pg_sleep(10)", vec![], tx).await?;
     // Give the server a moment to register the backend PID.
     tokio::time::sleep(std::time::Duration::from_millis(300)).await;
     f.conn.cancel(handle).await?;
@@ -112,7 +116,10 @@ async fn cancel_stops_a_long_query() -> anyhow::Result<()> {
     let mut saw_done = false;
     while tokio::time::Instant::now() < deadline {
         match tokio::time::timeout(std::time::Duration::from_millis(500), rx.recv()).await {
-            Ok(Some(b)) if b.done => { saw_done = true; break; }
+            Ok(Some(b)) if b.done => {
+                saw_done = true;
+                break;
+            }
             Ok(Some(_)) => continue,
             Ok(None) => break,
             Err(_) => continue,

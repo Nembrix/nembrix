@@ -60,23 +60,25 @@ async fn tunnel_forwards_tcp_through_sshd() -> anyhow::Result<()> {
     // (Inside the container we have a busybox-y shell; `nc -l -k -p 9999 -e /bin/cat`
     // gives us a persistent echo. linuxserver image ships busybox `nc`.)
     container
-        .exec(
-            testcontainers::core::ExecCommand::new(vec![
-                "sh".into(),
-                "-c".into(),
-                "(nc -l -k -p 9999 -e /bin/cat >/tmp/echo.log 2>&1 &) ; sleep 0.5".into(),
-            ]),
-        )
+        .exec(testcontainers::core::ExecCommand::new(vec![
+            "sh".to_string(),
+            "-c".to_string(),
+            "(nc -l -k -p 9999 -e /bin/cat >/tmp/echo.log 2>&1 &) ; sleep 0.5".to_string(),
+        ]))
         .await?;
 
     let host = container.get_host().await?.to_string();
-    let port = container.get_host_port_ipv4(ContainerPort::Tcp(2222)).await?;
+    let port = container
+        .get_host_port_ipv4(ContainerPort::Tcp(2222))
+        .await?;
 
     let tunnel = Tunnel::open(TunnelConfig {
         ssh_host: host,
         ssh_port: port,
         ssh_user: "demo".into(),
-        auth: SshAuth::Password { password: "demo".into() },
+        auth: SshAuth::Password {
+            password: "demo".into(),
+        },
         db_host: "127.0.0.1".into(), // echo server is reachable on the container's own loopback
         db_port: 9999,
         strict_host_key: false,

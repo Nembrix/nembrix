@@ -47,9 +47,14 @@ pub struct OpPreview {
 
 pub fn preview_rename_database(from: &str, to: &str) -> Result<OpPreview> {
     Ok(OpPreview {
-        sql: vec![format!("ALTER DATABASE {} RENAME TO {};", qi(from)?, qi(to)?)],
+        sql: vec![format!(
+            "ALTER DATABASE {} RENAME TO {};",
+            qi(from)?,
+            qi(to)?
+        )],
         warnings: vec![
-            "Postgres can't rename the DB you're connected to — this runs against a sibling DB.".into(),
+            "Postgres can't rename the DB you're connected to — this runs against a sibling DB."
+                .into(),
         ],
     })
 }
@@ -63,9 +68,7 @@ pub fn preview_duplicate_database(source: &str, dest: &str) -> Result<OpPreview>
             qi(dest)?,
             qi(source)?
         )],
-        warnings: vec![
-            "Source DB must have zero active sessions while this runs.".into(),
-        ],
+        warnings: vec!["Source DB must have zero active sessions while this runs.".into()],
     })
 }
 
@@ -100,11 +103,7 @@ pub fn preview_rename_table(schema: &str, from: &str, to: &str) -> Result<OpPrev
 }
 
 /// Move a table to a different schema (a "copy to schema" in the UI).
-pub fn preview_move_table(
-    schema: &str,
-    name: &str,
-    target_schema: &str,
-) -> Result<OpPreview> {
+pub fn preview_move_table(schema: &str, name: &str, target_schema: &str) -> Result<OpPreview> {
     Ok(OpPreview {
         sql: vec![format!(
             "ALTER TABLE {}.{} SET SCHEMA {};",

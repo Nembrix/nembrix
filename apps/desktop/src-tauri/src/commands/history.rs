@@ -27,7 +27,10 @@ pub async fn list_saved_queries(
     state: State<'_, AppState>,
     conn_id: Option<Uuid>,
 ) -> Result<Vec<SavedQuery>, String> {
-    state.store.list_saved_queries(conn_id).map_err(|e| e.to_string())
+    state
+        .store
+        .list_saved_queries(conn_id)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -58,5 +61,8 @@ pub async fn save_query(
 #[tauri::command]
 #[specta::specta]
 pub async fn delete_saved_query(state: State<'_, AppState>, id: Uuid) -> Result<(), String> {
-    state.store.delete_saved_query(id).map_err(|e| e.to_string())
+    state
+        .store
+        .delete_saved_query(id)
+        .map_err(|e| e.to_string())
 }

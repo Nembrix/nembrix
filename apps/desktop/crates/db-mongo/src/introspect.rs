@@ -85,10 +85,7 @@ async fn introspect_database(client: &Client, db_name: &str) -> DbResult<Databas
     })
 }
 
-async fn introspect_collection(
-    db: &mongodb::Database,
-    coll_name: &str,
-) -> DbResult<RelationNode> {
+async fn introspect_collection(db: &mongodb::Database, coll_name: &str) -> DbResult<RelationNode> {
     let coll = db.collection::<Document>(coll_name);
 
     // Sample documents for column inference.
@@ -124,7 +121,9 @@ async fn introspect_collection(
     // freshly-created empty collection samples nothing — pin it regardless.)
     if !order.iter().any(|n| n == "_id") {
         order.insert(0, "_id".to_string());
-        types.entry("_id".to_string()).or_insert_with(|| "objectId".to_string());
+        types
+            .entry("_id".to_string())
+            .or_insert_with(|| "objectId".to_string());
     } else if let Some(pos) = order.iter().position(|n| n == "_id") {
         let id = order.remove(pos);
         order.insert(0, id);

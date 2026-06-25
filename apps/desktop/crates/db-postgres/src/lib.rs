@@ -3,9 +3,8 @@
 use async_trait::async_trait;
 use dashmap::DashMap;
 use db_core::{
-    CellValue, ColMeta, DbConnection, DbError, DbResult, ExecSummary,
-    Params, QueryHandle, QueryLang, RowBatch, RowSink,
-    SchemaTree,
+    CellValue, ColMeta, DbConnection, DbError, DbResult, ExecSummary, Params, QueryHandle,
+    QueryLang, RowBatch, RowSink, SchemaTree,
 };
 use futures::TryStreamExt;
 use serde::{Deserialize, Serialize};
@@ -69,8 +68,16 @@ impl PgConn {
             .username(&cfg.user)
             .ssl_mode(cfg.ssl_mode.to_sqlx())
             .application_name(cfg.application_name.as_deref().unwrap_or("nembrix"));
-        let opts = if let Some(db) = &cfg.database { opts.database(db) } else { opts };
-        let opts = if let Some(pw) = &cfg.password { opts.password(pw) } else { opts };
+        let opts = if let Some(db) = &cfg.database {
+            opts.database(db)
+        } else {
+            opts
+        };
+        let opts = if let Some(pw) = &cfg.password {
+            opts.password(pw)
+        } else {
+            opts
+        };
 
         let pool = PgPoolOptions::new()
             .max_connections(8)
@@ -133,12 +140,7 @@ impl DbConnection for PgConn {
         })
     }
 
-    async fn stream(
-        &self,
-        query: &str,
-        _params: Params,
-        sink: RowSink,
-    ) -> DbResult<QueryHandle> {
+    async fn stream(&self, query: &str, _params: Params, sink: RowSink) -> DbResult<QueryHandle> {
         let handle = QueryHandle::new();
         let pool = self.pool.clone();
         let query = query.to_string();
@@ -238,7 +240,9 @@ impl DbConnection for PgConn {
         Ok(())
     }
 
-    fn as_any(&self) -> &dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 fn extract_columns(row: &PgRow) -> Vec<ColMeta> {
@@ -276,20 +280,32 @@ fn cell_at(row: &PgRow, idx: usize) -> CellValue {
 
     macro_rules! try_typed {
         ($t:ty, $variant:expr) => {
-            if let Ok(v) = row.try_get::<$t, _>(idx) { return $variant(v); }
+            if let Ok(v) = row.try_get::<$t, _>(idx) {
+                return $variant(v);
+            }
         };
     }
 
     match ty.as_str() {
         "BOOL" => try_typed!(bool, CellValue::Bool),
         "INT2" | "INT4" | "INT8" => {
-            if let Ok(v) = row.try_get::<i64, _>(idx) { return CellValue::Int(v); }
-            if let Ok(v) = row.try_get::<i32, _>(idx) { return CellValue::Int(v as i64); }
-            if let Ok(v) = row.try_get::<i16, _>(idx) { return CellValue::Int(v as i64); }
+            if let Ok(v) = row.try_get::<i64, _>(idx) {
+                return CellValue::Int(v);
+            }
+            if let Ok(v) = row.try_get::<i32, _>(idx) {
+                return CellValue::Int(v as i64);
+            }
+            if let Ok(v) = row.try_get::<i16, _>(idx) {
+                return CellValue::Int(v as i64);
+            }
         }
         "FLOAT4" | "FLOAT8" => {
-            if let Ok(v) = row.try_get::<f64, _>(idx) { return CellValue::Float(v); }
-            if let Ok(v) = row.try_get::<f32, _>(idx) { return CellValue::Float(v as f64); }
+            if let Ok(v) = row.try_get::<f64, _>(idx) {
+                return CellValue::Float(v);
+            }
+            if let Ok(v) = row.try_get::<f32, _>(idx) {
+                return CellValue::Float(v as f64);
+            }
         }
         "TEXT" | "VARCHAR" | "BPCHAR" | "NAME" | "CITEXT" => {
             try_typed!(String, CellValue::Text);
@@ -300,16 +316,24 @@ fn cell_at(row: &PgRow, idx: usize) -> CellValue {
             }
         }
         "UUID" => {
-            if let Ok(v) = row.try_get::<Uuid, _>(idx) { return CellValue::Text(v.to_string()); }
+            if let Ok(v) = row.try_get::<Uuid, _>(idx) {
+                return CellValue::Text(v.to_string());
+            }
         }
         "BYTEA" => {
-            if let Ok(v) = row.try_get::<Vec<u8>, _>(idx) { return CellValue::Bytes(v); }
+            if let Ok(v) = row.try_get::<Vec<u8>, _>(idx) {
+                return CellValue::Bytes(v);
+            }
         }
         _ => {}
     }
 
     // Catch-all: try string, then bytes.
-    if let Ok(v) = row.try_get::<String, _>(idx) { return CellValue::Raw(v); }
-    if let Ok(v) = row.try_get::<Vec<u8>, _>(idx) { return CellValue::Bytes(v); }
+    if let Ok(v) = row.try_get::<String, _>(idx) {
+        return CellValue::Raw(v);
+    }
+    if let Ok(v) = row.try_get::<Vec<u8>, _>(idx) {
+        return CellValue::Bytes(v);
+    }
     CellValue::Raw(format!("<{ty}>"))
 }

@@ -13,8 +13,11 @@
 //! frontend can prompt the user.
 
 use russh::client::{self, Handle};
-use russh_keys::{self as keys, key::{PublicKey, KeyPair as PrivateKey}};
 use russh::{ChannelMsg, Disconnect};
+use russh_keys::{
+    self as keys,
+    key::{KeyPair as PrivateKey, PublicKey},
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use specta::Type;
@@ -45,8 +48,13 @@ pub struct TunnelConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum SshAuth {
-    Password { password: String },
-    KeyFile { path: String, passphrase: Option<String> },
+    Password {
+        password: String,
+    },
+    KeyFile {
+        path: String,
+        passphrase: Option<String>,
+    },
     Agent,
 }
 
@@ -113,12 +121,8 @@ impl Tunnel {
             strict: cfg.strict_host_key,
         };
         let client_cfg = Arc::new(client::Config::default());
-        let mut session = client::connect(
-            client_cfg,
-            (cfg.ssh_host.as_str(), cfg.ssh_port),
-            handler,
-        )
-        .await?;
+        let mut session =
+            client::connect(client_cfg, (cfg.ssh_host.as_str(), cfg.ssh_port), handler).await?;
 
         authenticate(&mut session, &cfg).await?;
 
@@ -169,7 +173,9 @@ async fn authenticate(
 ) -> Result<(), TunnelError> {
     let ok = match &cfg.auth {
         SshAuth::Password { password } => {
-            session.authenticate_password(&cfg.ssh_user, password).await?
+            session
+                .authenticate_password(&cfg.ssh_user, password)
+                .await?
         }
         SshAuth::KeyFile { path, passphrase } => {
             let key: PrivateKey =
@@ -192,12 +198,13 @@ async fn authenticate(
                 // `authenticate_future`. Same shape: returns the signer
                 // back (it gets moved through the channel internals) and
                 // a `Result<bool, _>` for the auth outcome.
-                let (a, res) = session
-                    .authenticate_future(&cfg.ssh_user, id, agent)
-                    .await;
+                let (a, res) = session.authenticate_future(&cfg.ssh_user, id, agent).await;
                 agent = a;
                 match res {
-                    Ok(true) => { auth_ok = true; break; }
+                    Ok(true) => {
+                        auth_ok = true;
+                        break;
+                    }
                     Ok(false) => continue,
                     Err(_) => continue,
                 }
@@ -220,7 +227,12 @@ async fn forward(
     db_port: u16,
 ) -> Result<(), TunnelError> {
     let mut channel = session
-        .channel_open_direct_tcpip(db_host, db_port as u32, &peer.ip().to_string(), peer.port() as u32)
+        .channel_open_direct_tcpip(
+            db_host,
+            db_port as u32,
+            &peer.ip().to_string(),
+            peer.port() as u32,
+        )
         .await?;
 
     let (mut sock_r, mut sock_w) = sock.split();
@@ -294,9 +306,8 @@ fn sha256_fingerprint(key: &PublicKey) -> String {
 fn base64_pad(b: &[u8]) -> String {
     use std::fmt::Write;
     // tiny base64 without an extra dep
-    const T: &[u8; 64] =
-        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut s = String::with_capacity((b.len() + 2) / 3 * 4);
+    const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut s = String::with_capacity(b.len().div_ceil(3) * 4);
     let mut i = 0;
     while i + 3 <= b.len() {
         let n = ((b[i] as u32) << 16) | ((b[i + 1] as u32) << 8) | (b[i + 2] as u32);
@@ -308,7 +319,12 @@ fn base64_pad(b: &[u8]) -> String {
     let rem = b.len() - i;
     if rem == 1 {
         let n = (b[i] as u32) << 16;
-        let _ = write!(s, "{}{}==", T[((n >> 18) & 0x3f) as usize] as char, T[((n >> 12) & 0x3f) as usize] as char);
+        let _ = write!(
+            s,
+            "{}{}==",
+            T[((n >> 18) & 0x3f) as usize] as char,
+            T[((n >> 12) & 0x3f) as usize] as char
+        );
     } else if rem == 2 {
         let n = ((b[i] as u32) << 16) | ((b[i + 1] as u32) << 8);
         let _ = write!(
@@ -337,7 +353,7 @@ pub mod known_hosts {
     pub fn is_trusted(host: &str, fingerprint: &str) -> Option<bool> {
         let p = path()?;
         let f = fs::File::open(&p).ok()?;
-        for line in BufReader::new(f).lines().flatten() {
+        for line in BufReader::new(f).lines().map_while(Result::ok) {
             let mut it = line.split_whitespace();
             if let (Some(h), Some(fp)) = (it.next(), it.next()) {
                 if h == host && fp == fingerprint {
