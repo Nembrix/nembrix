@@ -1,4 +1,5 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, type Page } from "@playwright/test";
+import { expect, seedEmpty } from "./_setup";
 
 /** Open the command palette via the in-app menu — Chromium intercepts ⌘P for print. */
 async function openPalette(page: Page) {
@@ -7,10 +8,9 @@ async function openPalette(page: Page) {
   await expect(page.getByPlaceholder(/Search actions/)).toBeVisible();
 }
 
+// These tests exercise the palette with no live session — empty state is fine.
 test.beforeEach(async ({ page }) => {
-  await page.goto("/");
-  await page.evaluate(() => localStorage.clear());
-  await page.reload();
+  await seedEmpty(page);
 });
 
 test("Command Palette opens and Esc closes it", async ({ page }) => {
@@ -49,9 +49,13 @@ test("> mode filters to actions only", async ({ page }) => {
   await page.reload();
 
   await openPalette(page);
-  // Without prefix: Connections group is visible
+  // Type the connection name so the (virtualized) Connections group renders
+  // near the top of the list and is in the DOM.
+  await page.keyboard.type("Demo");
   await expect(page.getByText("Connections", { exact: true })).toBeVisible();
-  // > prefix hides non-action groups
-  await page.keyboard.type("> ");
+  // > prefix filters to actions only, so the Connections group disappears.
+  // Clear, then re-type with the action-mode prefix.
+  await page.keyboard.press("Meta+A");
+  await page.keyboard.type("> Demo");
   await expect(page.getByText("Connections", { exact: true })).toBeHidden();
 });

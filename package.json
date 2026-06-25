@@ -18,6 +18,7 @@
     "build": "yarn workspace @nembrix/desktop build",
     "build:prod": "yarn workspace @nembrix/desktop build:prod",
     "tauri": "yarn workspace @nembrix/desktop tauri",
+    "lint": "yarn workspace @nembrix/desktop lint",
     "test:unit": "yarn workspace @nembrix/desktop test:unit",
     "test:unit:watch": "yarn workspace @nembrix/desktop test:unit:watch",
     "test:e2e": "yarn workspace @nembrix/desktop test:e2e",

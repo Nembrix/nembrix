@@ -1,34 +1,19 @@
-import { test, expect } from "@playwright/test";
+import { test } from "@playwright/test";
+import { expect, seedConnectedSession } from "./_setup";
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/");
-  await page.evaluate(() => {
-    localStorage.clear();
-    const rec = {
-      id: "00000000-0000-0000-0000-000000000111",
-      name: "Demo",
-      engine: "postgres",
-      host: "h", port: 5432, username: "u",
-      database: "d", ssl_mode: "prefer", ssh: null, color: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    localStorage.setItem("nembrix.mock.connections", JSON.stringify([rec]));
-  });
-  await page.reload();
-  await page.locator(".rail-avatar").first().click();
-  await page.locator("[data-testid='connect-btn']").click();
+  await seedConnectedSession(page);
 });
 
 test("right-click a table opens the context menu with object-op actions", async ({ page }) => {
-  await page.getByText("users").click({ button: "right" });
+  await page.locator(".item-row", { hasText: "users" }).click({ button: "right" });
   await expect(page.getByText("Rename…")).toBeVisible();
   await expect(page.getByText("Duplicate…")).toBeVisible();
   await expect(page.getByText("Drop…")).toBeVisible();
 });
 
 test("Rename Table flow shows SQL preview before Apply", async ({ page }) => {
-  await page.getByText("users").click({ button: "right" });
+  await page.locator(".item-row", { hasText: "users" }).click({ button: "right" });
   await page.getByText("Rename…").click();
   await expect(page.getByText(/Rename public\.users/)).toBeVisible();
 
@@ -42,7 +27,7 @@ test("Rename Table flow shows SQL preview before Apply", async ({ page }) => {
 });
 
 test("Duplicate Table shows the with-data warning", async ({ page }) => {
-  await page.getByText("orders").click({ button: "right" });
+  await page.locator(".item-row", { hasText: "orders" }).click({ button: "right" });
   await page.getByText("Duplicate…").click();
   // The form has: From (disabled), To schema (text), To name (text), With data (checkbox).
   // Filter to text inputs only and fill the last one.

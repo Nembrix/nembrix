@@ -16,6 +16,12 @@ export default defineConfig({
       "@": fileURLToPath(new URL("./src", import.meta.url)),
       "@bindings": fileURLToPath(new URL("./bindings", import.meta.url)),
     },
+    // A transitive dep (@uiw/codemirror-extensions-basic-setup) pulls in its
+    // own nested copy of @codemirror/state, so two instances get loaded and
+    // CodeMirror's `instanceof` extension checks throw
+    // ("Unrecognized extension value… multiple instances of @codemirror/state"),
+    // blanking the editor. Force a single instance of the core CM packages.
+    dedupe: ["@codemirror/state", "@codemirror/view"],
   },
   server: {
     port: 1420,

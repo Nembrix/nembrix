@@ -1,39 +1,28 @@
-import { test, expect } from "@playwright/test";
+import { test } from "@playwright/test";
+import { expect, seedConnectedSession } from "./_setup";
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/");
-  await page.evaluate(() => {
-    localStorage.clear();
-    const rec = {
-      id: "00000000-0000-0000-0000-000000000099",
-      name: "Demo",
-      engine: "postgres",
-      host: "h", port: 5432, username: "u",
-      database: "d", ssl_mode: "prefer", ssh: null, color: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    localStorage.setItem("nembrix.mock.connections", JSON.stringify([rec]));
-  });
-  await page.reload();
+  await seedConnectedSession(page);
 });
 
 test("clicking a column header opens the summary popover", async ({ page }) => {
-  await page.locator(".rail-avatar").first().click();
-  await page.locator("[data-testid='connect-btn']").click();
   // Data-view auto-loads rows on open.
-  await page.getByText("orders").dblclick();
+  await page.locator(".empty-tab-card", { hasText: "orders" }).click();
   await expect(page.locator("table.grid tbody tr").first()).toBeVisible();
 
-  await page.getByRole("columnheader", { name: /^id/ }).click();
+  // The header itself sorts — the column summary opens via the per-column
+  // stats (bar-chart) icon inside the `id` header.
+  await page
+    .getByRole("columnheader", { name: /^id/ })
+    .locator(".hdr-stats")
+    .click();
+  await expect(page.locator(".col-summary")).toBeVisible();
   await expect(page.getByText(/Rows seen/)).toBeVisible();
   await expect(page.getByText(/Distinct/)).toBeVisible();
 });
 
 test("a foreign-key column gets the fk badge and opens the detail panel on click", async ({ page }) => {
-  await page.locator(".rail-avatar").first().click();
-  await page.locator("[data-testid='connect-btn']").click();
-  await page.getByText("orders").dblclick();
+  await page.locator(".empty-tab-card", { hasText: "orders" }).click();
   await expect(page.locator("table.grid tbody tr").first()).toBeVisible();
 
   const userIdHeader = page.getByRole("columnheader", { name: /user_id/ });

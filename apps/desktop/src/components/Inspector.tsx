@@ -231,7 +231,7 @@ export default function Inspector() {
     try {
       const t = await api.introspect(selectedConnId);
       setSchema(selectedConnId, t);
-    } catch {}
+    } catch { /* ignore: best-effort */ }
   };
 
   if (!selectedConnId) {
@@ -360,10 +360,6 @@ export default function Inspector() {
                 className="icon-btn"
                 onClick={(e) => {
                   const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                  const open = (req: typeof ctx extends infer T ? never : never) => {
-                    void req;
-                  };
-                  void open;
                   setCtx({
                     x: rect.left,
                     y: rect.bottom + 2,

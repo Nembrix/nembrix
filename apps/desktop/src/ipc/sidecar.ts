@@ -66,7 +66,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   });
   if (!res.ok) {
     let detail = "";
-    try { detail = (await res.json()).error ?? ""; } catch {}
+    try { detail = (await res.json()).error ?? ""; } catch { /* ignore: best-effort */ }
     throw new Error(detail || `${path}: HTTP ${res.status}`);
   }
   if (res.status === 204) return undefined as T;
@@ -139,7 +139,7 @@ export async function sidecarStream(
   });
   if (!res.ok) {
     let detail = "";
-    try { detail = (await res.json()).error ?? ""; } catch {}
+    try { detail = (await res.json()).error ?? ""; } catch { /* ignore: best-effort */ }
     throw new Error(detail || `/stream: HTTP ${res.status}`);
   }
   if (!res.body) throw new Error("/stream: no body");

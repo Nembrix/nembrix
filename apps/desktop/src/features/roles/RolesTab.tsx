@@ -45,16 +45,20 @@ export default function RolesTab({ tab }: { tab: Tab }) {
   const refreshRolesRef = useRef<() => void>(() => {});
   const refreshMatrixRef = useRef<() => void>(() => {});
 
-  /* roles */
-  refreshRolesRef.current = async () => {
-    try {
-      const rows = await fetchRows(tab.connId, ROLES_QUERY);
-      const parsed = rows.map(rowToRole);
-      setRoles(parsed);
-      if (!selectedRole && parsed.length > 0) setSelectedRole(parsed[0].name);
-      setErr(null);
-    } catch (e) { setErr(String(e)); }
-  };
+  /* roles — stored in a ref so toolbar buttons / dialogs always invoke the
+     freshest closure. Assigned in an effect rather than the render body so
+     the ref is never written during render. */
+  useEffect(() => {
+    refreshRolesRef.current = async () => {
+      try {
+        const rows = await fetchRows(tab.connId, ROLES_QUERY);
+        const parsed = rows.map(rowToRole);
+        setRoles(parsed);
+        if (!selectedRole && parsed.length > 0) setSelectedRole(parsed[0].name);
+        setErr(null);
+      } catch (e) { setErr(String(e)); }
+    };
+  });
 
   /* schemas (small list, populated once per connection) */
   useEffect(() => {
@@ -74,14 +78,17 @@ export default function RolesTab({ tab }: { tab: Tab }) {
   /* roles fetch on mount */
   useEffect(() => { refreshRolesRef.current(); }, [tab.connId]);
 
-  /* relation grants for current (role, schema) */
-  refreshMatrixRef.current = async () => {
-    if (!selectedRole || !schema) { setRels([]); return; }
-    try {
-      const rows = await fetchRows(tab.connId, relationPrivsForRoleInSchema(selectedRole, schema));
-      setRels(rows.map(rowToRelPriv));
-    } catch (e) { setErr(String(e)); }
-  };
+  /* relation grants for current (role, schema) — same ref pattern; assigned
+     in an effect so the ref is never written during render. */
+  useEffect(() => {
+    refreshMatrixRef.current = async () => {
+      if (!selectedRole || !schema) { setRels([]); return; }
+      try {
+        const rows = await fetchRows(tab.connId, relationPrivsForRoleInSchema(selectedRole, schema));
+        setRels(rows.map(rowToRelPriv));
+      } catch (e) { setErr(String(e)); }
+    };
+  });
   useEffect(() => { refreshMatrixRef.current(); }, [tab.connId, selectedRole, schema]);
 
   const role = useMemo(() => roles.find((r) => r.name === selectedRole) ?? null, [roles, selectedRole]);
@@ -129,7 +136,7 @@ export default function RolesTab({ tab }: { tab: Tab }) {
     } catch (e) {
       // Roll back implicitly by leaving COMMIT off — but the pending list survives so the user can edit.
       setErr(String(e));
-      try { await api.execute(tab.connId, "ROLLBACK;"); } catch {}
+      try { await api.execute(tab.connId, "ROLLBACK;"); } catch { /* ignore: best-effort */ }
     }
   };
 
@@ -217,7 +224,7 @@ export default function RolesTab({ tab }: { tab: Tab }) {
                 <AttrToggle label="SUPERUSER"  checked={role.is_super}       onChange={(v) => alterAttr({ isSuper: v })} />
                 <AttrToggle label="CREATEDB"   checked={role.can_createdb}   onChange={(v) => alterAttr({ canCreatedb: v })} />
                 <AttrToggle label="CREATEROLE" checked={role.can_createrole} onChange={(v) => alterAttr({ canCreaterole: v })} />
-                <AttrToggle label="REPLICATION" checked={role.can_repl}      onChange={(v) => alterAttr({})} disabled />
+                <AttrToggle label="REPLICATION" checked={role.can_repl}      onChange={(_v) => alterAttr({})} disabled />
                 <AttrToggle label="INHERIT"    checked={role.inherits}       onChange={(v) => alterAttr({ inherits: v })} />
               </div>
             </div>

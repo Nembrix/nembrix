@@ -209,7 +209,7 @@ async function mockInvoke<T>(cmd: string, args: Record<string, unknown> = {}): P
           run_at: new Date().toISOString(),
         });
         localStorage.setItem("nembrix.mock.history", JSON.stringify(all.slice(0, 500)));
-      } catch {}
+      } catch { /* ignore: best-effort */ }
       // Roles tab queries (sql is already lowercase here).
       if (/from\s+pg_roles/i.test(sql)) {
         const txt = (v: string) => ({ kind: "text" as const, value: v });

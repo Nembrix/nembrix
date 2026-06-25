@@ -26,7 +26,7 @@ function saveFixed(scope: string, fixed: Record<string, { x: number; y: number }
     const all = JSON.parse(localStorage.getItem(POSITIONS_KEY) || "{}");
     all[scope] = fixed;
     localStorage.setItem(POSITIONS_KEY, JSON.stringify(all));
-  } catch {}
+  } catch { /* ignore: best-effort */ }
 }
 
 /* ───────────────────────── component ───────────────────────── */
@@ -141,7 +141,7 @@ export default function ErDiagramTab({ tab }: { tab: Tab }) {
     const tuned = autoTune(DEFAULT_LAYOUT, nodes.length);
     const out = relax(nodes, edges, tuned, 280, fixed);
     setPositions(out);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [nodes, edges, scope]);
 
   // Drag handling. We use document-level listeners so a drag survives the

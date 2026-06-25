@@ -1,23 +1,18 @@
-import { test, expect } from "@playwright/test";
+import { test } from "@playwright/test";
+import { expect, seedConnectedSession } from "./_setup";
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/");
-  await page.evaluate(() => {
-    localStorage.clear();
-    const rec = {
-      id: "00000000-0000-0000-0000-000000000444",
-      name: "Demo", engine: "postgres",
-      host: "h", port: 5432, username: "u",
-      database: "d", ssl_mode: "prefer", ssh: null, color: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    localStorage.setItem("nembrix.mock.connections", JSON.stringify([rec]));
+  // Chromium exposes the File System Access save picker, which the export
+  // dialog prefers over an anchor download — but Playwright can't drive that
+  // native picker. Hide it so the dialog falls back to the Blob download path
+  // (button label "Download") that emits a real `download` event.
+  await page.addInitScript(() => {
+    // Intentionally remove the picker for the test env so the dialog
+    // falls back to the Blob download path.
+    delete (window as { showSaveFilePicker?: unknown }).showSaveFilePicker;
   });
-  await page.reload();
-  await page.locator(".rail-avatar").first().click();
-  await page.locator("[data-testid='connect-btn']").click();
-  await page.getByText("orders").dblclick();
+  await seedConnectedSession(page);
+  await page.locator(".empty-tab-card", { hasText: "orders" }).click();
   // Wait for data to load so the dialog has columns to render.
   await expect(page.locator(".grid-scroll")).toContainText("placed_at");
 });

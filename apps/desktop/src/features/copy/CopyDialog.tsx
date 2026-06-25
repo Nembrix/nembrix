@@ -10,7 +10,7 @@ import {
   cellToInsertValue, emitCreateSchema, emitCreateTable,
   emitForeignKeys, emitIndexes, emitSequenceResets, topoSortByFks,
 } from "./util";
-import { ENV_LABEL, colorFor } from "@/features/connections/environment";
+import { ENV_LABEL } from "@/features/connections/environment";
 
 type What = "structure" | "data" | "both";
 type Phase = "pending" | "ddl" | "copying" | "done" | "error";

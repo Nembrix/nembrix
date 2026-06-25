@@ -1,16 +1,17 @@
-import { test, expect } from "@playwright/test";
+import { test } from "@playwright/test";
+import { expect, seedEmpty } from "./_setup";
 import * as path from "node:path";
 import * as os from "node:os";
 import * as fs from "node:fs/promises";
 
+// All these tests start from the empty state and drive the connection form.
 test.beforeEach(async ({ page }) => {
-  await page.goto("/");
-  await page.evaluate(() => localStorage.clear());
-  await page.reload();
+  await seedEmpty(page);
 });
 
 test("saving a connection with environment=Production tints the rail ring red", async ({ page }) => {
-  await page.locator(".rail-add").click();
+  // `.rail-add` matches both the new-connection (+) and manage tiles.
+  await page.locator(".rail-add").first().click();
   await expect(page.getByText(/new postgresql connection/i)).toBeVisible();
 
   await page.getByLabel("Name").fill("Prod DB");
@@ -18,12 +19,16 @@ test("saving a connection with environment=Production tints the rail ring red", 
   await page.getByLabel("Port").fill("5432");
   await page.getByLabel("User").fill("app");
   await page.getByLabel("Password").fill("secret");
-  await page.getByLabel("Database").fill("app");
+  // `getByLabel("Database")` also matches the engine <select>; target the input.
+  await page.locator("#cf-database").fill("app");
 
   // Env field
   await page.locator("#cf-env").selectOption("production");
 
-  await page.getByRole("button", { name: "Save" }).click();
+  // The rail renders *sessions*, so plain Save (which only persists the
+  // connection) never produces a rail entry. "Connect" saves + opens a
+  // session, giving us the rail entry to assert on.
+  await page.getByRole("button", { name: "Connect", exact: true }).click();
 
   // Rail entry has is-prod class + a PROD pill underneath.
   await expect(page.locator(".rail-entry.is-prod")).toHaveCount(1);
@@ -31,7 +36,7 @@ test("saving a connection with environment=Production tints the rail ring red", 
 });
 
 test("env preset color updates when the environment changes", async ({ page }) => {
-  await page.locator(".rail-add").click();
+  await page.locator(".rail-add").first().click();
   await page.locator("#cf-env").selectOption("production");
   // The first swatch (production red) should be selected.
   await expect(page.locator(".env-swatch.selected").first()).toBeVisible();
@@ -43,7 +48,7 @@ test("env preset color updates when the environment changes", async ({ page }) =
 });
 
 test("SSH key file picker reads the chosen file into key_data (browser mode)", async ({ page }) => {
-  await page.locator(".rail-add").click();
+  await page.locator(".rail-add").first().click();
   await page.locator("#cf-ssh").check();
   await page.locator("#cf-ssh-auth").selectOption("key_file");
 

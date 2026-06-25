@@ -74,7 +74,7 @@ export default function App() {
     return 268;
   });
   useEffect(() => {
-    try { localStorage.setItem("nembrix.inspector.w", String(inspectorW)); } catch {}
+    try { localStorage.setItem("nembrix.inspector.w", String(inspectorW)); } catch { /* ignore: best-effort */ }
   }, [inspectorW]);
 
   const onInspectorResizeStart = (e: React.MouseEvent) => {

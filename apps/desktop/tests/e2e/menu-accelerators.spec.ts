@@ -1,9 +1,9 @@
-import { test, expect } from "@playwright/test";
+import { test } from "@playwright/test";
+import { expect, seedEmpty } from "./_setup";
 
+// These accelerator tests run from the empty / no-connection state.
 test.beforeEach(async ({ page }) => {
-  await page.goto("/");
-  await page.evaluate(() => localStorage.clear());
-  await page.reload();
+  await seedEmpty(page);
 });
 
 test("⌘N opens the connection form", async ({ page }) => {
@@ -15,7 +15,7 @@ test("⌘T does nothing without a connected DB but doesn't crash", async ({ page
   // No conn selected; accelerator must be a no-op because availability disables it.
   await page.keyboard.press("Meta+T");
   // Empty-state placeholder still visible — no tab was created.
-  await expect(page.getByText(/Select a connection on the rail/)).toBeVisible();
+  await expect(page.getByText(/No connection selected/i)).toBeVisible();
 });
 
 test("Help → Keyboard Shortcuts via the palette opens the cheat sheet", async ({ page }) => {

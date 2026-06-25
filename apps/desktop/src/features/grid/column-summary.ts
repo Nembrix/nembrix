@@ -42,7 +42,7 @@ function asKey(c: CellValue): { key: string; numeric: number | null } {
 export function summarizeColumn(values: CellValue[]): ColumnSummary {
   const total = values.length;
   let nulls = 0;
-  let numericValues: number[] = [];
+  const numericValues: number[] = [];
   const counts = new Map<string, number>();
 
   for (const v of values) {

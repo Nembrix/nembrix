@@ -41,7 +41,7 @@ export function load(): GroupsState {
 }
 
 export function save(state: GroupsState): void {
-  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {}
+  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { /* ignore: best-effort */ }
 }
 
 export function addEmptyGroup(name: string): GroupsState {

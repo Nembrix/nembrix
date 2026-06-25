@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { keymap, EditorView } from "@codemirror/view";
-import { EditorSelection, Prec } from "@codemirror/state";
+import { EditorSelection, Prec, StateEffect } from "@codemirror/state";
 import { Play, Square, Sparkles, Star } from "lucide-react";
 import { buildSqlExtension } from "@/editor/sql-completion";
 import { useStore, type Tab, type FilterChip } from "@/store";
@@ -147,6 +147,19 @@ export default function QueryTab({ tab }: { tab: Tab }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editorTick]);
 
+  // The CodeMirror keymap is registered once, on editor creation, rather than
+  // through the declarative `extensions` prop. The keymap commands need to
+  // invoke `run` / `format` / `saveAsNamed`, which (via run) write handleRef.
+  // Building those arrows inside the render-time `extensions` array makes the
+  // lint flow-analysis treat that ref write as render-phase access. Stashing
+  // the handlers on a ref and wiring the keymap from the `onCreateEditor`
+  // callback keeps the ref access firmly inside a callback. The ref always
+  // holds the freshest closures, so ⌘-shortcuts run against current state.
+  const cmdsRef = useRef({ run, cancel, format, saveAsNamed });
+  useEffect(() => {
+    cmdsRef.current = { run, cancel, format, saveAsNamed };
+  });
+
   const sqlExt = buildSqlExtension(tree);
   const rowCount = tab.rows?.length ?? 0;
 
@@ -163,7 +176,7 @@ export default function QueryTab({ tab }: { tab: Tab }) {
     return 50;
   });
   useEffect(() => {
-    try { localStorage.setItem("nembrix.editor.pct", String(editorPct)); } catch {}
+    try { localStorage.setItem("nembrix.editor.pct", String(editorPct)); } catch { /* ignore: best-effort */ }
   }, [editorPct]);
   const shellRef = useRef<HTMLDivElement>(null);
   // Ref to the CodeMirror EditorView so the wrapper's click handler
@@ -221,7 +234,28 @@ export default function QueryTab({ tab }: { tab: Tab }) {
           value={tab.sql ?? ""}
           height="100%"
           theme="dark"
-          onCreateEditor={(view) => { editorViewRef.current = view; }}
+          onCreateEditor={(view) => {
+            editorViewRef.current = view;
+            // Register the ⌘-shortcut keymap on the live view rather than via
+            // the declarative `extensions` prop. The commands read cmdsRef to
+            // reach the freshest run/format/save closures; doing this inside
+            // onCreateEditor keeps that ref access inside a callback.
+            view.dispatch({
+              effects: StateEffect.appendConfig.of(
+                Prec.highest(
+                  keymap.of([
+                    { key: "Mod-Enter", run: () => { cmdsRef.current.run(); return true; } },
+                    { key: "Mod-Shift-f", run: () => { cmdsRef.current.format(); return true; } },
+                    { key: "Mod-i", run: () => { cmdsRef.current.format(); return true; } },
+                    // ⌘S: save the query when focus is in the editor.
+                    // Uses the same flow as File → Save Query — prompts
+                    // for a name when the tab still has the default title.
+                    { key: "Mod-s", run: () => { void cmdsRef.current.saveAsNamed(); return true; } },
+                  ]),
+                ),
+              ),
+            });
+          }}
           extensions={[
             sqlExt,
             // Click anywhere in the editor body (including the empty
@@ -262,17 +296,6 @@ export default function QueryTab({ tab }: { tab: Tab }) {
                 return false;
               },
             }),
-            Prec.highest(
-              keymap.of([
-                { key: "Mod-Enter", run: () => { run(); return true; } },
-                { key: "Mod-Shift-f", run: () => { format(); return true; } },
-                { key: "Mod-i", run: () => { format(); return true; } },
-                // ⌘S: save the query when focus is in the editor.
-                // Uses the same flow as File → Save Query — prompts
-                // for a name when the tab still has the default title.
-                { key: "Mod-s", run: () => { void saveAsNamed(); return true; } },
-              ]),
-            ),
           ]}
           onChange={(v) => updateTab(tab.id, { sql: v })}
           basicSetup={{

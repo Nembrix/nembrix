@@ -1,9 +1,22 @@
-import { cloneElement, isValidElement, useEffect, useRef, useState } from "react";
+import { isValidElement, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 const SHOW_DELAY_MS = 280;
 const ARROW = 4;
 const PAD = 6;
+
+/**
+ * Apply a node to a React ref (callback or object form). Centralises the one
+ * unavoidable `.current` write so the call site stays a plain ref setter that
+ * only runs at commit time (never during render).
+ */
+function assignRef<T>(ref: React.Ref<T> | undefined, node: T | null): void {
+  if (typeof ref === "function") {
+    ref(node);
+  } else if (ref != null) {
+    (ref as { current: T | null }).current = node;
+  }
+}
 
 interface Props {
   /** Tooltip text. Skip entirely if empty/undefined. */
@@ -38,13 +51,6 @@ export default function Tooltip({ label, children, side = "bottom", shortcut }: 
   const anchorRef = useRef<HTMLElement | null>(null);
   const tipRef = useRef<HTMLDivElement | null>(null);
   const timerRef = useRef<number | null>(null);
-
-  if (!label) return children;
-
-  // Wire onMouseEnter/Leave + ref onto the child element without wrapping.
-  // We use cloneElement so the consumer's existing handlers still fire.
-  const child = isValidElement(children) ? children : null;
-  if (!child) return children;
 
   const show = () => {
     if (timerRef.current) window.clearTimeout(timerRef.current);
@@ -91,19 +97,31 @@ export default function Tooltip({ label, children, side = "bottom", shortcut }: 
     };
   }, [visible, side]);
 
+  // Bail out only after all hooks have run, so hook order stays stable.
+  // (Returning `children` unchanged when there's no label / no valid element.)
+  const child = label && isValidElement(children) ? children : null;
+  if (!child) return children;
+
+  // The child's own ref (if any). Reading a prop during render is allowed.
+  const childRef = (child as React.ReactElement & {
+    ref?: React.Ref<HTMLElement>;
+  }).ref;
+
+  // Ref callback (commit-time only): set the anchor and forward to the child's
+  // original ref. Writing `.current` inside a ref callback is permitted.
   const captureRef = (el: HTMLElement | null) => {
     anchorRef.current = el;
-    // Forward to the original ref if there was one.
-    const ref = (child as React.ReactElement & {
-      ref?: React.Ref<HTMLElement>;
-    }).ref;
-    if (typeof ref === "function") ref(el);
-    else if (ref && typeof ref === "object") (ref as React.MutableRefObject<HTMLElement | null>).current = el;
+    assignRef(childRef, el);
   };
 
+  // Merge our handlers with the child's so the consumer's existing ones still
+  // fire. Reading the child's type/props during render is allowed (they are
+  // plain props, not refs). The ref is attached via JSX below so the linter
+  // recognises it as a (commit-time) ref callback rather than a render read.
   const childProps = child.props as Record<string, unknown>;
-  const enhanced = cloneElement(child, {
-    ref: captureRef,
+  const Tag = child.type as React.ElementType;
+  const mergedProps: Record<string, unknown> = {
+    ...childProps,
     onMouseEnter: (e: React.MouseEvent) => {
       (childProps.onMouseEnter as ((e: React.MouseEvent) => void) | undefined)?.(e);
       show();
@@ -120,11 +138,11 @@ export default function Tooltip({ label, children, side = "bottom", shortcut }: 
       (childProps.onBlur as ((e: React.FocusEvent) => void) | undefined)?.(e);
       hide();
     },
-  } as Record<string, unknown>);
+  };
 
   return (
     <>
-      {enhanced}
+      <Tag {...mergedProps} ref={captureRef} />
       {visible && createPortal(
         <div
           ref={tipRef}
