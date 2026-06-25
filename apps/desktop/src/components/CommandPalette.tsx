@@ -205,10 +205,9 @@ export default function CommandPalette() {
 }
 
 function PaletteRow({ row }: { row: Scored }) {
-  const Icon = iconFor(row.it.kind);
   return (
     <div className="palette-item">
-      <span className="palette-icon"><Icon size={13} /></span>
+      <span className="palette-icon">{iconFor(row.it.kind, 13)}</span>
       <span className="palette-title">
         {highlightSegments(row.it.title, row.m.positions).map((seg, i) => (
           <span key={i} className={seg.matched ? "hi" : ""}>{seg.text}</span>
@@ -233,13 +232,13 @@ function ModeLegend() {
   );
 }
 
-function iconFor(k: ItemKind) {
+function iconFor(k: ItemKind, size: number) {
   switch (k) {
-    case "action":     return Command;
-    case "connection": return Database;
-    case "item":       return Table2;
-    case "tab":        return FileText;
-    case "history":    return History;
+    case "action":     return <Command size={size} />;
+    case "connection": return <Database size={size} />;
+    case "item":       return <Table2 size={size} />;
+    case "tab":        return <FileText size={size} />;
+    case "history":    return <History size={size} />;
   }
 }
 

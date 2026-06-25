@@ -1,4 +1,5 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, type Page } from "@playwright/test";
+import { expect, seedConnectedSession } from "./_setup";
 
 /** Open the Roles tab. Use the command palette (driven by the menu
  *  dispatcher) so we don't depend on the fragile multi-step menu
@@ -6,28 +7,17 @@ import { test, expect, type Page } from "@playwright/test";
 async function openRolesTab(page: Page) {
   await page.locator(".menu-bar-item", { hasText: "View" }).click();
   await page.locator(".menu-item", { hasText: /Command Palette/ }).click();
+  await expect(page.getByPlaceholder(/Search actions/)).toBeVisible();
   await page.keyboard.type("manage roles");
+  // Wait for the filtered result before committing — pressing Enter on a
+  // not-yet-filtered list selects the wrong (or no) action.
+  await expect(page.locator(".palette-row").first()).toBeVisible();
   await page.keyboard.press("Enter");
   await expect(page.locator(".roles-shell")).toBeVisible();
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/");
-  await page.evaluate(() => {
-    localStorage.clear();
-    const rec = {
-      id: "00000000-0000-0000-0000-000000000888",
-      name: "Demo", engine: "postgres",
-      host: "h", port: 5432, username: "u",
-      database: "d", ssl_mode: "prefer", ssh: null, color: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    localStorage.setItem("nembrix.mock.connections", JSON.stringify([rec]));
-  });
-  await page.reload();
-  await page.locator(".rail-avatar").first().click();
-  await page.locator("[data-testid='connect-btn']").click();
+  await seedConnectedSession(page);
 });
 
 test("opens Roles tab and lists pg_roles", async ({ page }) => {

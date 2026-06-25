@@ -44,6 +44,15 @@ interface LiveConn {
   running: Map<string, { client: PoolClient; pid: number | null }>;
 }
 
+/** Extract a string message from an unknown thrown value. */
+function errMessage(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (e && typeof e === "object" && "message" in e) {
+    return String((e as { message: unknown }).message);
+  }
+  return String(e);
+}
+
 const conns = new Map<string, LiveConn>();
 const PORT = parseInt(process.env.DBCLIENT_SIDECAR_PORT ?? "1421");
 
@@ -203,7 +212,7 @@ async function introspect(pool: Pool) {
 
     /* Index everything by (schema, table). */
     const key = (sc: string, t: string) => `${sc}.${t}`;
-    const colMap = new Map<string, any[]>();
+    const colMap = new Map<string, Record<string, unknown>[]>();
     for (const r of cols) {
       const k = key(r.table_schema, r.table_name);
       (colMap.get(k) ?? colMap.set(k, []).get(k)!).push({
@@ -218,7 +227,7 @@ async function introspect(pool: Pool) {
       const k = key(r.table_schema, r.table_name);
       (pkMap.get(k) ?? pkMap.set(k, []).get(k)!).push(r.column_name);
     }
-    const fkMap = new Map<string, any[]>();
+    const fkMap = new Map<string, Record<string, unknown>[]>();
     for (const r of fks) {
       const k = key(r.schema, r.table_name);
       (fkMap.get(k) ?? fkMap.set(k, []).get(k)!).push({
@@ -229,7 +238,7 @@ async function introspect(pool: Pool) {
         referenced_columns: r.ref_columns ?? [],
       });
     }
-    const idxMap = new Map<string, any[]>();
+    const idxMap = new Map<string, Record<string, unknown>[]>();
     for (const r of idxs) {
       const k = key(r.schema, r.table_name);
       (idxMap.get(k) ?? idxMap.set(k, []).get(k)!).push({
@@ -241,7 +250,7 @@ async function introspect(pool: Pool) {
         definition: r.definition,
       });
     }
-    const funcMap = new Map<string, any[]>();
+    const funcMap = new Map<string, Record<string, unknown>[]>();
     for (const r of funcs) {
       (funcMap.get(r.schema) ?? funcMap.set(r.schema, []).get(r.schema)!).push({
         name: r.name,
@@ -251,8 +260,8 @@ async function introspect(pool: Pool) {
     }
 
     const schemaNodes = schemas.map((s: { name: string }) => {
-      const tables: any[] = [];
-      const views: any[] = [];
+      const tables: Record<string, unknown>[] = [];
+      const views: Record<string, unknown>[] = [];
       for (const r of rels) {
         if (r.schema !== s.name) continue;
         const node = {
@@ -327,8 +336,8 @@ app.post("/test-connection", async (req: Request, res: Response) => {
     await c.connect();
     await c.query("SELECT 1");
     res.json({ ms: Date.now() - t0 });
-  } catch (e: any) {
-    res.status(400).json({ error: String(e?.message ?? e) });
+  } catch (e: unknown) {
+    res.status(400).json({ error: errMessage(e) });
   } finally {
     await c.end().catch(() => {});
   }
@@ -345,8 +354,8 @@ app.post("/connect", async (req: Request, res: Response) => {
     c.release();
     conns.set(body.id, { pool, running: new Map() });
     res.sendStatus(204);
-  } catch (e: any) {
-    res.status(400).json({ error: String(e?.message ?? e) });
+  } catch (e: unknown) {
+    res.status(400).json({ error: errMessage(e) });
   }
 });
 
@@ -366,8 +375,8 @@ app.post("/introspect", async (req: Request, res: Response) => {
   if (!live) return res.status(400).json({ error: "not connected" });
   try {
     res.json(await introspect(live.pool));
-  } catch (e: any) {
-    res.status(500).json({ error: String(e?.message ?? e) });
+  } catch (e: unknown) {
+    res.status(500).json({ error: errMessage(e) });
   }
 });
 
@@ -383,8 +392,8 @@ app.post("/execute", async (req: Request, res: Response) => {
       last_insert_id: null,
       elapsed_ms: Date.now() - t0,
     });
-  } catch (e: any) {
-    res.status(400).json({ error: String(e?.message ?? e) });
+  } catch (e: unknown) {
+    res.status(400).json({ error: errMessage(e) });
   }
 });
 
@@ -409,7 +418,7 @@ app.post("/stream", async (req: Request, res: Response) => {
 
   const handle = randomUUID();
   let client: PoolClient | null = null;
-  let pid: number | null = null;
+  let pid: number | null;
   try {
     client = await live.pool.connect();
     try {
@@ -433,9 +442,10 @@ app.post("/stream", async (req: Request, res: Response) => {
     const batch: RowBatch = { columns, rows, done: true };
     send("batch", batch);
     res.end();
-  } catch (e: any) {
-    console.error(`[sidecar] /stream error:`, e?.message ?? e);
-    send("batch", { columns: null, rows: [[{ kind: "text", value: String(e?.message ?? e) }]], done: true });
+  } catch (e: unknown) {
+    const msg = errMessage(e);
+    console.error(`[sidecar] /stream error:`, msg);
+    send("batch", { columns: null, rows: [[{ kind: "text", value: msg }]], done: true });
     res.end();
   } finally {
     live.running.delete(handle);

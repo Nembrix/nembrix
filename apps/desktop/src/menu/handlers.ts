@@ -135,7 +135,7 @@ export function registerAllMenuHandlers() {
   });
   registerMenu(MENU.REFRESH_SCHEMA, async () => {
     const id = s().selectedConnId; if (!id) return;
-    try { s().setSchema(id, await api.introspect(id)); } catch {}
+    try { s().setSchema(id, await api.introspect(id)); } catch { /* ignore: best-effort */ }
   });
 
   // ─── Database ───

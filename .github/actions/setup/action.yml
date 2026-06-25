@@ -1,0 +1,28 @@
+name: Setup
+description: >
+  Checks out is assumed done by the caller. Sets up Node + Yarn with
+  caching and runs a frozen-lockfile install. Reused across all CI jobs
+  so the Node version and install flags live in exactly one place.
+
+inputs:
+  node-version:
+    description: Node.js version
+    required: false
+    default: "22"
+  install:
+    description: Whether to run `yarn install` (set "false" to only set up Node)
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: "yarn"
+
+    - name: Install dependencies
+      if: ${{ inputs.install == 'true' }}
+      shell: bash
+      run: yarn install --frozen-lockfile

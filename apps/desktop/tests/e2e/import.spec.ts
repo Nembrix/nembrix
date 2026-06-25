@@ -1,25 +1,11 @@
-import { test, expect } from "@playwright/test";
+import { test } from "@playwright/test";
+import { expect, seedConnectedSession } from "./_setup";
 import * as path from "node:path";
 import * as os from "node:os";
 import * as fs from "node:fs/promises";
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/");
-  await page.evaluate(() => {
-    localStorage.clear();
-    const rec = {
-      id: "00000000-0000-0000-0000-0000000000bb",
-      name: "Demo", engine: "postgres",
-      host: "h", port: 5432, username: "u",
-      database: "d", ssl_mode: "prefer", ssh: null, color: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    localStorage.setItem("nembrix.mock.connections", JSON.stringify([rec]));
-  });
-  await page.reload();
-  await page.locator(".rail-avatar").first().click();
-  await page.locator("[data-testid='connect-btn']").click();
+  await seedConnectedSession(page);
 });
 
 async function openImport(page: import("@playwright/test").Page) {
@@ -27,6 +13,7 @@ async function openImport(page: import("@playwright/test").Page) {
   // command palette which uses the same dispatcher.
   await page.locator(".menu-bar-item", { hasText: "View" }).click();
   await page.locator(".menu-item", { hasText: /Command Palette/ }).click();
+  await expect(page.getByPlaceholder(/Search actions/)).toBeVisible();
   await page.keyboard.type("Import");
   await page.keyboard.press("Enter");
   await expect(page.locator(".modal-header", { hasText: "Import" })).toBeVisible();

@@ -49,7 +49,6 @@ export function parseCsv(input: string, d: CsvDialect = DEFAULT_DIALECT): Parsed
   let field = "";
   let inQuotes = false;
   let i = 0;
-  const n = input.length;
   const QUOTE = d.quote;
   const DELIM = d.delimiter;
 
@@ -104,10 +103,6 @@ export function parseCsv(input: string, d: CsvDialect = DEFAULT_DIALECT): Parsed
   }
   // Final field/row.
   if (field !== "" || cur.length > 0) { pushField(); pushRow(); }
-  // Discard the very last row if it's an artifact of trailing newlines we
-  // already cleared in pushRow.
-  i = i; void i;
-
   let columns: string[];
   if (d.header) {
     const head = rows.shift() ?? [];
@@ -172,7 +167,7 @@ function objectsToTable(objs: unknown[]): ParsedTable {
  * Split a SQL script into individual statements. Aware of:
  *  - single-quoted strings with doubled-quote escaping
  *  - line comments (-- …)
- *  - block comments (/* … *​/)
+ *  - block comments (/* … * /)
  *  - dollar-quoted strings ($tag$ … $tag$) — handles PL/pgSQL bodies
  *
  * Returns each statement with its trailing semicolon stripped.

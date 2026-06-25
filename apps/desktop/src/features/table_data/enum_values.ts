@@ -34,7 +34,7 @@ export async function enumValuesFor(
   const k = key(connId, t);
   if (cache.has(k)) return cache.get(k) ?? null;
 
-  let labels: string[] = [];
+  const labels: string[] = [];
   let isEnum = false;
 
   // `pg_type.typtype = 'e'` flags enums. We join pg_enum directly so a

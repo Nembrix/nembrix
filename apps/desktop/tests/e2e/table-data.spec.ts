@@ -1,36 +1,24 @@
-import { test, expect } from "@playwright/test";
+import { test } from "@playwright/test";
+import { expect, seedConnectedSession } from "./_setup";
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/");
-  await page.evaluate(() => {
-    localStorage.clear();
-    const rec = {
-      id: "00000000-0000-0000-0000-000000000333",
-      name: "Demo", engine: "postgres",
-      host: "h", port: 5432, username: "u",
-      database: "d", ssl_mode: "prefer", ssh: null, color: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    localStorage.setItem("nembrix.mock.connections", JSON.stringify([rec]));
-  });
-  await page.reload();
-  await page.locator(".rail-avatar").first().click();
-  await page.locator("[data-testid='connect-btn']").click();
+  await seedConnectedSession(page);
 });
 
 test("double-clicking a table opens a data view that loads rows by default (no editor)", async ({ page }) => {
-  await page.getByText("orders").dblclick();
-  // No CodeMirror editor in this tab.
+  await page.locator(".empty-tab-card", { hasText: "orders" }).click();
+  // No CodeMirror editor in this tab — it's the pure-GUI data view.
   await expect(page.locator(".cm-editor")).toHaveCount(0);
-  // The pure-GUI toolbar shows the relation name.
-  await expect(page.getByText("public.orders")).toBeVisible();
-  // Data is loaded by the mock backend — the grid-scroll container has rows.
+  // Data is loaded by the mock backend — the grid shows the table's
+  // columns (placed_at) and rows.
+  await expect(
+    page.getByRole("columnheader", { name: /placed_at/ }),
+  ).toBeVisible();
   await expect(page.locator(".grid-scroll")).toContainText("placed_at");
 });
 
 test("Structure / Indexes / Info segments swap the body content", async ({ page }) => {
-  await page.getByText("orders").dblclick();
+  await page.locator(".empty-tab-card", { hasText: "orders" }).click();
 
   await page.locator(".result-segments .segmented button", { hasText: "Structure" }).click();
   await expect(page.locator(".meta-table")).toBeVisible();
@@ -50,7 +38,7 @@ test("Structure / Indexes / Info segments swap the body content", async ({ page 
 });
 
 test("hiding a column drops it from the data grid", async ({ page }) => {
-  await page.getByText("orders").dblclick();
+  await page.locator(".empty-tab-card", { hasText: "orders" }).click();
   await expect(page.getByRole("columnheader", { name: /placed_at/ })).toBeVisible();
 
   await page.getByRole("button", { name: /Columns/ }).click();

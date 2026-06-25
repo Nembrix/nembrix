@@ -6,7 +6,7 @@ import {
 import { useStore } from "@/store";
 import * as api from "@/ipc/commands";
 import type { ConnectionRecord, Environment } from "@/ipc/types";
-import { ENV_COLOR, ENV_LABEL, ENVIRONMENTS, colorFor } from "./environment";
+import { ENV_LABEL, ENVIRONMENTS, colorFor } from "./environment";
 import {
   addEmptyGroup, compareOrder, load as loadGroups, removeEmptyGroup, reorder,
 } from "./groups";

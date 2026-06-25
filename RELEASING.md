@@ -66,12 +66,16 @@ right-click → Open.
 | `WIN_CERT_BASE64` | Base64-encoded `.pfx` containing your code-signing cert. `certutil -encode cert.pfx cert.txt` then strip the BEGIN/END lines. |
 | `WIN_CERT_PASSWORD` | Password set when exporting / receiving the `.pfx` |
 
-Cert vendors: SSL.com, DigiCert, Sectigo (~$200-400/year). EV
-certificates avoid SmartScreen warnings on first run but cost more.
+**Currently we ship unsigned** (no Windows secrets set), so the `.msi`/
+`.exe` go out unsigned and Windows SmartScreen shows a blue "Microsoft
+Defender SmartScreen prevented an unrecognized app from starting" dialog
+on first run — users click *More info → Run anyway*.
 
-Without these, the `.msi` ships unsigned. Windows SmartScreen shows a
-blue "Microsoft Defender SmartScreen prevented an unrecognized app
-from starting" dialog on first run.
+Options when upgrading, cheapest first: **Azure Trusted Signing** (~$10/mo,
+clears SmartScreen, CI-friendly), **SignPath** (free for OSS), or a
+commercial CA — SSL.com / DigiCert / Sectigo (~$200-400/yr; EV clears
+SmartScreen immediately but ships on a hardware token). See
+[docs/release-signing.md](docs/release-signing.md) for the full breakdown.
 
 ### Homebrew tap (optional)
 

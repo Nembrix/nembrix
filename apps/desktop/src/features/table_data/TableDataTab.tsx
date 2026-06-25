@@ -431,7 +431,7 @@ function StructurePane({
     try {
       const t = await api.introspect(connId);
       useStore.getState().setSchema(connId, t);
-    } catch {}
+    } catch { /* ignore: best-effort */ }
   };
 
   const runAlter = async (col: ColumnNode, sql: string) => {

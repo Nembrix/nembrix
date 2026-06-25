@@ -39,7 +39,6 @@ import { fileURLToPath } from "node:url";
 const APP_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const REPO = join(APP_ROOT, "..", "..");
 const BUNDLE_DIR = join(APP_ROOT, "target", "release", "bundle");
-const DESKTOP_DIR = APP_ROOT;
 const CASK_TEMPLATE = join(REPO, ".cask", "nembrix.rb.tmpl");
 
 interface Args {

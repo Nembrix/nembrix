@@ -26,10 +26,6 @@ export default function SchemaDiffTab({ tab }: { tab: Tab }) {
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState(false);
 
-  // Fetch on connect if we haven't already.
-  useEffect(() => { void ensureTree(leftConnId); }, [leftConnId]);
-  useEffect(() => { void ensureTree(rightConnId); }, [rightConnId]);
-
   async function ensureTree(connId: string) {
     if (!connId) return;
     if (schemas[connId]) return;
@@ -40,6 +36,10 @@ export default function SchemaDiffTab({ tab }: { tab: Tab }) {
       setError(String(e));
     }
   }
+
+  // Fetch on connect if we haven't already.
+  useEffect(() => { void ensureTree(leftConnId); }, [leftConnId]);
+  useEffect(() => { void ensureTree(rightConnId); }, [rightConnId]);
 
   const leftTree  = schemas[leftConnId];
   const rightTree = schemas[rightConnId];
@@ -106,7 +106,7 @@ export default function SchemaDiffTab({ tab }: { tab: Tab }) {
       await refresh();
     } catch (e) {
       setError(`${e}\n(transaction rolled back)`);
-      try { await api.execute(leftConnId, "ROLLBACK;"); } catch {}
+      try { await api.execute(leftConnId, "ROLLBACK;"); } catch { /* ignore: best-effort */ }
     } finally {
       setApplying(false);
     }

@@ -226,7 +226,7 @@ export default function ImportDialog({ connId, schema: schemaProp, onClose }: Pr
     await api.execute(connId, failed ? "ROLLBACK;" : "COMMIT;");
     // Refresh schema after a successful import (target table stats etc).
     if (!failed) {
-      try { useStore.getState().setSchema(connId, await api.introspect(connId)); } catch {}
+      try { useStore.getState().setSchema(connId, await api.introspect(connId)); } catch { /* ignore: best-effort */ }
     }
   };
 

@@ -101,9 +101,46 @@ CI signs `.msi`/`.exe` with `signtool` using a `.pfx` you supply as a
 base64 secret. The step is skipped when `WIN_CERT_BASE64` is unset, so
 unsigned dev builds still work.
 
-### 2a. Obtain a code-signing certificate
+### Choosing how to sign (and what it costs)
 
-Buy from a CA — SSL.com, DigiCert, or Sectigo (~$200–400/yr). You'll
+Windows code signing is a spectrum, not a single "buy a cert" step. From
+cheapest to most trusted:
+
+| Option | Cost | Clears SmartScreen? | Notes |
+| --- | --- | --- | --- |
+| **Ship unsigned** | Free | No | Current default. Users click *More info → Run anyway* on first launch. Fine for early/test releases. |
+| **Self-signed cert** | Free | No (unless the user trusts your cert) | Proves integrity, not identity. Only useful for internal/enterprise where you can push the cert via GPO. |
+| **Azure Trusted Signing** | ~$10/mo | **Yes** | Microsoft's service; certs Windows fully trusts, no hardware token, works in CI. Cheapest *trusted* path. Needs an Azure account + identity verification. |
+| **SignPath (OSS program)** | Free for OSS | Yes | Free trusted signing for approved open-source projects. Requires a public repo. |
+| **Commercial CA (OV/EV)** | ~$200–400/yr | OV: eventually · EV: immediately | SSL.com, DigiCert, Sectigo. EV usually ships on a hardware token (can't live in CI). |
+
+> **We currently use "Ship unsigned" (Option 1).** No Windows secrets are
+> set, so the `Sign Windows installers` step is skipped and the `.msi`/
+> `.exe` ship unsigned. See [§2a](#2a-shipping-unsigned-current) for the
+> user-facing first-run note. When ready to upgrade, **Azure Trusted
+> Signing (~$10/mo)** is the recommended next step — it clears SmartScreen
+> without a $200+/yr commitment — or **SignPath** if the repo is public.
+
+### 2a. Shipping unsigned (current)
+
+Nothing to configure — this is the default when `WIN_CERT_BASE64` is
+unset. The trade-off is the first-run SmartScreen dialog:
+
+> "Microsoft Defender SmartScreen prevented an unrecognized app from
+> starting."
+
+Tell users to click **More info → Run anyway**. This warning softens over
+time as the download builds reputation. Document this in your install
+instructions so first-run friction doesn't read as "the app is broken."
+
+When you adopt a real cert later (Azure Trusted Signing / SignPath / a
+commercial CA), follow §2b to wire up the `.pfx` secrets — no workflow
+changes are needed, the signing step activates automatically once
+`WIN_CERT_BASE64` is present.
+
+### 2a-alt. Obtain a code-signing certificate (when upgrading)
+
+For a commercial CA, buy from SSL.com, DigiCert, or Sectigo. You'll
 receive (or generate and get signed) a `.pfx`/`.p12` containing the cert
 + private key, protected by a password.
 
@@ -111,7 +148,8 @@ receive (or generate and get signed) a `.pfx`/`.p12` containing the cert
 > "unrecognized app" prompt until your signature builds reputation. An
 > **EV** cert clears SmartScreen immediately but costs more and usually
 > ships on a hardware token (which can't live in CI). For CI-based
-> signing, an OV `.pfx` is the practical choice.
+> signing, an OV `.pfx` or **Azure Trusted Signing** is the practical
+> choice.
 
 ### 2b. Load the two Windows secrets
 

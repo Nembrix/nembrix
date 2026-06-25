@@ -72,17 +72,23 @@ export default function ActivityTab({ tab }: { tab: Tab }) {
   const refresh = useRef<() => void>(() => {});
 
   // Fetch routine — uses stream(), drains the single mock-or-real batch.
-  refresh.current = async () => {
-    try {
-      const sessionsRows = await fetchRows(tab.connId, SESSIONS_SQL);
-      setSessions(sessionsRows.map(rowToSession));
-      const ov = await fetchRows(tab.connId, OVERVIEW_SQL);
-      if (ov[0]) setOverview(rowToOverview(ov[0]));
-      setErr(null);
-    } catch (e) {
-      setErr(String(e));
-    }
-  };
+  // Stored in a ref so the interval and event handlers always invoke the
+  // freshest closure (which captures the current tab.connId). Assigned in
+  // an effect rather than the render body so the ref is never written
+  // during render.
+  useEffect(() => {
+    refresh.current = async () => {
+      try {
+        const sessionsRows = await fetchRows(tab.connId, SESSIONS_SQL);
+        setSessions(sessionsRows.map(rowToSession));
+        const ov = await fetchRows(tab.connId, OVERVIEW_SQL);
+        if (ov[0]) setOverview(rowToOverview(ov[0]));
+        setErr(null);
+      } catch (e) {
+        setErr(String(e));
+      }
+    };
+  });
 
   // Initial + interval.
   useEffect(() => {

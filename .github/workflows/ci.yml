@@ -1,0 +1,127 @@
+name: CI
+
+# Runs on every PR and on pushes to main. Fast checks first (lint +
+# typecheck + unit tests + builds), then the heavier Playwright e2e and
+# Rust lint in parallel. Keeps `main` green and catches dependency-bump
+# regressions (e.g. an Astro major that breaks the docs build) before
+# they land.
+#
+# Node setup + frozen-lockfile install are factored into the local
+# composite action .github/actions/setup (one place to bump the Node
+# version / install flags).
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Cancel superseded runs on the same ref — pushing twice to a PR shouldn't
+# keep an obsolete run burning minutes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ─── Lint + typecheck + unit tests (fast, no browser/host) ──────────
+  unit:
+    name: Lint, typecheck & unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: ./.github/actions/setup
+
+      # ESLint fails the build on any error; warnings are advisory.
+      - name: Lint (desktop)
+        run: yarn workspace @nembrix/desktop lint
+
+      # tsc -b --noEmit mirrors what build:prod runs locally.
+      - name: Typecheck (desktop)
+        run: yarn workspace @nembrix/desktop tsc -b --noEmit
+
+      - name: Unit tests (desktop)
+        run: yarn workspace @nembrix/desktop test:unit
+
+  # ─── Frontend build — catches build-time breakage the unit tests miss
+  #     (e.g. a Vite/Astro major bump). Builds both the app and the docs.
+  build:
+    name: Build (desktop + docs)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: ./.github/actions/setup
+
+      - name: Build desktop frontend
+        run: yarn workspace @nembrix/desktop build
+
+      - name: Build docs
+        run: yarn workspace @nembrix/docs build
+
+  # ─── End-to-end (Playwright). The playwright config drives the Vite
+  #     dev server with the in-browser mock IPC layer — no Rust host
+  #     required, so plain headless Chromium is enough.
+  #
+  #     The suite is green; Playwright retries (retries: 2 under CI in
+  #     playwright.config.ts) absorb the residual flake from the single
+  #     shared mock dev server. If e2e starts blocking PRs on flake alone,
+  #     re-add `continue-on-error: true` here while it's investigated.
+  e2e:
+    name: E2E (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: ./.github/actions/setup
+
+      - name: Install Playwright browser
+        run: yarn workspace @nembrix/desktop test:e2e:install
+
+      - name: Run e2e
+        run: yarn workspace @nembrix/desktop test:e2e
+
+      # Keep the HTML report + traces on failure for debugging.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: |
+            apps/desktop/playwright-report/
+            apps/desktop/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # ─── Rust: format + clippy on the Tauri host. Heavier (needs the Linux
+  #     webkit toolchain), but cheap insurance against host regressions.
+  rust:
+    name: Rust fmt + clippy
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537 # stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          workspaces: apps/desktop -> apps/desktop/target
+
+      - name: Install Linux deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
+      - name: rustfmt
+        working-directory: apps/desktop/src-tauri
+        run: cargo fmt --all --check
+
+      - name: clippy
+        working-directory: apps/desktop/src-tauri
+        run: cargo clippy --all-targets --all-features -- -D warnings

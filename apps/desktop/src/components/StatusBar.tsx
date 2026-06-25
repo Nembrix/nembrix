@@ -34,7 +34,7 @@ import { isTauri } from "@/ipc/commands";
 
 export default function StatusBar() {
   const {
-    connections, status, setStatus, setSchema, selectedConnId,
+    connections, status, setSchema, selectedConnId,
     tabs, activeTabId, addTab, openConnectionManager, sessions,
     schemas, activeSchema, setActiveSchema, updateTab, setActiveTab,
     readOnly, setReadOnly,
@@ -103,24 +103,6 @@ export default function StatusBar() {
   const envLabel = conn.environment
     ? ENV_LABEL[conn.environment as keyof typeof ENV_LABEL]
     : "";
-
-  const connect = async () => {
-    const key = statusKey ?? conn.id;
-    setStatus(key, "connecting");
-    try {
-      await api.connect(key);
-      setStatus(key, "connected");
-      const tree = await api.introspect(key);
-      setSchema(key, tree);
-    } catch {
-      setStatus(key, "error");
-    }
-  };
-  const disconnect = async () => {
-    const key = statusKey ?? conn.id;
-    await api.disconnect(key);
-    setStatus(key, "disconnected");
-  };
 
   const newQueryTab = () => {
     addTab({
