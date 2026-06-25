@@ -202,6 +202,12 @@ jobs:
             rust_targets: aarch64-unknown-linux-gnu
             args: --target aarch64-unknown-linux-gnu
     runs-on: ${{ matrix.os }}
+    # Exposed job-wide so the Windows signing steps can gate on it in a
+    # single place (`if: ... && env.SIGNPATH_API_TOKEN != ''`). When the
+    # SignPath OSS token isn't set yet, every signing step is skipped and
+    # the build still ships unsigned installers.
+    env:
+      SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
@@ -319,29 +325,68 @@ jobs:
           # built artifacts to that release.
 
       # ─── Windows signing (separate pass — Tauri's signing hook is
-      #     Apple-only; on Windows we sign the produced installers
-      #     after the build with signtool). Only runs when the cert
-      #     secret is present, so unsigned dev releases work fine.
-      - name: Sign Windows installers
-        if: startsWith(matrix.os, 'windows') && env.WIN_CERT_BASE64 != ''
+      #     Apple-only; on Windows we sign the produced installers after
+      #     the build via SignPath's free OSS program). SignPath is a
+      #     cloud signer: there's no .pfx and no cert to manage — we submit
+      #     each installer to a signing policy and download the signed file
+      #     back in place. Signatures are timestamped server-side, so they
+      #     stay valid after the underlying cert rotates. Only runs when
+      #     SIGNPATH_API_TOKEN is present, so unsigned dev releases work.
+      #
+      #     The org id / project / policy slugs are non-secret and come
+      #     from repo *variables* (vars.*); only the API token is a secret.
+      #     Collect the installers first so SignPath signs a single zip,
+      #     then unpack the signed artifacts back over the originals.
+      # SignPath signs an artifact that was uploaded with actions/upload-artifact
+      # (referenced by id), not a local path — so the flow is:
+      #   stage → upload → submit (by artifact id) → download signed → restore.
+      - name: Stage Windows installers for signing
+        id: stage_signpath
+        if: startsWith(matrix.os, 'windows') && env.SIGNPATH_API_TOKEN != ''
         shell: pwsh
-        env:
-          WIN_CERT_BASE64: ${{ secrets.WIN_CERT_BASE64 }}
-          WIN_CERT_PASSWORD: ${{ secrets.WIN_CERT_PASSWORD }}
         run: |
-          $bytes = [System.Convert]::FromBase64String($env:WIN_CERT_BASE64)
-          $certPath = Join-Path $env:RUNNER_TEMP "cert.pfx"
-          [IO.File]::WriteAllBytes($certPath, $bytes)
-          # Sign every msi + exe produced by tauri-action. Cross-target
-          # builds land under apps/desktop/target/<triple>/release/bundle,
-          # so we search the whole target tree.
-          $files = Get-ChildItem `
-            -Path apps/desktop/target `
-            -Recurse `
-            -Include *.msi,*.exe
-          foreach ($f in $files) {
-            & signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
-              /f $certPath /p $env:WIN_CERT_PASSWORD $f.FullName
+          New-Item -ItemType Directory -Force -Path signpath-in | Out-Null
+          # Flatten every msi + exe from the (target-dependent) bundle tree
+          # into one folder so the uploaded artifact is flat.
+          Get-ChildItem -Path apps/desktop/target -Recurse -Include *.msi,*.exe |
+            ForEach-Object { Copy-Item $_.FullName -Destination signpath-in }
+          Get-ChildItem signpath-in
+
+      - name: Upload unsigned installers
+        id: upload_unsigned
+        if: startsWith(matrix.os, 'windows') && env.SIGNPATH_API_TOKEN != ''
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: windows-installers-unsigned
+          path: signpath-in
+
+      - name: Sign Windows installers (SignPath)
+        if: startsWith(matrix.os, 'windows') && env.SIGNPATH_API_TOKEN != ''
+        uses: signpath/github-action-submit-signing-request@4f13d373e8f0cd8d3c0465ff4877feff27aed2ae # v1.2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIG_SLUG }}
+          # The artifact uploaded above, referenced by the upload step's id.
+          github-artifact-id: ${{ steps.upload_unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          # Signed files are written here for the restore step to pick up.
+          output-artifact-directory: signpath-out
+
+      - name: Restore signed installers
+        if: startsWith(matrix.os, 'windows') && env.SIGNPATH_API_TOKEN != ''
+        shell: pwsh
+        run: |
+          # Copy each signed installer back over the original in the bundle
+          # tree (matched by file name) so the downstream collect step picks
+          # up the signed versions.
+          Get-ChildItem signpath-out -Recurse -Include *.msi,*.exe | ForEach-Object {
+            $signed = $_
+            Get-ChildItem -Path apps/desktop/target -Recurse -Include *.msi,*.exe |
+              Where-Object { $_.Name -eq $signed.Name } |
+              ForEach-Object { Copy-Item $signed.FullName -Destination $_.FullName -Force }
           }
 
       # ─── Collect bundles into release/<slug>/ ───────────────────

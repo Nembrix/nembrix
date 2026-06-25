@@ -63,23 +63,31 @@ Without these, the build still produces a `.dmg`, but it's unsigned
 and macOS users get a "this app cannot be opened" warning until they
 right-click → Open.
 
-### Windows Authenticode signing
+### Windows Authenticode signing (SignPath OSS)
 
-| Secret | What it is |
-| --- | --- |
-| `WIN_CERT_BASE64` | Base64-encoded `.pfx` containing your code-signing cert. `certutil -encode cert.pfx cert.txt` then strip the BEGIN/END lines. |
-| `WIN_CERT_PASSWORD` | Password set when exporting / receiving the `.pfx` |
+CI signs `.msi`/`.exe` with SignPath's free OSS program — a cloud signer,
+so there's no `.pfx` and no cert to manage. The org id / slugs are
+non-secret **repo variables**; only the API token is a secret.
 
-**Currently we ship unsigned** (no Windows secrets set), so the `.msi`/
+| Name | Kind | What it is |
+| --- | --- | --- |
+| `SIGNPATH_ORGANIZATION_ID` | variable | SignPath organization GUID |
+| `SIGNPATH_PROJECT_SLUG` | variable | SignPath project slug |
+| `SIGNPATH_ARTIFACT_CONFIG_SLUG` | variable | Artifact configuration slug |
+| `SIGNPATH_POLICY_SLUG` | variable | Signing policy slug, e.g. `release-signing` |
+| `SIGNPATH_API_TOKEN` | **secret** | SignPath REST API token (gates the signing steps) |
+
+**Until `SIGNPATH_API_TOKEN` is set we ship unsigned**, so the `.msi`/
 `.exe` go out unsigned and Windows SmartScreen shows a blue "Microsoft
 Defender SmartScreen prevented an unrecognized app from starting" dialog
 on first run — users click *More info → Run anyway*.
 
-Options when upgrading, cheapest first: **Azure Trusted Signing** (~$10/mo,
-clears SmartScreen, CI-friendly), **SignPath** (free for OSS), or a
-commercial CA — SSL.com / DigiCert / Sectigo (~$200-400/yr; EV clears
-SmartScreen immediately but ships on a hardware token). See
-[docs/release-signing.md](docs/release-signing.md) for the full breakdown.
+SignPath (free for OSS, needs a public repo + program approval) is the
+chosen path. Alternatives: **Azure Artifact Signing** (~$10/mo, but
+geo-restricted to US/CA individuals and US/CA/EU/UK orgs) or a commercial
+CA (SSL.com / DigiCert / Sectigo, ~$200-400/yr). See
+[docs/release-signing.md](docs/release-signing.md) for sign-up steps and
+the full breakdown.
 
 ### Homebrew tap (optional)
 

@@ -95,11 +95,29 @@ base64 `.p12`, because runners have no Keychain.
 
 ---
 
-## 2. Windows — Authenticode signing
+## 2. Windows — Authenticode signing (SignPath OSS)
 
-CI signs `.msi`/`.exe` with `signtool` using a `.pfx` you supply as a
-base64 secret. The step is skipped when `WIN_CERT_BASE64` is unset, so
-unsigned dev builds still work.
+CI signs `.msi`/`.exe` with **SignPath's free OSS program**. SignPath is a
+cloud signer: there's no `.pfx` and no cert to manage — the workflow
+uploads each installer, SignPath signs it under a signing policy, and the
+signed file is downloaded back over the original. Signatures are
+timestamped server-side, so already-shipped installers stay valid after
+the underlying cert rotates.
+
+**Skips cleanly when unconfigured.** `SIGNPATH_API_TOKEN` is exposed once
+at the build-job level, and every SignPath step is gated on
+`env.SIGNPATH_API_TOKEN != ''`. Until you set the token, all four signing
+steps (stage → upload → sign → restore) are skipped and the build ships
+unsigned installers — the rest of the release still succeeds. No workflow
+edit is needed to turn signing on; setting the token (plus the
+`SIGNPATH_*` variables) activates it.
+
+> **Why SignPath here.** Azure Trusted/Artifact Signing — the other cheap
+> trusted option — is geo-restricted: individuals only in the USA/Canada,
+> organizations only in USA/Canada/EU/UK. SignPath's OSS program has no
+> such restriction and is free for approved public repos, so it's the fit
+> for this project. (If you later have a US/EU/UK entity, Azure is a valid
+> alternative; see this file's git history for the Azure variant.)
 
 ### Choosing how to sign (and what it costs)
 
@@ -108,63 +126,78 @@ cheapest to most trusted:
 
 | Option | Cost | Clears SmartScreen? | Notes |
 | --- | --- | --- | --- |
-| **Ship unsigned** | Free | No | Current default. Users click *More info → Run anyway* on first launch. Fine for early/test releases. |
+| **Ship unsigned** | Free | No | Users click *More info → Run anyway* on first launch. Fine for early/test releases. |
 | **Self-signed cert** | Free | No (unless the user trusts your cert) | Proves integrity, not identity. Only useful for internal/enterprise where you can push the cert via GPO. |
-| **Azure Trusted Signing** | ~$10/mo | **Yes** | Microsoft's service; certs Windows fully trusts, no hardware token, works in CI. Cheapest *trusted* path. Needs an Azure account + identity verification. |
-| **SignPath (OSS program)** | Free for OSS | Yes | Free trusted signing for approved open-source projects. Requires a public repo. |
+| **SignPath (OSS program)** | Free for OSS | Yes | Free trusted signing for approved open-source projects. Requires a public repo. **What this workflow uses.** |
+| **Azure Artifact Signing** | ~$10/mo | Yes | Microsoft's service, no hardware token, CI-friendly — but geo-restricted (US/CA individuals; US/CA/EU/UK orgs). |
 | **Commercial CA (OV/EV)** | ~$200–400/yr | OV: eventually · EV: immediately | SSL.com, DigiCert, Sectigo. EV usually ships on a hardware token (can't live in CI). |
 
-> **We currently use "Ship unsigned" (Option 1).** No Windows secrets are
-> set, so the `Sign Windows installers` step is skipped and the `.msi`/
-> `.exe` ship unsigned. See [§2a](#2a-shipping-unsigned-current) for the
-> user-facing first-run note. When ready to upgrade, **Azure Trusted
-> Signing (~$10/mo)** is the recommended next step — it clears SmartScreen
-> without a $200+/yr commitment — or **SignPath** if the repo is public.
+> **The workflow is wired for SignPath.** Until `SIGNPATH_API_TOKEN` is set
+> the signing steps are skipped and the `.msi`/`.exe` ship unsigned (see
+> [§2a](#2a-shipping-unsigned) for the user-facing first-run note). Setting
+> the token + the `SIGNPATH_*` repo variables (§2b–2d) activates signing —
+> no workflow changes needed.
 
-### 2a. Shipping unsigned (current)
+### 2a. Shipping unsigned
 
-Nothing to configure — this is the default when `WIN_CERT_BASE64` is
-unset. The trade-off is the first-run SmartScreen dialog:
+Until `SIGNPATH_API_TOKEN` exists, installers ship unsigned. The trade-off
+is the first-run SmartScreen dialog:
 
 > "Microsoft Defender SmartScreen prevented an unrecognized app from
 > starting."
 
-Tell users to click **More info → Run anyway**. This warning softens over
-time as the download builds reputation. Document this in your install
-instructions so first-run friction doesn't read as "the app is broken."
+Tell users to click **More info → Run anyway**, and document it in your
+install instructions so first-run friction doesn't read as "the app is
+broken."
 
-When you adopt a real cert later (Azure Trusted Signing / SignPath / a
-commercial CA), follow §2b to wire up the `.pfx` secrets — no workflow
-changes are needed, the signing step activates automatically once
-`WIN_CERT_BASE64` is present.
+### 2b. Apply to the SignPath OSS program
 
-### 2a-alt. Obtain a code-signing certificate (when upgrading)
+You do this once. It's free for approved open-source projects and the repo
+must be public.
 
-For a commercial CA, buy from SSL.com, DigiCert, or Sectigo. You'll
-receive (or generate and get signed) a `.pfx`/`.p12` containing the cert
-+ private key, protected by a password.
+1. **Apply** at [signpath.org](https://signpath.org) (the SignPath
+   *Foundation* — the free OSS program, distinct from the commercial
+   signpath.io). Submit nembrix's public repo URL.
+2. **Wait for approval.** A human reviews the application; this can take a
+   few business days, similar to other code-signing identity checks. You
+   can't sign until it's approved and your org is provisioned.
+3. Once approved you get a SignPath **organization**. Note its
+   **Organization ID** (a GUID, in *Settings → Organization*).
 
-> **EV vs OV.** A standard (OV) cert still triggers a SmartScreen
-> "unrecognized app" prompt until your signature builds reputation. An
-> **EV** cert clears SmartScreen immediately but costs more and usually
-> ships on a hardware token (which can't live in CI). For CI-based
-> signing, an OV `.pfx` or **Azure Trusted Signing** is the practical
-> choice.
+### 2c. Set up the project, policy, and API token
 
-### 2b. Load the two Windows secrets
+Inside your approved SignPath organization:
+
+1. **Create a project** for nembrix. Its slug becomes
+   `SIGNPATH_PROJECT_SLUG` (e.g. `nembrix`).
+2. **Add an artifact configuration** describing the uploaded zip of
+   installers (the OSS onboarding docs/template cover this). Its slug
+   becomes `SIGNPATH_ARTIFACT_CONFIG_SLUG`.
+3. **Pick/confirm a signing policy.** Use `release-signing` for releases
+   (there's also `test-signing`). The slug becomes `SIGNPATH_POLICY_SLUG`.
+4. **Create an API token** (*Settings → API Tokens*) scoped to submit
+   signing requests. This is the only **secret**; the rest are non-secret
+   slugs/ids.
+
+### 2d. Load the SignPath config
+
+The org id / slugs are **not secret** — store them as repo *variables*; only
+the token is a *secret*. (Set them on the `release` environment to match
+the rest of the signing config.)
 
 ```sh
-base64 -i code-signing.pfx | gh secret set WIN_CERT_BASE64 --env release
-gh secret set WIN_CERT_PASSWORD --env release    # the .pfx password
+# Non-secret config → repo/environment variables:
+gh variable set SIGNPATH_ORGANIZATION_ID      --env release   # GUID from 2b.3
+gh variable set SIGNPATH_PROJECT_SLUG         --env release   # project slug from 2c.1
+gh variable set SIGNPATH_ARTIFACT_CONFIG_SLUG --env release   # artifact config slug from 2c.2
+gh variable set SIGNPATH_POLICY_SLUG          --env release   # e.g. release-signing, from 2c.3
+
+# The one secret → the API token:
+gh secret set SIGNPATH_API_TOKEN --env release                # API token from 2c.4
 ```
 
-On Windows/PowerShell, produce the base64 with:
-
-```powershell
-[Convert]::ToBase64String([IO.File]::ReadAllBytes("code-signing.pfx")) `
-  | Out-File -NoNewline cert.b64
-gh secret set WIN_CERT_BASE64 --env release < cert.b64
-```
+`gh secret set` reads from stdin when you don't pipe a value — it prompts
+and hides input, so the token never hits your shell history.
 
 ---
 
@@ -173,8 +206,8 @@ gh secret set WIN_CERT_BASE64 --env release < cert.b64
 1. Run **Actions → Release → Run workflow** (a draft is fine).
 2. In the macOS build job logs, look for codesign + notarization steps
    running rather than being skipped. In the Windows job, look for the
-   `Sign Windows installers` step actually executing (it's gated on
-   `WIN_CERT_BASE64 != ''`).
+   `Sign Windows installers (SignPath)` step actually executing (it's
+   gated on `SIGNPATH_API_TOKEN != ''`).
 3. Download the artifacts from the draft release and check signatures:
 
    ```sh
@@ -198,6 +231,8 @@ build.
 - **macOS:** revoke the old cert in the Apple Developer portal, create a
   new Developer ID Application cert, redo §1c–1e. Already-shipped builds
   stay valid (they were signed when the cert was live).
-- **Windows:** get a fresh `.pfx` from your CA, redo §2b.
+- **Windows:** there's no cert to rotate — SignPath manages the cert. To
+  rotate *CI credentials*, create a new API token in the SignPath portal,
+  revoke the old one, and redo the `SIGNPATH_API_TOKEN` step in §2d.
 - Updating a secret is the same `gh secret set …` command — it
   overwrites in place.
