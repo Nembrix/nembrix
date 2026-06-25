@@ -65,6 +65,10 @@ export async function seedEmpty(page: Page) {
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
+  // `reload()` resolves on the load event, before React has mounted the app
+  // shell and registered the menu accelerators. Wait for the menu bar so tests
+  // that fire keyboard shortcuts (e.g. ⌘N) don't race the listener attaching.
+  await expect(page.locator(".menu-bar-item").first()).toBeVisible();
 }
 
 export { expect };
