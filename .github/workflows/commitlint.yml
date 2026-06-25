@@ -8,6 +8,11 @@ on:
     # Re-run when the title/body changes too, not just on new commits.
     types: [opened, edited, synchronize, reopened]
 
+# A new push / edit to the same PR supersedes the older run.
+concurrency:
+  group: commitlint-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   pull-requests: read
