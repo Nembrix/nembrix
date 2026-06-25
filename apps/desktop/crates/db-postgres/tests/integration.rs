@@ -4,7 +4,6 @@ mod common;
 
 use db_core::{DbConnection, RowBatch};
 use db_postgres::object_ops;
-use sqlx::Row;
 use tokio::sync::mpsc;
 
 #[tokio::test]
