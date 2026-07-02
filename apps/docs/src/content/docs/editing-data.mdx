@@ -12,7 +12,7 @@ import { Aside } from "@astrojs/starlight/components";
 - **Right-click** opens a menu: Copy, Copy as JSON, Copy row (TSV),
   Edit, Set NULL.
 
-![Right-click cell menu](/media/edit-cell-context-menu.png)
+![Right-click cell menu](../../assets/media/edit-cell-context-menu.png)
 
 ## Edits are pending until you save
 
@@ -20,7 +20,7 @@ Every edit you make is staged as a **pending edit** — the cell turns
 yellow, but nothing's written to the database yet. A banner at the top
 of the grid shows the count.
 
-![Pending edits banner](/media/edit-pending-banner.png)
+![Pending edits banner](../../assets/media/edit-pending-banner.png)
 
 Press **⌘S** to commit them. Every pending edit goes out as a single
 transaction:
@@ -37,7 +37,7 @@ If any single UPDATE fails, the whole transaction rolls back and a
 modal pops up with the SQL error. Your pending edits stay queued so
 you can fix and retry.
 
-![Save error dialog](/media/edit-save-error.png)
+![Save error dialog](../../assets/media/edit-save-error.png)
 
 ## Edits require a primary key
 

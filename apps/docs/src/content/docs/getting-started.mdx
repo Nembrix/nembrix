@@ -9,7 +9,7 @@ The first thing you'll see is an empty rail (the column of connection
 avatars on the left) and a landing pane that says **No recent
 connections yet**.
 
-![Empty landing](/media/empty-landing.png)
+![Empty landing](../../assets/media/empty-landing.png)
 
 ## 2. Save a connection
 
@@ -24,7 +24,7 @@ The connection form is a single dialog with three sections:
   This drives the avatar tint and the destructive-query confirmation
   flow. Production gets a bright red ring; the editor will refuse to
   `DROP TABLE` on it without you typing the connection name first.
-- **SSH tunnel** — optional, covered in [SSH](ssh/).
+- **SSH tunnel** — optional, covered in [SSH](../ssh/).
 
 Click **Test connection** to verify before saving, or **Save & connect**
 to do it in one shot.
@@ -34,7 +34,7 @@ to do it in one shot.
 Once you're connected, the inspector on the right shows the schema
 tree. Click any table to open it in a tab.
 
-![Inspector with a table picked](/media/inspector-table-pick.png)
+![Inspector with a table picked](../../assets/media/inspector-table-pick.png)
 
 By default each tab loads the first 200 rows. Bump it with the
 **Limit** dropdown above the grid.
@@ -46,7 +46,7 @@ Each chip has a column, an operator ("=", "contains", "is null", …),
 and a value. The chip's checkbox toggles it on or off without
 deleting it.
 
-[→ Filters](filters/)
+[→ Filters](../filters/)
 
 ## 5. Edit a cell
 
@@ -57,7 +57,7 @@ edits you have queued.
 Press ⌘S to commit them all in a single transaction. Postgres
 errors bubble up in a modal with a Retry button.
 
-[→ Editing data](editing-data/)
+[→ Editing data](../editing-data/)
 
 ## 6. Save what you typed
 

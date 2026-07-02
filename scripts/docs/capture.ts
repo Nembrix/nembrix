@@ -37,7 +37,10 @@ import { seedScript } from "./inject";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SCENES_DIR = join(__dirname, "scenes");
-const OUT_DIR = join(__dirname, "..", "..", "apps", "docs", "public", "media");
+// Screenshots live under src/assets/ so they go through Astro's asset
+// pipeline (hashing + optimization + base-aware URLs) — MDX references
+// them relatively (../../assets/media/…), so no absolute /media/ paths.
+const OUT_DIR = join(__dirname, "..", "..", "apps", "docs", "src", "assets", "media");
 const VIEWPORT = { width: 1440, height: 900 };
 
 export type SeedMode = "connected" | "connection-only" | "none";

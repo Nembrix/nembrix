@@ -35,22 +35,6 @@ You can also run the web build for fast iteration.
   </TabItem>
 </Tabs>
 
-## From source
-
-```sh
-git clone https://github.com/oesukam/nembrix.git
-cd nembrix
-yarn install
-yarn tauri dev      # native desktop build
-# or
-yarn dev:all        # browser + sidecar (faster iteration, no Rust rebuild)
-```
-
-The browser dev mode talks to your real Postgres through a small
-Node sidecar at `localhost:1421` — see
-[ARCHITECTURE.md](https://github.com/oesukam/nembrix/blob/main/ARCHITECTURE.md)
-in the repo for the why.
-
 ## What you need
 
 - A Postgres server you can reach (locally or over SSH).

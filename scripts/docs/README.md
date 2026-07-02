@@ -13,7 +13,7 @@ What it does:
    already running — see the safety check below).
 3. Injects a saved + connected connection into localStorage so every
    scene starts with the inspector already loaded.
-4. Runs every `*.scene.ts`, screenshots → `apps/docs/public/media/`.
+4. Runs every `*.scene.ts`, screenshots → `apps/docs/src/assets/media/`.
 5. Tears down everything we started (including the testcontainer).
 
 Requires: **Docker** running (Docker Desktop, OrbStack, Colima — any).
@@ -31,8 +31,8 @@ workflow only consumes already-committed PNGs.
 | **Helper API (`defineScene`)** | `helpers.ts` |
 | **Coverage audit** | `audit.ts` |
 | **Individual scenes** | `scenes/*.scene.ts` |
-| **Output** | `apps/docs/public/media/<scene-name>.png` |
-| **Astro reference** | `/media/<scene-name>.png` in MDX |
+| **Output** | `apps/docs/src/assets/media/<scene-name>.png` |
+| **Astro reference** | `![](../../assets/media/<scene-name>.png)` in MDX — relative so Astro's asset pipeline hashes + optimizes them and keeps URLs base/host-independent. Pages under `reference/` use `../../../assets/media/`. |
 
 The orchestrator discovers every `*.scene.ts` automatically — no
 registry to update.

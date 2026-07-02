@@ -2,8 +2,8 @@
  * Audit doc image coverage.
  *
  * Scans every MDX file under apps/docs/src/content/docs, extracts the
- * `/media/<name>.<ext>` paths it references, and reports which are
- * missing from apps/docs/public/media. Also lists scenes that don't
+ * `…/media/<name>.<ext>` paths it references, and reports which are
+ * missing from apps/docs/src/assets/media. Also lists scenes that don't
  * have a corresponding image reference (orphaned PNGs).
  *
  * Run: `yarn docs:media:audit`
@@ -16,8 +16,10 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..", "..");
 const DOCS_DIR = join(ROOT, "apps", "docs", "src", "content", "docs");
-const MEDIA_DIR = join(ROOT, "apps", "docs", "public", "media");
+const MEDIA_DIR = join(ROOT, "apps", "docs", "src", "assets", "media");
 
+// Matches both the current relative refs (…/assets/media/foo.png) and any
+// legacy absolute /media/foo.png — the trailing `/media/<name>` is common.
 const MEDIA_RE = /\/media\/([a-z0-9-]+)\.(png|webp|jpg|jpeg|gif|webm|mp4)/g;
 
 interface Reference {

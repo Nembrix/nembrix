@@ -9,7 +9,7 @@ The Activity tab is a server-side observability view, scoped to
 the current connection. It polls a handful of `pg_stat_*` views
 on a short interval and renders them in one place.
 
-![Activity tab](/media/activity.png)
+![Activity tab](../../assets/media/activity.png)
 
 ## Overview cards
 
@@ -40,7 +40,7 @@ Nembrix walks `pg_blocking_pids()` for every active backend and
 draws an edge from blocker to blocked. Cycles get highlighted in
 red — a deadlock the server hasn't broken yet.
 
-![Lock chain](/media/activity-locks.png)
+![Lock chain](../../assets/media/activity-locks.png)
 
 ## Per-table stats
 
