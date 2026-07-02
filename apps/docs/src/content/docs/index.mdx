@@ -3,10 +3,13 @@ title: Nembrix
 description: A modern desktop database client for Postgres — fast inspector, editable grid, SSH-first, multi-session.
 template: splash
 hero:
-  tagline: A fast, opinionated database client. Postgres-first, multi-session, scriptable, scriptable, native-feeling.
+  tagline: A fast, opinionated database client. Postgres-first, multi-session, scriptable, native-feeling.
   actions:
     - text: Install
-      link: /install/
+      # Relative so it resolves under the configured `base` (/nembrix/) —
+      # Starlight does NOT prefix hero action links the way it does sidebar
+      # links, so an absolute "/install/" would escape the project subpath.
+      link: install/
       icon: right-arrow
       variant: primary
     - text: View on GitHub
