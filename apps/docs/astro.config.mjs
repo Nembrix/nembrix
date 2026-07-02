@@ -11,6 +11,12 @@ export default defineConfig({
   // links must carry that prefix. Override with DOCS_BASE (e.g. "/") when
   // serving from a domain root.
   base: process.env.DOCS_BASE ?? "/nembrix",
+  // Assets still flow through the pipeline (content-hashed, base-aware URLs
+  // — so images resolve under /nembrix and survive a host change), but we
+  // skip Sharp-based optimization. Sharp's platform-specific native binary
+  // is unreliable under Yarn 1 + --frozen-lockfile in CI; the passthrough
+  // service needs no native dep. Screenshots are already reasonably sized.
+  image: { service: { entrypoint: "astro/assets/services/noop" } },
   integrations: [
     starlight({
       title: "Nembrix",
