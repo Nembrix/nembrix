@@ -3,10 +3,14 @@ import starlight from "@astrojs/starlight";
 
 // https://astro.build/config
 export default defineConfig({
-  // `site` is used for canonical links + sitemap. Override at build time
-  // with DOCS_SITE_URL when you have a real domain (e.g. via a CNAME
-  // on GitHub Pages). The site always serves at /.
-  site: process.env.DOCS_SITE_URL ?? "https://example.com",
+  // `site` is used for canonical links + sitemap. Defaults to the GitHub
+  // Pages URL; override at build time with DOCS_SITE_URL when you have a
+  // real domain (e.g. via a CNAME on GitHub Pages).
+  site: process.env.DOCS_SITE_URL ?? "https://oesukam.github.io",
+  // Served from a project Pages site at /nembrix/, so assets and internal
+  // links must carry that prefix. Override with DOCS_BASE (e.g. "/") when
+  // serving from a domain root.
+  base: process.env.DOCS_BASE ?? "/nembrix",
   integrations: [
     starlight({
       title: "Nembrix",
