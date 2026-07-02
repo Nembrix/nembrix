@@ -17,6 +17,22 @@ including the standard attributes — `superuser`, `inherit`,
 `createrole`, `createdb`, `login`, `replication`,
 `connection limit`, `valid until`. Click a column header to sort.
 
+Under each role name is the list of databases it can **connect
+to**. Nembrix determines this with
+`has_database_privilege(role, database, 'CONNECT')` rather than
+reading ACLs directly, so implicit access — superusers, `PUBLIC`
+grants, and access inherited through role membership — is
+reflected correctly. Databases with `datallowconn = false` are
+excluded. A role with no connectable database shows *no database
+access*.
+
+### Filter by database
+
+A dropdown at the top of the list narrows it to the roles that
+can connect to a chosen database. Pick **All databases** to clear
+the filter. While a filter is active the header count shows
+`matching/total` so you can see how many roles were hidden.
+
 ## The grant tree
 
 Click a role and the right pane fills with a tree:

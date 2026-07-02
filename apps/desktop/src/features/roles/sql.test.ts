@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   alterRoleSql, createRoleSql, dropRoleSql, grantSql, qi,
-  relationPrivsForRoleInSchema, ROLES_QUERY,
+  relationPrivsForRoleInSchema, ROLES_QUERY, ROLE_DATABASES_QUERY,
 } from "./sql";
 
 describe("qi (identifier quoting)", () => {
@@ -102,6 +102,12 @@ describe("catalog queries", () => {
   it("ROLES_QUERY references pg_roles + pg_auth_members", () => {
     expect(ROLES_QUERY).toMatch(/FROM pg_roles/);
     expect(ROLES_QUERY).toMatch(/pg_auth_members/);
+  });
+  it("ROLE_DATABASES_QUERY selects (role, database) via has_database_privilege CONNECT", () => {
+    expect(ROLE_DATABASES_QUERY).toMatch(/has_database_privilege\(r\.oid, d\.oid, 'CONNECT'\)/);
+    expect(ROLE_DATABASES_QUERY).toMatch(/d\.datallowconn/);
+    expect(ROLE_DATABASES_QUERY).toMatch(/r\.rolname AS role/);
+    expect(ROLE_DATABASES_QUERY).toMatch(/d\.datname AS database/);
   });
   it("relationPrivsForRoleInSchema inserts the role + schema and asks has_table_privilege", () => {
     const sql = relationPrivsForRoleInSchema("qa", "public");

@@ -3320,14 +3320,26 @@ table.import-mapping tr.row-skipped td:first-child {
   padding: 8px 12px;
   border-bottom: 1px solid var(--border-soft);
 }
+.roles-filter {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.roles-filter select { width: 100%; }
 .roles-list { overflow-y: auto; padding: 4px; }
 .role-row {
-  display: flex; align-items: center; gap: 6px;
+  display: flex; flex-direction: column; gap: 2px;
   padding: 5px 8px;
   border-radius: 4px;
   cursor: pointer;
   font-size: 12.5px;
 }
+.role-row-head { display: flex; align-items: center; gap: 6px; }
+.role-databases {
+  font-size: 10.5px;
+  color: var(--fg-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.role-row.selected .role-databases { color: var(--accent-fg); opacity: 0.85; }
 .role-row:hover { background: var(--bg-elev); }
 .role-row.selected { background: var(--accent); color: var(--accent-fg); }
 .role-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

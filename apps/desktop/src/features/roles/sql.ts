@@ -39,6 +39,23 @@ ORDER BY r.rolname;
 `.trim();
 
 /**
+ * Databases each role can CONNECT to. One row per (role, database) pair, so
+ * the UI can group them into a per-role list and offer a "filter by database"
+ * control. We test CONNECT rather than reading ACLs directly so that implicit
+ * access (superusers, PUBLIC grants, role membership) is reflected correctly.
+ */
+export const ROLE_DATABASES_QUERY = `
+SELECT
+  r.rolname AS role,
+  d.datname AS database
+FROM pg_roles r
+CROSS JOIN pg_database d
+WHERE d.datallowconn
+  AND has_database_privilege(r.oid, d.oid, 'CONNECT')
+ORDER BY r.rolname, d.datname;
+`.trim();
+
+/**
  * Relations in a schema with the per-privilege bits the chosen role holds.
  * One column per privilege so the UI can render checkboxes directly.
  * has_table_privilege() works for tables, views and matviews alike.

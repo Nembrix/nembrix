@@ -6,7 +6,7 @@ import type { CellValue, RowBatch } from "@/ipc/types";
 import {
   ALL_TABLE_PRIVS, alterRoleSql, createRoleSql, dropRoleSql, grantSql,
   type PrivilegeEdit, type TablePriv,
-  ROLES_QUERY, relationPrivsForRoleInSchema,
+  ROLES_QUERY, ROLE_DATABASES_QUERY, relationPrivsForRoleInSchema,
 } from "./sql";
 
 /* ───────────────────────── types ───────────────────────── */
@@ -22,6 +22,8 @@ interface Role {
   conn_limit: number;
   valid_until: string | null;
   memberof: string[];
+  /** Databases this role can CONNECT to. */
+  databases: string[];
 }
 
 interface RelationPrivRow {
@@ -39,6 +41,7 @@ export default function RolesTab({ tab }: { tab: Tab }) {
   const [schema, setSchema] = useState<string>("public");
   const [rels, setRels] = useState<RelationPrivRow[]>([]);
   const [filter, setFilter] = useState("");
+  const [dbFilter, setDbFilter] = useState<string>("");
   const [pending, setPending] = useState<PrivilegeEdit[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -51,8 +54,17 @@ export default function RolesTab({ tab }: { tab: Tab }) {
   useEffect(() => {
     refreshRolesRef.current = async () => {
       try {
-        const rows = await fetchRows(tab.connId, ROLES_QUERY);
-        const parsed = rows.map(rowToRole);
+        const [roleRows, dbRows] = await Promise.all([
+          fetchRows(tab.connId, ROLES_QUERY),
+          fetchRows(tab.connId, ROLE_DATABASES_QUERY),
+        ]);
+        const dbsByRole = new Map<string, string[]>();
+        for (const r of dbRows) {
+          const list = dbsByRole.get(r.role) ?? [];
+          list.push(r.database);
+          dbsByRole.set(r.role, list);
+        }
+        const parsed = roleRows.map((r) => rowToRole(r, dbsByRole.get(r.name) ?? []));
         setRoles(parsed);
         if (!selectedRole && parsed.length > 0) setSelectedRole(parsed[0].name);
         setErr(null);
@@ -92,6 +104,19 @@ export default function RolesTab({ tab }: { tab: Tab }) {
   useEffect(() => { refreshMatrixRef.current(); }, [tab.connId, selectedRole, schema]);
 
   const role = useMemo(() => roles.find((r) => r.name === selectedRole) ?? null, [roles, selectedRole]);
+
+  /* every distinct database any role can access — powers the filter dropdown */
+  const allDatabases = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of roles) for (const d of r.databases) set.add(d);
+    return [...set].sort();
+  }, [roles]);
+
+  /* roles list narrowed to those with access to the chosen database */
+  const filteredRoles = useMemo(() => {
+    if (!dbFilter) return roles;
+    return roles.filter((r) => r.databases.includes(dbFilter));
+  }, [roles, dbFilter]);
 
   const filteredRels = useMemo(() => {
     if (!filter) return rels;
@@ -167,7 +192,7 @@ export default function RolesTab({ tab }: { tab: Tab }) {
       <aside className="roles-sidebar">
         <div className="pane-toolbar">
           <strong>Roles</strong>
-          <span className="muted">{roles.length}</span>
+          <span className="muted">{filteredRoles.length}{dbFilter && `/${roles.length}`}</span>
           <div className="spacer" />
           <button className="icon-btn" title="New role" onClick={() => setShowCreate(true)}>
             <Plus size={13} />
@@ -176,21 +201,39 @@ export default function RolesTab({ tab }: { tab: Tab }) {
             <RefreshCcw size={13} />
           </button>
         </div>
+        <div className="roles-filter">
+          <select
+            value={dbFilter}
+            onChange={(e) => setDbFilter(e.target.value)}
+            title="Filter roles by database access"
+          >
+            <option value="">All databases</option>
+            {allDatabases.map((d) => <option key={d} value={d}>{d}</option>)}
+          </select>
+        </div>
         <div className="roles-list">
           {roles.length === 0 && <div className="muted placeholder" style={{ padding: 14 }}>Loading…</div>}
-          {roles.map((r) => (
+          {roles.length > 0 && filteredRoles.length === 0 && (
+            <div className="muted placeholder" style={{ padding: 14 }}>No roles can access “{dbFilter}”.</div>
+          )}
+          {filteredRoles.map((r) => (
             <div
               key={r.name}
               className={`role-row ${selectedRole === r.name ? "selected" : ""}`}
               onClick={() => setSelectedRole(r.name)}
             >
-              <span className="role-name">{r.name}</span>
-              <span className="role-flags">
-                {r.is_super && <span className="role-flag super">S</span>}
-                {r.can_createdb && <span className="role-flag">DB</span>}
-                {r.can_createrole && <span className="role-flag">RL</span>}
-                {r.can_login || <span className="role-flag dim">NL</span>}
-                {r.can_repl && <span className="role-flag">RPL</span>}
+              <div className="role-row-head">
+                <span className="role-name">{r.name}</span>
+                <span className="role-flags">
+                  {r.is_super && <span className="role-flag super">S</span>}
+                  {r.can_createdb && <span className="role-flag">DB</span>}
+                  {r.can_createrole && <span className="role-flag">RL</span>}
+                  {r.can_login || <span className="role-flag dim">NL</span>}
+                  {r.can_repl && <span className="role-flag">RPL</span>}
+                </span>
+              </div>
+              <span className="role-databases" title={r.databases.join(", ")}>
+                {r.databases.length > 0 ? r.databases.join(", ") : "no database access"}
               </span>
             </div>
           ))}
@@ -453,7 +496,7 @@ function cellToString(v: CellValue): string {
   }
 }
 
-function rowToRole(r: Record<string, string>): Role {
+function rowToRole(r: Record<string, string>, databases: string[]): Role {
   const memberStr = r.memberof || "";
   // pg array literal: {a,b} or {} or NULL
   const memberof = memberStr.startsWith("{") && memberStr.length > 2
@@ -470,6 +513,7 @@ function rowToRole(r: Record<string, string>): Role {
     conn_limit: parseInt(r.conn_limit ?? "-1"),
     valid_until: r.valid_until || null,
     memberof,
+    databases,
   };
 }
 

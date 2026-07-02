@@ -27,6 +27,39 @@ test("opens Roles tab and lists pg_roles", async ({ page }) => {
   await expect(page.locator(".role-row", { hasText: "readonly" })).toBeVisible();
 });
 
+test("each role row lists the databases it can connect to", async ({ page }) => {
+  await openRolesTab(page);
+
+  // qa can connect to demo + analytics (per the mock), rendered under the name.
+  const qaRow = page.locator(".role-row", { hasText: "qa" });
+  await expect(qaRow.locator(".role-databases")).toHaveText("demo, analytics");
+  // readonly can only reach demo.
+  const readonlyRow = page.locator(".role-row", { hasText: "readonly" });
+  await expect(readonlyRow.locator(".role-databases")).toHaveText("demo");
+});
+
+test("filtering by database narrows the role list and updates the count", async ({ page }) => {
+  await openRolesTab(page);
+
+  // Baseline: all four mock roles are visible.
+  await expect(page.locator(".role-row")).toHaveCount(4);
+
+  // Only postgres + qa can connect to analytics.
+  await page.locator(".roles-filter select").selectOption("analytics");
+  await expect(page.locator(".role-row")).toHaveCount(2);
+  await expect(page.locator(".role-row", { hasText: "postgres" })).toBeVisible();
+  await expect(page.locator(".role-row", { hasText: "qa" })).toBeVisible();
+  await expect(page.locator(".role-row", { hasText: "readonly" })).toHaveCount(0);
+
+  // Header count reflects matching/total while a filter is active.
+  await expect(page.locator(".roles-sidebar .pane-toolbar .muted")).toHaveText("2/4");
+
+  // Clearing the filter restores the full list.
+  await page.locator(".roles-filter select").selectOption("");
+  await expect(page.locator(".role-row")).toHaveCount(4);
+  await expect(page.locator(".roles-sidebar .pane-toolbar .muted")).toHaveText("4");
+});
+
 test("selecting a role loads its grant matrix", async ({ page }) => {
   await openRolesTab(page);
 

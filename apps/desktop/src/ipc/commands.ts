@@ -211,6 +211,24 @@ async function mockInvoke<T>(cmd: string, args: Record<string, unknown> = {}): P
         localStorage.setItem("nembrix.mock.history", JSON.stringify(all.slice(0, 500)));
       } catch { /* ignore: best-effort */ }
       // Roles tab queries (sql is already lowercase here).
+      if (/has_database_privilege/i.test(sql)) {
+        const txt = (v: string) => ({ kind: "text" as const, value: v });
+        const batchRoleDbs: RowBatch = {
+          columns: [
+            { name: "role",     type_name: "TEXT", nullable: false },
+            { name: "database", type_name: "TEXT", nullable: false },
+          ],
+          rows: ([
+            ["postgres", "demo"], ["postgres", "analytics"], ["postgres", "postgres"],
+            ["qa", "demo"], ["qa", "analytics"],
+            ["readonly", "demo"],
+            ["app_user", "demo"],
+          ] as [string, string][]).map(([role, db]) => [txt(role), txt(db)]),
+          done: true,
+        };
+        setTimeout(() => sink.onmessage(batchRoleDbs), 30);
+        return crypto.randomUUID() as unknown as T;
+      }
       if (/from\s+pg_roles/i.test(sql)) {
         const txt = (v: string) => ({ kind: "text" as const, value: v });
         const bool = (v: boolean) => ({ kind: "bool" as const, value: v });
