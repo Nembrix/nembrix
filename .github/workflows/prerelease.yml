@@ -18,6 +18,11 @@ on:
     paths-ignore:
       - "**/*.md"
       - "docs/**"
+  # Manual trigger — rebuild the rolling nightly from the current tip of
+  # main on demand. Use this when a `chore:`-titled squash merge skipped
+  # the automatic build (the gate below force-runs for manual dispatch),
+  # or to re-cut nightly covering everything since the last release.
+  workflow_dispatch:
 
 # Don't let two merges in quick succession race on the same rolling tag.
 # cancel-in-progress is fine here: the newest merge wins and supersedes
@@ -41,6 +46,9 @@ jobs:
   # commits whose subject is a `chore` (chore: / chore(scope):) — routine
   # housekeeping that doesn't warrant re-cutting nightly or rebuilding
   # binaries. Every other commit type (feat/fix/perf/refactor/…) builds.
+  # A manual run (workflow_dispatch) always builds, regardless of the head
+  # commit subject — that's the escape hatch for a chore-titled squash
+  # merge that skipped the automatic build.
   # ─────────────────────────────────────────────────────────────────
   gate:
     name: Decide whether to run
@@ -52,7 +60,15 @@ jobs:
       - id: check
         name: Inspect head commit subject
         shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
         run: |
+          # A hand-triggered run always builds — the operator asked for it.
+          if [[ "$EVENT" == "workflow_dispatch" ]]; then
+            echo "manual dispatch — forcing run."
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           SUBJECT=$(git log -1 --pretty=%s)
           echo "Head commit: $SUBJECT"
           # Match Conventional-Commit chore subjects, with or without a
