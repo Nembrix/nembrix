@@ -13,7 +13,12 @@ use std::path::Path;
 use thiserror::Error;
 use uuid::Uuid;
 
-const KEYRING_SERVICE: &str = "dev.nembrix.app";
+// Keychain service name every secret (DB/SSH password, key passphrase) is
+// filed under. Must match the app bundle identifier. Renamed from the former
+// `dev.nembrix.app` when the canonical domain moved to nembrix.com — a
+// pre-release reset: secrets stored under the old name are orphaned and users
+// re-enter their passwords once. (See README's stored-secret-keys warning.)
+const KEYRING_SERVICE: &str = "com.nembrix.desktop";
 
 #[derive(Debug, Error)]
 pub enum SecretsError {

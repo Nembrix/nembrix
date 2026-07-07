@@ -35,9 +35,43 @@ env:
   NIGHTLY_TAG: nightly
 
 jobs:
+  # ─────────────────────────────────────────────────────────────────
+  # Gate: skip the whole nightly refresh for no-op commits. `paths-ignore`
+  # above already drops docs/markdown-only pushes; this additionally skips
+  # commits whose subject is a `chore` (chore: / chore(scope):) — routine
+  # housekeeping that doesn't warrant re-cutting nightly or rebuilding
+  # binaries. Every other commit type (feat/fix/perf/refactor/…) builds.
+  # ─────────────────────────────────────────────────────────────────
+  gate:
+    name: Decide whether to run
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - id: check
+        name: Inspect head commit subject
+        shell: bash
+        run: |
+          SUBJECT=$(git log -1 --pretty=%s)
+          echo "Head commit: $SUBJECT"
+          # Match Conventional-Commit chore subjects, with or without a
+          # scope and with or without a `!` breaking-change marker.
+          if [[ "$SUBJECT" =~ ^chore(\(.+\))?!?: ]]; then
+            echo "chore commit — skipping nightly."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
   nightly:
     name: Refresh nightly pre-release
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.release.outputs.release_id }}
+      version: ${{ steps.meta.outputs.version }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -73,7 +107,8 @@ jobs:
           config: cliff.toml
           args: --unreleased --strip header
 
-      - name: Create or update the nightly pre-release
+      - id: release
+        name: Create or update the nightly pre-release
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           TAG: ${{ env.NIGHTLY_TAG }}
@@ -127,7 +162,154 @@ jobs:
                 release_id: existing.id,
                 body,
               });
+              core.setOutput("release_id", String(existing.id));
             } else {
               core.info(`Creating new nightly release for ${TAG}`);
-              await github.rest.repos.createRelease({ ...common, body });
+              const created = await github.rest.repos.createRelease({ ...common, body });
+              core.setOutput("release_id", String(created.data.id));
             }
+
+  # ─────────────────────────────────────────────────────────────────
+  # Build nightly binaries and attach them to the rolling `nightly`
+  # release. Unlike the full Release workflow (8 targets), nightly ships
+  # only the three formats a tester actually installs: macOS universal
+  # .dmg, Windows x64 .msi/.exe, and Linux x86_64 .AppImage/.deb. Keep
+  # this matrix in sync with release.yml's build job when the toolchain
+  # or signing setup changes — the two are intentionally parallel.
+  #
+  # Runs after `nightly` (which creates/refreshes the release these
+  # assets attach to). Because `nightly` is a single rolling release,
+  # every run's assets collide by name with the previous run's — so we
+  # delete this platform's stale assets before tauri-action re-uploads.
+  # ─────────────────────────────────────────────────────────────────
+  build:
+    name: Build nightly (${{ matrix.label }})
+    needs: nightly
+    strategy:
+      fail-fast: false  # One platform failing shouldn't kill the others.
+      matrix:
+        include:
+          - label: macOS (universal)
+            slug: macos-universal
+            os: macos-14
+            rust_targets: "x86_64-apple-darwin,aarch64-apple-darwin"
+            args: --target universal-apple-darwin
+          - label: Windows x64
+            slug: windows-x86_64
+            os: windows-latest
+            rust_targets: x86_64-pc-windows-msvc
+            args: ""
+          - label: Linux x86_64
+            slug: linux-x86_64
+            os: ubuntu-22.04
+            rust_targets: x86_64-unknown-linux-gnu
+            args: ""
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # ─── Toolchain ─────────────────────────────────────────────
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "22"
+          cache: "yarn"
+
+      - uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537 # stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.rust_targets }}
+
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          workspaces: apps/desktop -> apps/desktop/target
+          key: nightly-${{ matrix.slug }}
+
+      # ─── Linux build deps ──────────────────────────────────────
+      - name: Install Linux deps
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            rpm
+
+      # ─── Frontend ──────────────────────────────────────────────
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      # ─── Updater endpoint ──────────────────────────────────────
+      # Same placeholder-substitution as release.yml: bake the real repo
+      # coordinates into the updater endpoint before building.
+      - name: Set updater endpoint
+        shell: bash
+        run: |
+          CONF=apps/desktop/src-tauri/tauri.conf.json
+          tmp=$(mktemp)
+          sed -e "s/__OWNER__/${{ github.repository_owner }}/g" \
+              -e "s/__REPO__/${{ github.event.repository.name }}/g" \
+              "$CONF" > "$tmp" && mv "$tmp" "$CONF"
+          echo "Updater endpoint:"; grep -A1 endpoints "$CONF" || true
+
+      # ─── Clear this platform's stale nightly assets ────────────
+      # The nightly release is rolling, so last run's dmg/msi/etc. still
+      # hang off it and would collide by name with this run's uploads.
+      # Delete only the assets whose names match this platform's outputs.
+      - name: Delete stale nightly assets for this platform
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          RELEASE_ID: ${{ needs.nightly.outputs.release_id }}
+          SLUG: ${{ matrix.slug }}
+        with:
+          script: |
+            const { RELEASE_ID, SLUG } = process.env;
+            const { owner, repo } = context.repo;
+            // Platform → filename fragments its artifacts contain. Only
+            // delete assets matching this matrix leg so parallel legs
+            // don't race deleting each other's uploads.
+            const patterns = {
+              'macos-universal': [/\.dmg$/i, /\.app\.tar\.gz$/i],
+              'windows-x86_64':  [/\.msi$/i, /-setup\.exe$/i, /\.exe$/i],
+              'linux-x86_64':    [/\.AppImage$/i, /\.deb$/i, /\.rpm$/i],
+            }[SLUG] || [];
+            const assets = await github.rest.repos.listReleaseAssets({
+              owner, repo, release_id: Number(RELEASE_ID), per_page: 100,
+            });
+            for (const a of assets.data) {
+              // Also drop the updater manifest + its sig each run; it's
+              // regenerated from whatever this run produces.
+              const isUpdater = a.name === 'latest.json';
+              if (isUpdater || patterns.some((re) => re.test(a.name))) {
+                core.info(`Deleting stale asset ${a.name} (id ${a.id})`);
+                await github.rest.repos.deleteReleaseAsset({
+                  owner, repo, asset_id: a.id,
+                });
+              }
+            }
+
+      # ─── Tauri build + sign + upload to the nightly release ────
+      - name: Build & upload
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # action-v0.6.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          releaseId: ${{ needs.nightly.outputs.release_id }}
+          args: ${{ matrix.args }}
+          projectPath: apps/desktop
+          includeUpdaterJson: true
