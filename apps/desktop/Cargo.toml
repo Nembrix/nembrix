@@ -9,6 +9,7 @@ members = [
     "crates/db-core",
     "crates/db-postgres",
     "crates/db-mongo",
+    "crates/db-script",
     "crates/ssh-tunnel",
     "crates/secrets",
     "crates/sql-format",
