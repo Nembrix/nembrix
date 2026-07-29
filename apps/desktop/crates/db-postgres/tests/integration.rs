@@ -102,6 +102,101 @@ async fn stream_emits_batches_and_finishes() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
+async fn stream_join_returns_orders_per_user() -> anyhow::Result<()> {
+    // The set-based equivalent of a per-user "for each user, fetch their orders"
+    // loop: a single JOIN streamed through the driver returns one row per
+    // (user, order) pair. This is the form that works in the SQL-only editor —
+    // there is no app-side loop or `pool` in that path.
+    require_docker!();
+    let f = common::start_pg().await?;
+    sqlx::query(
+        "CREATE TABLE u (id serial PRIMARY KEY, active boolean NOT NULL);
+         CREATE TABLE o (id serial PRIMARY KEY, user_id integer REFERENCES u(id), total bigint);
+         INSERT INTO u (active) VALUES (true), (true), (false);
+         -- user 1: two orders, user 2: one order, user 3 (inactive): none
+         INSERT INTO o (user_id, total) VALUES (1, 10), (1, 20), (2, 30);",
+    )
+    .execute(f.conn.pool())
+    .await?;
+
+    // INNER JOIN over active users: user 1 (2 orders) + user 2 (1 order) = 3 rows.
+    // Inactive user 3 and any user with no orders are excluded, as with INNER JOIN.
+    let (tx, mut rx) = mpsc::channel::<RowBatch>(16);
+    let _h = f
+        .conn
+        .stream(
+            "SELECT u.id AS user_id, o.total \
+             FROM u JOIN o ON o.user_id = u.id \
+             WHERE u.active = true \
+             ORDER BY u.id, o.total",
+            vec![],
+            tx,
+        )
+        .await?;
+    let mut total_rows = 0usize;
+    let mut last_done = false;
+    while let Some(batch) = rx.recv().await {
+        total_rows += batch.rows.len();
+        if batch.done {
+            last_done = true;
+            break;
+        }
+    }
+    assert!(last_done, "final batch should be marked done");
+    assert_eq!(
+        total_rows, 3,
+        "active users 1 and 2 have 3 orders between them; inactive user 3 is excluded"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn stream_left_join_keeps_users_without_orders() -> anyhow::Result<()> {
+    // Contrast with the INNER JOIN above: a LEFT JOIN keeps every active user,
+    // even one with zero orders (its order columns come back NULL). This is the
+    // form to use when "for each user" must include users that have no orders.
+    require_docker!();
+    let f = common::start_pg().await?;
+    sqlx::query(
+        "CREATE TABLE u (id serial PRIMARY KEY, active boolean NOT NULL);
+         CREATE TABLE o (id serial PRIMARY KEY, user_id integer REFERENCES u(id), total bigint);
+         INSERT INTO u (active) VALUES (true), (true);
+         -- user 1 has one order, user 2 has none
+         INSERT INTO o (user_id, total) VALUES (1, 10);",
+    )
+    .execute(f.conn.pool())
+    .await?;
+
+    let (tx, mut rx) = mpsc::channel::<RowBatch>(16);
+    let _h = f
+        .conn
+        .stream(
+            "SELECT u.id AS user_id, o.total \
+             FROM u LEFT JOIN o ON o.user_id = u.id \
+             WHERE u.active = true \
+             ORDER BY u.id",
+            vec![],
+            tx,
+        )
+        .await?;
+    let mut total_rows = 0usize;
+    let mut last_done = false;
+    while let Some(batch) = rx.recv().await {
+        total_rows += batch.rows.len();
+        if batch.done {
+            last_done = true;
+            break;
+        }
+    }
+    assert!(last_done, "final batch should be marked done");
+    assert_eq!(
+        total_rows, 2,
+        "LEFT JOIN keeps user 2 despite having no orders: 2 rows total"
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn cancel_stops_a_long_query() -> anyhow::Result<()> {
     require_docker!();
     let f = common::start_pg().await?;

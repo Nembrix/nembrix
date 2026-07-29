@@ -1,0 +1,513 @@
+<title>Nembrix — JS Scripting Mode Design</title>
+<style>
+  :root {
+    --bg: #12141a;
+    --surface: #1a1d26;
+    --surface-2: #21252f;
+    --ink: #e6e8ef;
+    --muted: #8b90a0;
+    --faint: #5a5f6e;
+    --accent: #5b8cff;
+    --accent-dim: #3a5599;
+    --warn: #e0a458;
+    --good: #5bc98a;
+    --crit: #e0687a;
+    --rule: #2b2f3a;
+    --serif: "Newsreader", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    --display: "Fraunces", "Newsreader", Georgia, serif;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 17px;
+    line-height: 1.65;
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 0 clamp(20px, 5vw, 64px);
+  }
+
+  .col { max-width: 68ch; }
+
+  /* ---- Masthead ---- */
+  header.mast {
+    border-bottom: 1px solid var(--rule);
+    padding: clamp(48px, 8vw, 96px) 0 40px;
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 20px;
+  }
+  h1 {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: clamp(34px, 6vw, 58px);
+    line-height: 1.04;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+    margin: 0 0 22px;
+  }
+  h1 em { font-style: italic; color: var(--accent); }
+  .standfirst {
+    font-size: clamp(18px, 2.4vw, 21px);
+    color: var(--muted);
+    max-width: 60ch;
+    margin: 0;
+  }
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 28px;
+    margin-top: 32px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--faint);
+    letter-spacing: 0.02em;
+  }
+  .meta b { color: var(--muted); font-weight: 500; }
+
+  /* ---- Sections ---- */
+  section { padding: 52px 0; border-bottom: 1px solid var(--rule); }
+  .sec-label {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--faint);
+    margin: 0 0 8px;
+  }
+  h2 {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: clamp(24px, 3.6vw, 34px);
+    letter-spacing: -0.015em;
+    line-height: 1.1;
+    text-wrap: balance;
+    margin: 0 0 24px;
+  }
+  h3 {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: 20px;
+    letter-spacing: -0.01em;
+    margin: 36px 0 10px;
+  }
+  p { margin: 0 0 18px; }
+  strong { color: #fff; font-weight: 600; }
+  a { color: var(--accent); }
+  code {
+    font-family: var(--mono);
+    font-size: 0.86em;
+    background: var(--surface-2);
+    padding: 1.5px 6px;
+    border-radius: 4px;
+    color: #cdd3e6;
+  }
+  .path { color: var(--warn); }
+
+  /* ---- TL;DR callout ---- */
+  .tldr {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--accent);
+    border-radius: 6px;
+    padding: 24px 28px;
+    margin: 8px 0 0;
+    max-width: 68ch;
+  }
+  .tldr p:last-child { margin-bottom: 0; }
+
+  /* ---- Decisions grid ---- */
+  .decisions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+    margin-top: 8px;
+  }
+  .decision {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 20px 22px;
+  }
+  .decision .k {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--faint);
+    margin: 0 0 8px;
+  }
+  .decision .v {
+    font-family: var(--display);
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--accent);
+    margin: 0 0 8px;
+    letter-spacing: -0.01em;
+  }
+  .decision .why { font-size: 14.5px; color: var(--muted); line-height: 1.5; margin: 0; }
+
+  /* ---- Data flow diagram ---- */
+  .flow {
+    overflow-x: auto;
+    margin: 24px 0 8px;
+    padding-bottom: 8px;
+  }
+  .flow-inner {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    min-width: 760px;
+    font-family: var(--mono);
+  }
+  .node {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 14px 14px 16px;
+    position: relative;
+  }
+  .node + .node { margin-left: 26px; }
+  .node + .node::before {
+    content: "→";
+    position: absolute;
+    left: -22px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--accent-dim);
+    font-size: 18px;
+  }
+  .node .layer {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--faint);
+    margin-bottom: 6px;
+  }
+  .node .title { font-size: 13px; color: var(--ink); font-weight: 600; line-height: 1.3; }
+  .node .file { font-size: 11px; color: var(--warn); margin-top: 8px; word-break: break-all; }
+  .node.new { border-color: var(--accent-dim); background: #1a2030; }
+  .node.new .title { color: var(--accent); }
+  .flow-legend {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--faint);
+    margin-top: 6px;
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  .swatch { display: inline-block; width: 11px; height: 11px; border-radius: 3px; vertical-align: -1px; margin-right: 6px; }
+
+  /* ---- Code blocks ---- */
+  pre {
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.6;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 18px 20px;
+    overflow-x: auto;
+    margin: 0 0 20px;
+    color: #cdd3e6;
+    max-width: 100%;
+  }
+  pre .c { color: var(--faint); font-style: italic; }
+  pre .k { color: var(--accent); }
+  pre .s { color: var(--good); }
+  pre .f { color: var(--warn); }
+
+  /* ---- Phase table ---- */
+  .phases { overflow-x: auto; margin-top: 8px; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 640px;
+    font-size: 15px;
+  }
+  th, td {
+    text-align: left;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  th {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--faint);
+    font-weight: 500;
+  }
+  td .ph {
+    font-family: var(--mono);
+    color: var(--accent);
+    font-size: 13px;
+  }
+  td .est { font-family: var(--mono); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+
+  /* ---- Risk list ---- */
+  .risks { list-style: none; padding: 0; margin: 8px 0 0; max-width: 72ch; }
+  .risks li {
+    display: grid;
+    grid-template-columns: 88px 1fr;
+    gap: 18px;
+    padding: 16px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .risks li:last-child { border-bottom: none; }
+  .sev {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 3px 0;
+    height: fit-content;
+    border-radius: 4px;
+    text-align: center;
+    font-weight: 600;
+  }
+  .sev.high { background: rgba(224,104,122,0.14); color: var(--crit); border: 1px solid rgba(224,104,122,0.3); }
+  .sev.med { background: rgba(224,164,88,0.14); color: var(--warn); border: 1px solid rgba(224,164,88,0.3); }
+  .sev.low { background: rgba(91,201,138,0.14); color: var(--good); border: 1px solid rgba(91,201,138,0.3); }
+  .sev.done { background: rgba(91,140,255,0.14); color: var(--accent); border: 1px solid rgba(91,140,255,0.35); }
+  .risks .body { margin: 0; }
+  .risks .body strong { display: block; margin-bottom: 3px; }
+  .risks .body span { color: var(--muted); font-size: 15px; }
+
+  footer {
+    padding: 40px 0 72px;
+    color: var(--faint);
+    font-family: var(--mono);
+    font-size: 12.5px;
+  }
+
+  ul.tight { margin: 0 0 18px; padding-left: 22px; }
+  ul.tight li { margin-bottom: 7px; }
+  ul.tight li::marker { color: var(--accent-dim); }
+</style>
+
+<div class="wrap">
+
+  <header class="mast">
+    <p class="eyebrow">Engineering Design · Nembrix Desktop</p>
+    <h1>A <em>scripting mode</em> over SQL — run JavaScript against a live connection</h1>
+    <p class="standfirst">A new editor language where <code>await db.query(...)</code> and ordinary control flow work, so "for each row, run another query" is expressible without leaving the app. This is the design; no code has been merged beyond validation tests.</p>
+    <div class="meta">
+      <span><b>Author</b> Olivier M. Esuka</span>
+      <span><b>Date</b> 2026-07-28</span>
+      <span><b>Status</b> Proposal — pending review</span>
+      <span><b>Scope</b> apps/desktop</span>
+    </div>
+  </header>
+
+  <section>
+    <p class="sec-label">Why this exists</p>
+    <h2>The problem, stated plainly</h2>
+    <div class="col">
+      <p>The query editor runs <strong>SQL only</strong>. Typed text goes straight to the driver — <code>QueryTab.tsx</code> attaches a <code>LIMIT</code>, then <code>db-postgres/lib.rs:176</code> runs it as a single statement via <code>sqlx::query().fetch()</code>. There is no JavaScript runtime, no <code>pool</code>, no loop.</p>
+      <p>So the natural "MongoDB shell" instinct — pull rows, iterate, query again per row — has nowhere to run. Pasting that JS into the editor sends <code>const users = …</code> to Postgres, which rejects it as a syntax error. Today the honest answer is <em>"use a JOIN"</em>, and it usually is the right one. But a genuine scripting surface unlocks the cases a JOIN can't express: per-row branching, calling a query whose shape depends on the previous result, staged migrations.</p>
+    </div>
+    <div class="tldr">
+      <p><strong>TL;DR.</strong> Add a per-tab <code>Script</code> language alongside SQL. Scripts run in an embedded <strong>rquickjs</strong> sandbox with a single injected capability — <code>db.query()</code> — that marshals back to the existing driver. The <strong>last</strong> query result fills the Data grid; <code>console.log</code> streams to the Message tab. Scripts can do anything a normal query tab can. No new process to ship.</p>
+    </div>
+  </section>
+
+  <section>
+    <p class="sec-label">Decisions locked</p>
+    <h2>Three choices that shape everything</h2>
+    <div class="decisions">
+      <div class="decision">
+        <p class="k">Sandbox engine</p>
+        <p class="v">rquickjs</p>
+        <p class="why">QuickJS embedded in Rust. ~1 MB, in-process, no sidecar to spawn, bundle, or code-sign. We hand it exactly one function and it can reach nothing else — no fs, no net.</p>
+      </div>
+      <div class="decision">
+        <p class="k">Results model</p>
+        <p class="v">Last query + log</p>
+        <p class="why">The final <code>db.query</code> result populates the Data grid; <code>console.log()</code> streams to Message. Reuses the existing <code>RowBatch</code> contract almost unchanged.</p>
+      </div>
+      <div class="decision">
+        <p class="k">Write policy</p>
+        <p class="v">Same as SQL</p>
+        <p class="why">Scripts can <code>INSERT</code>/<code>UPDATE</code>/DDL — whatever a normal tab can. No special restriction to build or explain; consistent with the editor users already know.</p>
+      </div>
+      <div class="decision">
+        <p class="k">Availability</p>
+        <p class="v">RDBMS only</p>
+        <p class="why">Offered on SQL drivers (Postgres, MySQL) only — not Mongo or Redis. Mongo already has its own shell dialect; a JS-over-SQL tab has no meaning there. Gated on <code>lang() == Sql</code>.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="sec-label">Architecture</p>
+    <h2>How a script executes, end to end</h2>
+    <div class="col">
+      <p>It mirrors the existing MongoDB path — the codebase's proven precedent for <em>a non-SQL language over a driver</em>: parse a string into commands, dispatch through the driver, stream <code>RowBatch</code>es back over the same sink. The only new box is the sandbox.</p>
+      <p>The tab offers Script mode only when the active driver reports <code>lang() == Sql</code> (<span class="path">db-postgres/lib.rs:114</span>). On a Mongo or Redis connection the toggle simply isn't shown — those drivers have their own languages, and <code>db.query(sql)</code> would be meaningless against them.</p>
+    </div>
+
+    <div class="flow" role="img" aria-label="Data flow from the script editor through the Tauri command layer, into the rquickjs sandbox, and back out to the driver and results grid.">
+      <div class="flow-inner">
+        <div class="node">
+          <p class="layer">Frontend</p>
+          <p class="title">Script tab — CodeMirror JS mode</p>
+          <p class="file">QueryTab.tsx · lang-javascript</p>
+        </div>
+        <div class="node">
+          <p class="layer">IPC</p>
+          <p class="title">run_script command</p>
+          <p class="file">commands/query.rs</p>
+        </div>
+        <div class="node new">
+          <p class="layer">New</p>
+          <p class="title">rquickjs sandbox — injects db.query</p>
+          <p class="file">crates/db-script (new)</p>
+        </div>
+        <div class="node">
+          <p class="layer">Driver</p>
+          <p class="title">live.db.stream() per query</p>
+          <p class="file">db-postgres/lib.rs:176</p>
+        </div>
+        <div class="node">
+          <p class="layer">Results</p>
+          <p class="title">RowBatch + log → Data / Message</p>
+          <p class="file">db-core/lib.rs:52</p>
+        </div>
+      </div>
+    </div>
+    <div class="flow-legend">
+      <span><span class="swatch" style="background:#1a2030;border:1px solid var(--accent-dim)"></span>New component</span>
+      <span><span class="swatch" style="background:var(--surface);border:1px solid var(--rule)"></span>Existing, reused</span>
+    </div>
+
+    <h3>The injected capability</h3>
+    <div class="col">
+      <p>The sandbox never touches the <code>DynConn</code>. It gets one async host function. Each call resolves the connection out of <code>AppState</code> (<span class="path">state.rs:17</span>) by the tab's <code>connId</code> and runs it through the <em>same</em> <code>stream()</code> the SQL path uses — so cancellation, pooling, and error handling all come for free.</p>
+    </div>
+    <pre><span class="c">// what the user writes in a Script tab</span>
+<span class="k">const</span> users = <span class="k">await</span> db.<span class="f">query</span>(<span class="s">"SELECT id FROM users WHERE active = true"</span>);
+
+<span class="k">for</span> (<span class="k">const</span> u <span class="k">of</span> users.rows) {
+  <span class="k">const</span> orders = <span class="k">await</span> db.<span class="f">query</span>(
+    <span class="s">"SELECT * FROM orders WHERE user_id = $1"</span>, [u.id]);
+  console.<span class="f">log</span>(u.id, orders.rowCount);   <span class="c">// → Message tab</span>
+}
+
+<span class="k">return</span> users;   <span class="c">// last result → Data grid</span></pre>
+      <div class="col">
+        <p>Note this is still N+1 by construction — the sandbox is for cases a set operation genuinely can't express, not a license to loop where a <code>JOIN</code> would do. The docs should say so next to the feature.</p>
+      </div>
+  </section>
+
+  <section>
+    <p class="sec-label">Delivery</p>
+    <h2>Build order</h2>
+    <div class="col">
+      <p>Sequenced so each phase is independently shippable and the risky unknown (embedding rquickjs) is retired first, behind a flag, before any UI depends on it.</p>
+    </div>
+    <div class="phases">
+      <table>
+        <thead>
+          <tr><th>Phase</th><th>Deliverable</th><th>Touches</th><th>Est.</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="ph">P1 ✓</span></td>
+            <td><strong>Spike the sandbox — done.</strong> New <code>db-script</code> crate embeds rquickjs behind a <code>QueryRunner</code> seam; 7 tests prove a per-row query loop runs, the async QuickJS↔Tokio bridge works, guards fire, and fs/net globals are absent.</td>
+            <td>crates/db-script</td>
+            <td class="est">done</td>
+          </tr>
+          <tr>
+            <td><span class="ph">P2</span></td>
+            <td><strong>Wire the capability.</strong> <code>db.query</code> resolves the live conn and calls the real <code>stream()</code>; collect rows + captured <code>console</code> output into a script result.</td>
+            <td>query.rs, state.rs, db-core</td>
+            <td class="est">3–5 d</td>
+          </tr>
+          <tr>
+            <td><span class="ph">P3</span></td>
+            <td><strong>QueryLang + IPC.</strong> Add <code>Script</code> to <code>QueryLang</code>; new <code>run_script</code> command; extend the result payload with a log channel.</td>
+            <td>db-core:17, query.rs, types.ts</td>
+            <td class="est">2–3 d</td>
+          </tr>
+          <tr>
+            <td><span class="ph">P4</span></td>
+            <td><strong>Editor surface.</strong> Per-tab language toggle; swap CodeMirror to <code>@codemirror/lang-javascript</code> for scripts; render <code>console.log</code> in the Message tab.</td>
+            <td>QueryTab.tsx, editor/</td>
+            <td class="est">3–4 d</td>
+          </tr>
+          <tr>
+            <td><span class="ph">P5</span></td>
+            <td><strong>Harden.</strong> Execution timeout + row/memory caps, cancellation wired to the existing handle, integration tests, docs with the "prefer a JOIN" guidance.</td>
+            <td>db-script, integration.rs, apps/docs</td>
+            <td class="est">3–5 d</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="col" style="margin-top:22px">
+      <p style="color:var(--muted);font-size:15px">Roughly <strong>2.5–3 weeks</strong> for one engineer to a flagged, tested first cut. P1 is the go/no-go gate: if embedding rquickjs against our Tokio runtime proves ugly, we reassess the engine before spending the rest.</p>
+    </div>
+  </section>
+
+  <section>
+    <p class="sec-label">Risks</p>
+    <h2>What could bite us</h2>
+    <ul class="risks">
+      <li>
+        <span class="sev done">Retired</span>
+        <p class="body"><strong>Async bridge: rquickjs promises ↔ Tokio.</strong><span> <em>Cleared in P1.</em> An <code>Async</code>-wrapped host function returns a Rust future exposed to JS as a Promise; <code>AsyncContext::async_with</code> + <code>AsyncRuntime::idle</code> drive it to settlement. A per-row query loop suspends and resumes correctly — proven by <code>loops_and_queries_per_row</code>.</span></p>
+      </li>
+      <li>
+        <span class="sev med">Med</span>
+        <p class="body"><strong>Runaway scripts.</strong><span> An infinite loop or a query returning millions of rows can wedge a connection or exhaust memory. Mitigation: an interrupt handler with a wall-clock timeout, a cumulative row cap across all <code>db.query</code> calls, and reuse of the existing cancellation handle.</span></p>
+      </li>
+      <li>
+        <span class="sev med">Med</span>
+        <p class="body"><strong>Result-set ambiguity.</strong><span> "Last query fills the grid" is simple but can surprise: a script whose last statement is a write returns no rows and shows an empty grid. Fix with a clear Message-tab summary ("ran 14 queries, 0 rows returned") so empty ≠ broken.</span></p>
+      </li>
+      <li>
+        <span class="sev low">Low</span>
+        <p class="body"><strong>Param marshalling.</strong><span> JS values passed to <code>db.query(sql, params)</code> must map onto the driver's <code>CellValue</code> param type — today the SQL path passes <code>vec![]</code>. Straightforward, but new surface: numbers, strings, null, arrays each need a defined mapping and a test.</span></p>
+      </li>
+      <li>
+        <span class="sev low">Low</span>
+        <p class="body"><strong>Dev-sidecar parity.</strong><span> Browser-mode dev runs against the Node <code>dev-sidecar.ts</code>, which has no rquickjs. Script mode either degrades gracefully there or the sidecar grows a matching JS path. Decide, don't discover.</span></p>
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <p class="sec-label">Alternatives weighed</p>
+    <h2>Why not the other paths</h2>
+    <ul class="tight">
+      <li><strong>Deno/Node sidecar.</strong> Full modern JS, but ships a ~40 MB signed binary per platform and a process lifecycle to babysit — heavy for a query DSL. Reconsider only if scripts need npm.</li>
+      <li><strong>boa (pure Rust).</strong> Cleanest build, no C deps, but slower and more spec gaps — more likely to trip on a user's script. rquickjs is the better fit today; boa stays the fallback if the C toolchain becomes a burden.</li>
+      <li><strong>Views / CTEs.</strong> For the pipeline-shaped cases ("output of one feeds the next"), <code>WITH</code> chains already work with zero new code and belong in the docs as the first thing to try. Scripting is for what CTEs can't do.</li>
+      <li><strong>PL/pgSQL <code>DO</code> blocks.</strong> Loops server-side, but returns no rows through our single-statement <code>fetch()</code> path and is Postgres-only. Not a general answer.</li>
+    </ul>
+  </section>
+
+  <footer>
+    Nembrix · apps/desktop · design proposal · references verified against source at 2026-07-28
+  </footer>
+
+</div>
