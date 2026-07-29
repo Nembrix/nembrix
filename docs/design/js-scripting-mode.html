@@ -437,10 +437,10 @@
             <td class="est">done</td>
           </tr>
           <tr>
-            <td><span class="ph">P2</span></td>
-            <td><strong>Wire the capability.</strong> <code>db.query</code> resolves the live conn and calls the real <code>stream()</code>; collect rows + captured <code>console</code> output into a script result.</td>
-            <td>query.rs, state.rs, db-core</td>
-            <td class="est">3–5 d</td>
+            <td><span class="ph">P2 ✓</span></td>
+            <td><strong>Wire the capability — done.</strong> A <code>ScriptRunner</code> adapter in <code>query.rs</code> drains the real <code>DbConnection::stream</code> into a <code>QueryResult</code> (mapping the driver's in-band error batch to a thrown JS error). New <code>run_script</code> command, RDBMS-gated. Engine confined to a dedicated thread so the command future stays <code>Send</code>. Two tests loop over real Postgres rows.</td>
+            <td>query.rs, db-script, integration.rs</td>
+            <td class="est">done</td>
           </tr>
           <tr>
             <td><span class="ph">P3</span></td>
@@ -477,6 +477,10 @@
         <p class="body"><strong>Async bridge: rquickjs promises ↔ Tokio.</strong><span> <em>Cleared in P1.</em> An <code>Async</code>-wrapped host function returns a Rust future exposed to JS as a Promise; <code>AsyncContext::async_with</code> + <code>AsyncRuntime::idle</code> drive it to settlement. A per-row query loop suspends and resumes correctly — proven by <code>loops_and_queries_per_row</code>.</span></p>
       </li>
       <li>
+        <span class="sev done">Retired</span>
+        <p class="body"><strong>The QuickJS engine is <code>!Send</code>.</strong><span> <em>Found &amp; handled in P2.</em> rquickjs's runtime/context can't cross threads, but Tauri commands require <code>Send</code> futures. Resolved by confining the engine to a dedicated OS thread with its own current-thread runtime + <code>LocalSet</code>, returning the outcome over a <code>Send</code> oneshot. All of this lives inside <code>db_script::run</code>, so callers just <code>await</code> a normal <code>Send</code> future.</span></p>
+      </li>
+      <li>
         <span class="sev med">Med</span>
         <p class="body"><strong>Runaway scripts.</strong><span> An infinite loop or a query returning millions of rows can wedge a connection or exhaust memory. Mitigation: an interrupt handler with a wall-clock timeout, a cumulative row cap across all <code>db.query</code> calls, and reuse of the existing cancellation handle.</span></p>
       </li>
@@ -486,7 +490,7 @@
       </li>
       <li>
         <span class="sev low">Low</span>
-        <p class="body"><strong>Param marshalling.</strong><span> JS values passed to <code>db.query(sql, params)</code> must map onto the driver's <code>CellValue</code> param type — today the SQL path passes <code>vec![]</code>. Straightforward, but new surface: numbers, strings, null, arrays each need a defined mapping and a test.</span></p>
+        <p class="body"><strong>Param marshalling — deferred.</strong><span> The relational drivers still ignore bound params (<code>stream</code> takes an empty <code>Params</code>), so <code>db.query(sql, params)</code> accepts a params array but does not yet bind it — scripts interpolate values into SQL for now. Real binding lands in P5 alongside driver-side param support; the sandbox already parses the JS params to JSON, so only the driver half remains.</span></p>
       </li>
       <li>
         <span class="sev low">Low</span>

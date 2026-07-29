@@ -71,6 +71,7 @@ sqlformat = "0.2"
 db-core = { path = "crates/db-core" }
 db-postgres = { path = "crates/db-postgres" }
 db-mongo = { path = "crates/db-mongo" }
+db-script = { path = "crates/db-script" }
 ssh-tunnel = { path = "crates/ssh-tunnel" }
 secrets = { path = "crates/secrets" }
 sql-format = { path = "crates/sql-format" }

@@ -20,6 +20,7 @@
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
+use specta::Type;
 
 mod runner;
 mod sandbox;
@@ -27,7 +28,7 @@ mod sandbox;
 pub use runner::{QueryResult, QueryRunner};
 
 /// Everything a finished script hands back to the caller.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Type)]
 pub struct ScriptOutcome {
     /// The grid payload: the script's return value, coerced to a
     /// [`QueryResult`] when it is one, otherwise the last `db.query` result the
@@ -41,7 +42,7 @@ pub struct ScriptOutcome {
     pub query_count: u32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum LogLevel {
     Log,
@@ -49,7 +50,7 @@ pub enum LogLevel {
     Error,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Type)]
 pub struct LogLine {
     pub level: LogLevel,
     pub text: String,
@@ -95,10 +96,47 @@ impl Default for Limits {
 
 /// Run `source` as a script against `runner`, returning the grid data and
 /// captured logs. `runner` is the only way the script can reach a database.
+///
+/// ## Threading
+///
+/// QuickJS is single-threaded: rquickjs's `AsyncRuntime`/`AsyncContext` are
+/// `!Send`, so the engine (and any future that holds it across an `.await`)
+/// cannot cross threads. Tauri commands, however, require `Send` futures. We
+/// bridge the two by confining the entire engine to a dedicated OS thread that
+/// runs its own current-thread Tokio runtime with a `LocalSet`, and handing the
+/// result back over a `Send` oneshot channel. The future this function returns
+/// is therefore `Send` even though nothing inside the engine is.
+///
+/// The `runner`'s own futures (which call back into the driver's multi-threaded
+/// pool) execute on that current-thread runtime — that's fine, they only need
+/// to be pollable there, not `Send` across it.
 pub async fn run(
     source: &str,
     runner: Arc<dyn QueryRunner>,
     limits: Limits,
 ) -> Result<ScriptOutcome, ScriptError> {
-    sandbox::execute(source, runner, limits).await
+    let source = source.to_string();
+    let (tx, rx) = tokio::sync::oneshot::channel();
+
+    std::thread::Builder::new()
+        .name("nembrix-script".into())
+        .spawn(move || {
+            let rt = match tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+            {
+                Ok(rt) => rt,
+                Err(e) => {
+                    let _ = tx.send(Err(ScriptError::Engine(e.to_string())));
+                    return;
+                }
+            };
+            let local = tokio::task::LocalSet::new();
+            let outcome = local.block_on(&rt, sandbox::execute(&source, runner, limits));
+            let _ = tx.send(outcome);
+        })
+        .map_err(|e| ScriptError::Engine(e.to_string()))?;
+
+    rx.await
+        .map_err(|_| ScriptError::Engine("script thread terminated unexpectedly".into()))?
 }
