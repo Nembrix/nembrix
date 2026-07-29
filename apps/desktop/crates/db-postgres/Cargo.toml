@@ -25,3 +25,7 @@ testcontainers = { workspace = true }
 testcontainers-modules = { workspace = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
 anyhow.workspace = true
+# End-to-end test of the JS scripting adapter against a real Postgres: proves
+# `db.query` in a script streams real rows through the driver.
+db-script.workspace = true
+async-trait.workspace = true

@@ -9,12 +9,13 @@
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use specta::Type;
 
 /// One query's fully-materialized result, shaped for JS consumption. This is a
 /// deliberately JSON-friendly projection of `db-core::RowBatch` — the sandbox
 /// converts it into a JS object `{ columns, rows, rowCount }` so a script can
 /// write `result.rows[0].id`.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Type)]
 pub struct QueryResult {
     /// Column names in order. Rows are objects keyed by these names.
     pub columns: Vec<String>,
