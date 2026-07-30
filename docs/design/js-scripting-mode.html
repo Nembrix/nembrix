@@ -443,16 +443,16 @@
             <td class="est">done</td>
           </tr>
           <tr>
-            <td><span class="ph">P3</span></td>
-            <td><strong>QueryLang + IPC.</strong> Add <code>Script</code> to <code>QueryLang</code>; new <code>run_script</code> command; extend the result payload with a log channel.</td>
-            <td>db-core:17, query.rs, types.ts</td>
-            <td class="est">2–3 d</td>
+            <td><span class="ph">P3 ✓</span></td>
+            <td><strong>QueryLang + IPC — done.</strong> Added <code>Script</code> to <code>QueryLang</code>, mirrored in <code>types.ts</code>; <code>ScriptOutcome</code>/<code>LogLine</code> types + a <code>runScript</code> IPC wrapper. Result payload already carries the log channel from P2.</td>
+            <td>db-core, types.ts, commands.ts</td>
+            <td class="est">done</td>
           </tr>
           <tr>
-            <td><span class="ph">P4</span></td>
-            <td><strong>Editor surface.</strong> Per-tab language toggle; swap CodeMirror to <code>@codemirror/lang-javascript</code> for scripts; render <code>console.log</code> in the Message tab.</td>
-            <td>QueryTab.tsx, editor/</td>
-            <td class="est">3–4 d</td>
+            <td><span class="ph">P4 ✓</span></td>
+            <td><strong>Editor surface — done.</strong> Per-tab Lang toggle (SQL/JavaScript), shown only on RDBMS connections; CodeMirror swaps to <code>@codemirror/lang-javascript</code> in script mode; <code>run()</code> routes to <code>runScript</code>; console output renders in the Message tab, tinted by level. You can now open a Script tab and run a per-row query loop.</td>
+            <td>QueryTab.tsx, store, styles.css</td>
+            <td class="est">done</td>
           </tr>
           <tr>
             <td><span class="ph">P5</span></td>

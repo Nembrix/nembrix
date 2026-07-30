@@ -20,6 +20,12 @@ pub enum QueryLang {
     Sql,
     MongoShell,
     RedisCmd,
+    /// JavaScript scripting mode. Not a driver's native language — it's an
+    /// editor mode layered *over* a SQL connection (see `db-script`). No
+    /// driver returns this from [`DbConnection::lang`]; it's a per-tab choice
+    /// the frontend makes, offered only when the driver's own `lang()` is
+    /// [`QueryLang::Sql`].
+    Script,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]

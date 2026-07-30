@@ -1,7 +1,32 @@
 // Hand-authored mirror of the Rust types. specta will regenerate
 // `bindings/commands.ts` on first dev build; until then we use these.
 
-export type QueryLang = "sql" | "mongo_shell" | "redis_cmd";
+export type QueryLang = "sql" | "mongo_shell" | "redis_cmd" | "script";
+
+// --- JS scripting mode (mirror of db-script types) ---
+
+export type LogLevel = "log" | "warn" | "error";
+
+export interface LogLine {
+  level: LogLevel;
+  text: string;
+}
+
+/** One materialized query result inside a script: rows are objects keyed by
+ *  column name (so a script writes `row.user_id`). */
+export interface ScriptQueryResult {
+  columns: string[];
+  rows: Record<string, unknown>[];
+}
+
+export interface ScriptOutcome {
+  /** Grid payload — the script's returned/last query result, or null. */
+  data: ScriptQueryResult | null;
+  /** console.log/warn/error lines in emission order. */
+  logs: LogLine[];
+  /** How many db.query calls the script made. */
+  query_count: number;
+}
 
 export type CellValue =
   | { kind: "null" }
