@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { keymap, EditorView } from "@codemirror/view";
 import { EditorSelection, Prec, StateEffect } from "@codemirror/state";
+import { javascript } from "@codemirror/lang-javascript";
 import { Play, Square, Sparkles, Star } from "lucide-react";
 import { buildSqlExtension } from "@/editor/sql-completion";
 import { useStore, type Tab, type FilterChip } from "@/store";
@@ -18,6 +19,21 @@ import { recordSlowQuery } from "@/features/query/slowQueries";
 
 type ResultView = "data" | "message" | "chart" | "analysis";
 
+/** Map a JSON value coming back from a script's query result into the grid's
+ *  tagged CellValue union, so script results render through the same DataGrid
+ *  as normal queries. Objects/arrays land in the collapsible `document` cell. */
+function toCell(v: unknown): import("@/ipc/types").CellValue {
+  if (v === null || v === undefined) return { kind: "null" };
+  if (typeof v === "boolean") return { kind: "bool", value: v };
+  if (typeof v === "number") {
+    return Number.isInteger(v)
+      ? { kind: "int", value: v }
+      : { kind: "float", value: v };
+  }
+  if (typeof v === "string") return { kind: "text", value: v };
+  return { kind: "document", value: v };
+}
+
 export default function QueryTab({ tab }: { tab: Tab }) {
   const { schemas, updateTab, appendBatch, activeTabId, editorTick, editorAction, panels } = useStore();
   const tree = schemas[tab.connId];
@@ -28,6 +44,13 @@ export default function QueryTab({ tab }: { tab: Tab }) {
   const lineCount = useMemo(() => (tab.sql ?? "").split("\n").length, [tab.sql]);
   const selectedChars = (tab.sql ?? "").length;
   const filters = tab.filters ?? [];
+
+  const isScript = tab.lang === "script";
+  // Scripting mode is RDBMS-only. postgres/mysql/sqlite are SQL engines;
+  // mongo/redis have their own languages, so we don't offer the toggle there.
+  const conn = useStore.getState().connections.find((c) => c.id === tab.connId);
+  const sqlEngines = new Set(["postgres", "mysql", "sqlite"]);
+  const scriptingAvailable = sqlEngines.has(conn?.engine ?? "");
 
   /** Tack a LIMIT onto the SQL when the picker is set, the query
    *  looks like a SELECT, and the user didn't already type one. We
@@ -43,12 +66,55 @@ export default function QueryTab({ tab }: { tab: Tab }) {
     return `${trimmed}\nLIMIT ${limit};`;
   };
 
+  const runScriptMode = async () => {
+    const source = tab.sql ?? "";
+    if (!source.trim()) return;
+    const started = performance.now();
+    updateTab(tab.id, {
+      columns: undefined, rows: [], logs: [], running: true, error: undefined,
+      queryStartedAt: started, elapsedMs: undefined,
+    });
+    setStatusMsg("Running script…");
+    setView("data");
+    try {
+      const outcome = await api.runScript(tab.connId, source);
+      const ms = Math.round(performance.now() - started);
+      // Project the script's { columns, rows: Record<>[] } result into the
+      // grid's positional shape (ColMeta[] + CellValue[][]) so DataGrid renders
+      // it exactly like a normal query result.
+      let columns: import("@/ipc/types").ColMeta[] | undefined;
+      let rows: import("@/ipc/types").CellValue[][] | undefined;
+      if (outcome.data) {
+        columns = outcome.data.columns.map((name) => ({
+          name, type_name: "", nullable: true,
+        }));
+        rows = outcome.data.rows.map((row) =>
+          outcome.data!.columns.map((c) => toCell(row[c])),
+        );
+      }
+      updateTab(tab.id, {
+        columns, rows: rows ?? [], logs: outcome.logs,
+        running: false, elapsedMs: ms,
+      });
+      useStore.getState().bumpHistory();
+      const n = outcome.query_count;
+      const rowsN = rows?.length ?? 0;
+      setStatusMsg(
+        `Done in ${ms} ms · ${n} ${n === 1 ? "query" : "queries"}` +
+        `${rowsN > 0 ? `, ${rowsN} ${rowsN === 1 ? "row" : "rows"}` : ""}`,
+      );
+    } catch (e) {
+      updateTab(tab.id, { running: false, error: String(e) });
+      setStatusMsg(`Error: ${e}`);
+    }
+  };
+
   const run = async () => {
+    if (isScript) return runScriptMode();
     const rawSql = tab.sql ?? "";
     if (!rawSql.trim()) return;
     const sql = attachLimit(rawSql, tab.limit);
     // Production / staging guard — type the connection name to confirm.
-    const conn = useStore.getState().connections.find((c) => c.id === tab.connId);
     const reason = destructiveReason(conn?.environment, sql);
     if (reason && conn) {
       const typed = prompt(
@@ -160,7 +226,10 @@ export default function QueryTab({ tab }: { tab: Tab }) {
     cmdsRef.current = { run, cancel, format, saveAsNamed };
   });
 
-  const sqlExt = buildSqlExtension(tree);
+  // Language extension: JS syntax/highlighting in script mode, SQL completion
+  // otherwise. Swapping this by `tab.lang` is what makes the same editor a
+  // JavaScript surface when the user flips the toggle.
+  const langExt = isScript ? javascript() : buildSqlExtension(tree);
   const rowCount = tab.rows?.length ?? 0;
 
   // Editor height — user-draggable via the separator between the
@@ -257,7 +326,7 @@ export default function QueryTab({ tab }: { tab: Tab }) {
             });
           }}
           extensions={[
-            sqlExt,
+            langExt,
             // Click anywhere in the editor body (including the empty
             // area below the last line) places the cursor at the end
             // of the document and focuses the editor. CodeMirror's
@@ -317,10 +386,29 @@ export default function QueryTab({ tab }: { tab: Tab }) {
           {lineCount} {lineCount === 1 ? "line" : "lines"}, {selectedChars} characters
         </span>
         <div className="spacer" />
+        {/* Language toggle — only for SQL connections. Flips the tab between
+            plain SQL and JS scripting mode (db.query + loops). Mongo/Redis
+            connections have their own languages, so it's hidden there. */}
+        {scriptingAvailable && (
+          <label className="limit-picker" title="Editor language for this tab">
+            <span className="muted">Lang</span>
+            <select
+              value={tab.lang ?? "sql"}
+              onChange={(e) =>
+                updateTab(tab.id, { lang: e.target.value as "sql" | "script" })
+              }
+            >
+              <option value="sql">SQL</option>
+              <option value="script">JavaScript</option>
+            </select>
+          </label>
+        )}
         {/* Limit picker: when set, a LIMIT clause is appended to the
             executed SQL if the user's query doesn't already have one.
             "No limit" lets the user opt out per tab — defensive
-            queries (DELETE etc.) keep their own semantics. */}
+            queries (DELETE etc.) keep their own semantics. Not shown in
+            script mode: the LIMIT rewrite only makes sense for raw SQL. */}
+        {!isScript && (
         <label className="limit-picker">
           <span className="muted">Limit</span>
           <select
@@ -339,9 +427,12 @@ export default function QueryTab({ tab }: { tab: Tab }) {
             <option value={10000}>10,000</option>
           </select>
         </label>
+        )}
+        {!isScript && (
         <button className="btn-pill" onClick={format} title="Format (⌘I)">
           <Sparkles size={12} /> Beautify <span className="kbd">⌘I</span>
         </button>
+        )}
         <button className="btn-pill" onClick={saveAsNamed} title="Save query…">
           <Star size={12} /> Save
         </button>
@@ -351,7 +442,7 @@ export default function QueryTab({ tab }: { tab: Tab }) {
           </button>
         ) : (
           <button className="btn-pill primary" onClick={run} title="Run (⌘↵)">
-            <Play size={12} /> Run Current <span className="kbd">⌘↵</span>
+            <Play size={12} /> {isScript ? "Run Script" : "Run Current"} <span className="kbd">⌘↵</span>
           </button>
         )}
       </div>
@@ -396,7 +487,21 @@ export default function QueryTab({ tab }: { tab: Tab }) {
             : <DataGrid tab={tab} />)}
           {view === "message" && (
             <div className="message-pane">
-              {tab.error ? <span className="err">{tab.error}</span> : statusMsg || "—"}
+              {tab.error ? (
+                <span className="err">{tab.error}</span>
+              ) : isScript && (tab.logs?.length ?? 0) > 0 ? (
+                // Script console output: one line per console.* call, tinted by
+                // level. Monospace so aligned/tabular logs stay readable.
+                <div className="script-log">
+                  {tab.logs!.map((l, i) => (
+                    <div key={i} className={`log-line log-${l.level}`}>
+                      {l.text}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                statusMsg || "—"
+              )}
             </div>
           )}
           {view === "chart" && tab.columns && tab.rows && (

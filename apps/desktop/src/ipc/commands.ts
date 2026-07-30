@@ -5,6 +5,7 @@ import type {
   QueryHandle,
   RowBatch,
   SchemaTree,
+  ScriptOutcome,
 } from "./types";
 import {
   probeSidecar,
@@ -648,6 +649,12 @@ export const stream = async (
 
 export const cancel = (connId: string, handle: QueryHandle) =>
   invoke<void>("cancel", { connId: resolveConnId(connId), handle });
+
+/** Run a JS scripting-mode tab. Executes `source` in the sandbox against the
+ *  connection, returning grid data + captured console output. Only valid for
+ *  SQL connections — the backend rejects non-SQL drivers. */
+export const runScript = (connId: string, source: string) =>
+  invoke<ScriptOutcome>("run_script", { connId: resolveConnId(connId), source });
 
 export const formatSql = (sql: string) =>
   invoke<string>("format_sql", { sql, cfg: null });

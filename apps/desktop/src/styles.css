@@ -1348,6 +1348,14 @@ tr.grid-filler.row-even > td {
   color: var(--fg-2);
 }
 .message-pane .err { color: var(--danger); }
+
+/* JS scripting console output: one row per console.* call. Inherits the
+   pane's monospace; tint per level so warnings/errors stand out without a
+   separate panel. */
+.script-log { display: flex; flex-direction: column; gap: 1px; }
+.script-log .log-line { white-space: pre-wrap; }
+.script-log .log-warn { color: var(--warn, #e0a458); }
+.script-log .log-error { color: var(--danger); }
 /* When the pane itself carries the .err modifier (a query failed),
    give it the full error treatment — bordered, tinted, scrollable so
    long stack traces don't blow out the result panel. */

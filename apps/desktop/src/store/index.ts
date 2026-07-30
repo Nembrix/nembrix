@@ -16,6 +16,13 @@ export interface Tab {
   kind: TabKind;
   title: string;
   sql?: string;
+  /** Editor language for this tab. Defaults to "sql". "script" turns the
+   *  tab into a JS scripting surface (see db-script) — only offered on SQL
+   *  connections. The same `sql` field holds the source in either mode. */
+  lang?: "sql" | "script";
+  /** console.log/warn/error lines from the last script run. Rendered in the
+   *  Message tab. Only populated when `lang === "script"`. */
+  logs?: { level: "log" | "warn" | "error"; text: string }[];
   columns?: ColMeta[];
   rows?: CellValue[][];
   running?: boolean;
