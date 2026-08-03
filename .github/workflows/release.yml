@@ -144,6 +144,11 @@ jobs:
   build:
     name: Build (${{ matrix.label }})
     needs: prepare
+    # The Apple codesigning + notarization secrets (APPLE_CERTIFICATE et al.)
+    # live in the `release` GitHub Environment, not at repo scope, so the
+    # build must bind to it or `security import` gets an empty cert and the
+    # macOS bundle step fails. The environment is restricted to `main`.
+    environment: release
     strategy:
       fail-fast: false  # One platform failing shouldn't kill the others.
       matrix:
