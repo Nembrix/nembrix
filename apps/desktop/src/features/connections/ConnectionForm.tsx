@@ -68,6 +68,24 @@ function parsePostgresUri(raw: string): Partial<ConnectionInput> | null {
   return out;
 }
 
+/** Validate a connection name against the existing set. Required, and
+ *  unique case-insensitively across all connections except the one being
+ *  edited (matched by id). Returns a user-facing message or null. Pure so
+ *  it can be unit-tested without mounting the form. */
+export function validateConnectionName(
+  name: string,
+  existing: Pick<ConnectionRecord, "id" | "name">[],
+  currentId: string | null,
+): string | null {
+  const trimmed = name.trim();
+  if (!trimmed) return "Name is required.";
+  const clash = existing.some(
+    (c) => c.id !== currentId && c.name.trim().toLowerCase() === trimmed.toLowerCase(),
+  );
+  if (clash) return "A connection with this name already exists.";
+  return null;
+}
+
 const empty: ConnectionInput = {
   id: null,
   name: "",
@@ -128,6 +146,10 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
   const [uriText, setUriText] = useState<string>("");
   const [uriErr, setUriErr] = useState<string | null>(null);
   const [testMsg, setTestMsg] = useState<string | null>(null);
+  // Only surface the inline name error once the field has been touched or
+  // a save was attempted, so a freshly-opened form doesn't show a red
+  // "required" hint before the user has done anything.
+  const [nameTouched, setNameTouched] = useState(false);
   // Quick visual ack on the Test button: tints it green/red for ~2.5s
   // after a probe completes so the user catches the result without
   // reading the small status text. Cleared whenever the form changes
@@ -185,6 +207,11 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
 
   const finalInput = (): ConnectionInput => ({ ...v, ssh: useSsh ? v.ssh : null });
 
+  // Validate the connection name up front (required + unique). Gates Save
+  // / Connect so we never round-trip an invalid record to the backend just
+  // to get a generic error back. See validateConnectionName above.
+  const nameError = validateConnectionName(v.name, connections, v.id);
+
   const onTest = async () => {
     setWorking("test");
     setTestMsg("Testing…");
@@ -223,6 +250,7 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
   }, [v, useSsh]);
 
   const onSave = async () => {
+    if (nameError) { setNameTouched(true); setTestMsg(nameError); setTestResult("fail"); return; }
     setWorking("save");
     try {
       await api.saveConnection(finalInput());
@@ -241,6 +269,7 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
    * lifecycle is consistent.
    */
   const onSaveAndConnect = async () => {
+    if (nameError) { setNameTouched(true); setTestMsg(nameError); setTestResult("fail"); return; }
     setWorking("connect");
     setTestMsg("Saving…");
     try {
@@ -314,7 +343,20 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
 
             <div className="section-title">General</div>
             <label htmlFor="cf-name">Name</label>
-            <input id="cf-name" type="text" value={v.name} onChange={(e) => patch({ name: e.target.value })} />
+            <div>
+              <input
+                id="cf-name"
+                type="text"
+                value={v.name}
+                aria-invalid={nameTouched && !!nameError}
+                className={nameTouched && nameError ? "invalid" : undefined}
+                onChange={(e) => patch({ name: e.target.value })}
+                onBlur={() => setNameTouched(true)}
+              />
+              {nameTouched && nameError && (
+                <div className="field-error">{nameError}</div>
+              )}
+            </div>
 
             {v.engine === "postgres" && (
               <>
@@ -517,7 +559,8 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
           <button
             className="btn-pill"
             onClick={onSave}
-            disabled={!!working}
+            disabled={!!working || !!nameError}
+            title={nameError ?? undefined}
           >
             {working === "save"
               ? (editing ? "Updating…" : "Saving…")
@@ -526,10 +569,10 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
           <button
             className="btn-pill primary"
             onClick={onSaveAndConnect}
-            disabled={!!working}
-            title={editing
+            disabled={!!working || !!nameError}
+            title={nameError ?? (editing
               ? "Update this connection and connect to it"
-              : "Save this connection and connect to it now"}
+              : "Save this connection and connect to it now")}
           >
             {working === "connect" ? "Connecting…" : "Connect"}
           </button>
