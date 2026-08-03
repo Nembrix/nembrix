@@ -4,7 +4,8 @@
  * `brand/nembrix-mark.svg` is a transparent outline mark (the database
  * puck), so we composite it centered onto a rounded-square plate — the
  * shape macOS/Windows expect for an app icon — and write a 1024×1024 PNG
- * to `src-tauri/icons/source.png`.
+ * to `src-tauri/icons/source.png`. The mark fills most of the plate
+ * (little padding) so it reads at small sizes.
  *
  * From there, `yarn tauri icon src-tauri/icons/source.png` produces every
  * variant the bundlers need (.icns, .ico, the PNG size series, the
@@ -20,16 +21,15 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, "..", "..", "..");
-// Use the SOLID mark for the icon: on a small app-icon plate the filled
-// body reads more clearly than the thin outline stroke.
-const MARK_SVG = join(REPO_ROOT, "brand", "nembrix-mark-solid.svg");
+const MARK_SVG = join(REPO_ROOT, "brand", "nembrix-mark.svg");
 const OUT = join(__dirname, "..", "src-tauri", "icons", "source.png");
 
 const SIZE = 1024;
 // Corner radius ~18% of the canvas — the macOS "squircle"-ish rounding.
 const RADIUS = 180;
-// Leave the mark at ~54% of the canvas so it breathes inside the plate.
-const MARK_FRAC = 0.54;
+// Fill most of the plate — minimal padding so the mark isn't lost in
+// empty space. ~0.8 leaves just a small margin off the plate edges.
+const MARK_FRAC = 0.8;
 
 // Light silver plate so the dark mark reads (matches the app's neutral
 // surfaces rather than a heavy black tile).
