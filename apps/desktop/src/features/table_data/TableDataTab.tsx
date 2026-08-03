@@ -28,6 +28,13 @@ type ResultView = "data" | "structure" | "indexes" | "info" | "chart";
  */
 export default function TableDataTab({ tab }: { tab: Tab }) {
   const { updateTab, appendBatch, schemas } = useStore();
+  // Subscribe to this session's connection status. On app restart a tab is
+  // restored before its connection pool is re-established (reconnect runs
+  // as a background promise), so a query fired on mount races the
+  // reconnect and hits "not connected". We gate the run on this status and
+  // re-run once it flips to "connected". undefined = never-set (treat as
+  // ready, e.g. the browser/mock path that has no status).
+  const connStatus = useStore((s) => s.status[tab.connId]);
   const [view, setView] = useState<ResultView>("data");
   const [colMenuOpen, setColMenuOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -102,12 +109,20 @@ export default function TableDataTab({ tab }: { tab: Tab }) {
   // the stream twice (which would double the rows in the grid).
   const lastKeyRef = useRef<string | null>(null);
   useEffect(() => {
+    // Don't fire a query while the session is (re)connecting or failed —
+    // it would hit "not connected". `undefined` means no status was ever
+    // set (browser/mock path), which is safe to run. When reconnect
+    // completes and status flips to "connected", this effect re-runs and
+    // dispatches the query that was held back.
+    if (connStatus === "connecting" || connStatus === "disconnected" || connStatus === "error") {
+      return;
+    }
     const key = `${sql}#${tab.refreshTick ?? 0}`;
     if (lastKeyRef.current === key) return;
     lastKeyRef.current = key;
     void run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sql, tab.refreshTick]);
+  }, [sql, tab.refreshTick, connStatus]);
 
   /**
    * Two-phase row count. Fires after the data stream finishes (we use
