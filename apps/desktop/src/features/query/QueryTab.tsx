@@ -336,9 +336,24 @@ export default function QueryTab({ tab }: { tab: Tab }) {
             EditorView.domEventHandlers({
               mousedown(event, view) {
                 const target = event.target as HTMLElement;
-                // Skip clicks on the gutter or autocomplete tooltips —
-                // those have their own behavior.
-                if (target.closest(".cm-gutter, .cm-tooltip")) return false;
+                // Autocomplete tooltips have their own behavior — leave them.
+                if (target.closest(".cm-tooltip")) return false;
+                // Clicking a line number in the gutter should place the
+                // cursor at the START of that line and focus the editor,
+                // like every code editor — CodeMirror's default does
+                // nothing on a bare gutter click. Resolve the line from
+                // the click Y (posAtCoords is content-relative but the
+                // gutter shares the row's vertical band).
+                if (target.closest(".cm-gutter")) {
+                  const pos = view.posAtCoords({ x: event.clientX, y: event.clientY }, false);
+                  const line = view.state.doc.lineAt(pos);
+                  view.dispatch({
+                    selection: EditorSelection.cursor(line.from),
+                    scrollIntoView: true,
+                  });
+                  view.focus();
+                  return false;
+                }
                 // Any click inside the editor's scroll surface should
                 // place the cursor at the doc end (when below the
                 // last line) or at the clicked coordinate (when on
