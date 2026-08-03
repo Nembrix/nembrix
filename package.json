@@ -17,6 +17,7 @@
     "dev:all": "yarn workspace @nembrix/desktop dev:all",
     "build": "yarn workspace @nembrix/desktop build",
     "build:prod": "yarn workspace @nembrix/desktop build:prod",
+    "build:local": "yarn workspace @nembrix/desktop build:local",
     "tauri": "yarn workspace @nembrix/desktop tauri",
     "lint": "yarn workspace @nembrix/desktop lint",
     "test:unit": "yarn workspace @nembrix/desktop test:unit",
