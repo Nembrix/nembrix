@@ -323,7 +323,11 @@ jobs:
             // must delete ONLY its own arch's stale assets or they'd race
             // deleting each other's uploads.
             const patterns = {
-              'macos-aarch64':  [/aarch64\.dmg$/i, /aarch64\.app\.tar\.gz$/i],
+              // Each macOS leg also sweeps any legacy `universal.*` asset
+              // left over from before nightly split into Silicon/Intel, so
+              // a stale universal dmg/tarball can't linger on the rolling
+              // release. (Harmless if already gone — delete is a no-op.)
+              'macos-aarch64':  [/aarch64\.dmg$/i, /aarch64\.app\.tar\.gz$/i, /universal\.dmg$/i, /universal\.app\.tar\.gz$/i],
               'macos-x86_64':   [/x64\.dmg$/i, /x64\.app\.tar\.gz$/i],
               'windows-x86_64': [/\.msi$/i, /-setup\.exe$/i, /\.exe$/i],
               'linux-x86_64':   [/\.AppImage$/i, /\.deb$/i, /\.rpm$/i],
