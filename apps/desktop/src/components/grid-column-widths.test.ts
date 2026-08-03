@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { clearScope, getWidth, scopeKey, setWidth } from "./grid-column-widths";
+import { clearScope, getWidth, scopeKey, setWidth, stretchLastColumn } from "./grid-column-widths";
 
 /* localStorage is a global in vitest-jsdom; with environment:"node" in our
  * config, we polyfill it with a tiny Map-backed stub. */
@@ -62,5 +62,40 @@ describe("setWidth / getWidth", () => {
     clearScope(k);
     expect(getWidth(k, "id")).toBeUndefined();
     expect(getWidth(k, "email")).toBeUndefined();
+  });
+});
+
+describe("stretchLastColumn", () => {
+  const GUTTER = 44;
+
+  it("grows the last column to fill the viewport", () => {
+    // 3 cols (100 each) + 44 gutter = 344; viewport 800 → 456 slack → last col.
+    const out = stretchLastColumn([100, 100, 100], GUTTER, 800, false);
+    expect(out).toEqual([100, 100, 100 + 456]);
+    // total now exactly fills the viewport
+    expect(GUTTER + out.reduce((a, b) => a + b, 0)).toBe(800);
+  });
+
+  it("does not shrink columns that already overflow the viewport", () => {
+    const widths = [300, 300, 300];
+    // 944 total > 500 viewport → no slack → unchanged (same ref)
+    expect(stretchLastColumn(widths, GUTTER, 500, false)).toBe(widths);
+  });
+
+  it("leaves the last column alone when it was manually resized", () => {
+    const widths = [100, 100, 100];
+    expect(stretchLastColumn(widths, GUTTER, 800, true)).toBe(widths);
+  });
+
+  it("returns the same array when there are no columns", () => {
+    const widths: number[] = [];
+    expect(stretchLastColumn(widths, GUTTER, 800, false)).toBe(widths);
+  });
+
+  it("only the last column absorbs the slack, others are untouched", () => {
+    const out = stretchLastColumn([80, 120], GUTTER, 500, false);
+    // slack = 500 - (44+80+120) = 256
+    expect(out[0]).toBe(80);
+    expect(out[1]).toBe(120 + 256);
   });
 });

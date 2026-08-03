@@ -7,7 +7,7 @@ import type { CellValue, ForeignKey, RelationNode } from "@/ipc/types";
 import ColumnSummaryPopover from "@/features/grid/ColumnSummaryPopover";
 import ForeignKeyPanel from "@/features/grid/ForeignKeyPanel";
 import { rewriteSqlWithFilters } from "@/features/grid/filter-sql";
-import { scopeKey, getWidth, setWidth } from "@/components/grid-column-widths";
+import { scopeKey, getWidth, setWidth, stretchLastColumn } from "@/components/grid-column-widths";
 import ContextMenu, { type ContextItem } from "@/components/ContextMenu";
 import { buildUpdate, cellToText, pkValuesFor, valueLiteral } from "@/components/grid_edit";
 import ExportDialog from "@/features/export/ExportDialog";
@@ -204,7 +204,7 @@ export default function DataGrid({ tab }: { tab: Tab }) {
    * Override priority: drag-set width > sampled width > DEFAULT_COL_W.
    * `resizeTick` is in the deps so the memo recomputes while dragging.
    */
-  const colWidths = useMemo(
+  const baseColWidths = useMemo(
     () => cols.map((c, i) => {
       const o = overrides[c.name];
       if (o != null) return o;
@@ -214,6 +214,17 @@ export default function DataGrid({ tab }: { tab: Tab }) {
     }),
     [cols, rows, fkByCol, overrides],
   );
+
+  // When the real columns don't fill the viewport, grow the LAST column to
+  // absorb the slack (instead of leaving an empty filler band on the
+  // right). Skipped when the last column has a user-set (dragged) width;
+  // the filler col below then takes over so the row rules still reach the
+  // edge. See stretchLastColumn.
+  const colWidths = useMemo(() => {
+    const lastName = cols[cols.length - 1]?.name;
+    const lastIsManual = lastName != null && overrides[lastName] != null;
+    return stretchLastColumn(baseColWidths, GUTTER_W, contentW, lastIsManual);
+  }, [baseColWidths, cols, overrides, contentW]);
 
   const totalColW = GUTTER_W + colWidths.reduce((a, b) => a + b, 0);
   // Filler col absorbs the horizontal slack when the real columns don't
