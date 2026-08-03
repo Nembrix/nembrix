@@ -5,6 +5,7 @@ import { isTauri } from "@/ipc/commands";
 import type { ConnectionInput, ConnectionRecord, Environment } from "@/ipc/types";
 import { useStore } from "@/store";
 import { ENV_COLOR, ENV_LABEL, ENVIRONMENTS, colorFor } from "./environment";
+import { validateConnectionName } from "./validateConnectionName";
 
 /** Engines we ship now vs. the ones on the roadmap. The form lists every
  *  engine — the unsupported ones are shown disabled with a "Coming soon"
@@ -66,24 +67,6 @@ function parsePostgresUri(raw: string): Partial<ConnectionInput> | null {
     out.ssl_mode = sslmode;
   }
   return out;
-}
-
-/** Validate a connection name against the existing set. Required, and
- *  unique case-insensitively across all connections except the one being
- *  edited (matched by id). Returns a user-facing message or null. Pure so
- *  it can be unit-tested without mounting the form. */
-export function validateConnectionName(
-  name: string,
-  existing: Pick<ConnectionRecord, "id" | "name">[],
-  currentId: string | null,
-): string | null {
-  const trimmed = name.trim();
-  if (!trimmed) return "Name is required.";
-  const clash = existing.some(
-    (c) => c.id !== currentId && c.name.trim().toLowerCase() === trimmed.toLowerCase(),
-  );
-  if (clash) return "A connection with this name already exists.";
-  return null;
 }
 
 const empty: ConnectionInput = {
