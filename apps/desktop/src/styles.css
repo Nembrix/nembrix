@@ -108,11 +108,12 @@ button, input, select, textarea { font: inherit; color: inherit; }
   min-height: 0;
   -webkit-app-region: drag;
 }
-/* Traffic-light strip is ~28px tall on macOS — pad just enough to
-   clear it. Earlier 64px left an awkward dead zone above the first
-   connection. The .rail's own 12px top padding stacks underneath, so
-   total clearance is 32px (28 + 4 visual breathing room). */
-.app.is-tauri .rail { padding-top: 28px; }
+/* Traffic-light strip is ~28px tall on macOS. `padding-top` here
+   overrides the 12px from the shorthand above (it does not stack), so
+   this value IS the total top clearance. 28px sat the logo flush against
+   the traffic lights with no breathing room; 40px clears the strip and
+   leaves ~12px of air below it. Earlier 64px left an awkward dead zone. */
+.app.is-tauri .rail { padding-top: 40px; }
 .rail > * { -webkit-app-region: no-drag; }
 /* The session list itself is the scrolling block. Bound it to the
    available space so the actions row at the bottom never gets pushed
@@ -1540,6 +1541,26 @@ tr.grid-filler.row-even > td {
   width: 100%;
 }
 .form-grid input:focus, .form-grid select:focus { border-color: var(--accent-ring); }
+/* Boolean checkboxes in the form (Use SSH, strict host check). The bare
+   browser-default box renders as a washed-out white square on the dark
+   theme; accent-color gives it a proper themed tick when checked. Kept a
+   classic checkmark box on purpose — not a switch. */
+.form-grid input[type=checkbox] {
+  accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  margin: 0;
+}
+/* Invalid field (e.g. missing/duplicate connection name) — red border +
+   a small inline message below the input. */
+.form-grid input.invalid { border-color: var(--danger, #e5484d); }
+.form-grid input.invalid:focus { border-color: var(--danger, #e5484d); }
+.field-error {
+  color: var(--danger, #e5484d);
+  font-size: 11px;
+  margin-top: 4px;
+}
 .section-title {
   grid-column: 1 / -1;
   color: var(--fg-3);
