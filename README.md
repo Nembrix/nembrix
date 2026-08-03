@@ -1,5 +1,8 @@
 # Nembrix
 
+[![Downloads](https://img.shields.io/github/downloads/oesukam/nembrix/total?label=downloads)](https://github.com/oesukam/nembrix/releases)
+[![Latest release](https://img.shields.io/github/v/release/oesukam/nembrix?include_prereleases&label=release)](https://github.com/oesukam/nembrix/releases)
+
 Cross-platform desktop database client built on **Tauri 2** (Rust + React).
 Ships Postgres with SSH-tunnel connections, schema-aware autocomplete,
 streamed result grid with cancel, SQL formatting, native role management,
