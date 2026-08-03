@@ -1,49 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Nembrix wordmark: the database-drum mark + the name "nembrix".
+  Nembrix wordmark: the outline database-puck mark + the name "nembrix".
 
-  Horizontal lockup. The drum mark (silver tile, gradient blue lid, dark
-  body with a lit front face) sits at left; the name follows set in the
-  platform UI font (SF Pro / Inter / Segoe UI), weight 700, tight
-  tracking. The leading "n" is the accent blue; "embrix" is ink.
+  Horizontal lockup. The mark (dark hollow body, steel-blue lid) sits at
+  left; the name follows in the platform UI font (SF Pro / Inter / Segoe
+  UI), weight 700, tight tracking. The leading "n" is the accent blue;
+  "embrix" is ink. The name is live text so it stays editable.
 
-  Replaces the old wordmark, whose leading "n" was a hand-drawn wave that
-  read as a squiggle rather than a letter. The name is live text so it
-  stays editable; every target surface has one of the fallback fonts.
-
-  Colors: lid gradient (accent family), n #3b82f6, text #1f2937.
+  Mark geometry mirrors brand/nembrix-mark.svg (96x96, transparent).
 -->
-<svg
-  xmlns="http://www.w3.org/2000/svg"
-  viewBox="0 0 580 150"
-  width="580" height="150"
-  role="img"
-  aria-label="Nembrix"
->
-  <defs>
-    <linearGradient id="plate" x1="0" y1="0" x2="0.35" y2="1">
-      <stop offset="0" stop-color="#eef1f5"/><stop offset="0.55" stop-color="#dfe4ea"/><stop offset="1" stop-color="#cdd4dd"/>
-    </linearGradient>
-    <linearGradient id="lid" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#83abf4"/><stop offset="0.5" stop-color="#5285ec"/><stop offset="1" stop-color="#3068d9"/>
-    </linearGradient>
-    <linearGradient id="face" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#e9edf2"/>
-    </linearGradient>
-  </defs>
-
-  <g transform="translate(16,20)">
-    <rect x="0" y="0" width="110" height="110" rx="26" fill="url(#plate)"/>
-    <rect x="0" y="0" width="110" height="56" rx="26" fill="#ffffff" opacity="0.20"/>
-    <g transform="translate(55,55) scale(0.86)">
-      <path d="M-32 -9 V27 A32 13 0 0 0 32 27 V-9 Z" fill="#1b2432"/>
-      <path d="M-16 0 V31 A16 6 0 0 0 16 31 V0 Z" fill="url(#face)"/>
-      <path d="M-16 0 A16 6 0 0 0 16 0" fill="none" stroke="#c3ccd8" stroke-width="1.4" opacity="0.65"/>
-      <ellipse cx="0" cy="-9" rx="32" ry="13" fill="url(#lid)"/>
-      <ellipse cx="0" cy="-10" rx="32" ry="13" fill="none" stroke="#aecaf9" stroke-width="1.2" opacity="0.55"/>
-    </g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 120" width="560" height="120" role="img" aria-label="Nembrix">
+  <!-- mark, ~96px tall at left -->
+  <g transform="translate(16,12)">
+    <path d="M23,30 V61 a25,11 0 0 0 50,0 V30" fill="none" stroke="#17181A" stroke-width="10"/>
+    <ellipse cx="48" cy="30" rx="30" ry="10.5" fill="#5a86c4"/>
   </g>
-
-  <text x="150" y="100" font-family="-apple-system,BlinkMacSystemFont,'SF Pro Display','Inter','Segoe UI',system-ui,sans-serif"
-        font-size="82" font-weight="700" letter-spacing="-3"><tspan fill="#3b82f6">n</tspan><tspan fill="#1f2937">embrix</tspan></text>
+  <text x="128" y="82" font-family="-apple-system,BlinkMacSystemFont,'SF Pro Display','Inter','Segoe UI',system-ui,sans-serif"
+        font-size="72" font-weight="700" letter-spacing="-2.5"><tspan fill="#3b82f6">n</tspan><tspan fill="#1f2937">embrix</tspan></text>
 </svg>
