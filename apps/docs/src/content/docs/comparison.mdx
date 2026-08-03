@@ -1,0 +1,84 @@
+---
+title: How Nembrix compares
+description: How Nembrix stacks up against TablePlus, DBeaver, DataGrip, and Mac-native clients like Postico and Sequel Ace.
+---
+
+Nembrix isn't trying to be every database client for every engine. It's a
+**Postgres-first, session-oriented** client built for people who keep several
+connections open while shipping a migration. This page is an honest look at
+where it fits next to the tools you're probably already using.
+
+:::note
+Comparisons reflect each tool's general positioning at the time of writing, not
+a feature-by-feature audit of the newest release of every competitor. If
+something here is out of date, [open an
+issue](https://github.com/oesukam/nembrix/issues).
+:::
+
+## At a glance
+
+| | **Nembrix** | TablePlus | DBeaver | DataGrip | Postico / Sequel Ace |
+| --- | --- | --- | --- | --- | --- |
+| **Focus** | Postgres-first | Many engines | Many engines | Many engines (JetBrains) | Postgres / MySQL, Mac-only |
+| **Price** | Free, open source | Paid (free trial, row limits) | Free (CE) / paid (Pro) | Paid (subscription) | Freemium / paid |
+| **Platforms** | macOS · Windows · Linux | macOS · Windows · Linux | macOS · Windows · Linux | macOS · Windows · Linux | macOS only |
+| **Feel** | Native (Tauri/Rust) | Native | Java/Eclipse | JetBrains IDE | Native |
+| **Multi-session per connection** | ✅ first-class rail | Tabs | Tabs | Tabs | Limited |
+| **Editable grid** | ✅ txn-batched | ✅ | ✅ | ✅ | ✅ |
+| **SSH tunneling** | ✅ native russh, TOFU | ✅ | ✅ | ✅ | ✅ |
+| **EXPLAIN ANALYZE viewer** | ✅ heat-mapped tree | Basic | ✅ | ✅ | Text |
+| **Schema diff** | ✅ | Paid | ✅ | ✅ | — |
+| **Copy between connections** | ✅ FK-ordered | Manual | Data transfer | Data transfer | — |
+| **Open source** | ✅ | ❌ | Partly (CE) | ❌ | ❌ |
+| **Telemetry** | None by default | Varies | Varies | Varies | Varies |
+
+## The one-liners
+
+**vs. TablePlus** — TablePlus is a polished, broad multi-engine client, but
+it's proprietary and its free tier caps open tabs and rows, with several
+features (schema diff, some export paths) behind the paid license. Nembrix is
+free and open source, goes deeper on Postgres specifically, and treats
+**multiple live sessions per saved connection** as a first-class rail rather
+than just more tabs.
+
+**vs. DBeaver** — DBeaver is the Swiss-army knife: it connects to nearly
+everything. That breadth is also its cost — it's a Java/Eclipse app that can
+feel heavy, and the polished bits sit in the paid Pro tier. Nembrix is a
+lightweight native app (Tauri/Rust) that trades universal engine support for a
+faster, more focused Postgres experience.
+
+**vs. DataGrip** — DataGrip is excellent and IDE-grade, with the best SQL
+intelligence in the list — but it's a paid JetBrains subscription and carries
+full-IDE weight. If you live in JetBrains already, DataGrip is a natural fit.
+Nembrix is the answer when you want a fast, standalone, free client rather than
+another IDE window.
+
+**vs. Postico / Sequel Ace** — These are beloved Mac-native clients (Postico
+for Postgres, Sequel Ace for MySQL). Nembrix shares their native feel and
+Postgres focus, but adds **cross-platform** builds (Windows/Linux too), a
+first-class multi-session rail, a heat-mapped `EXPLAIN ANALYZE` viewer, schema
+diff, and copy-between-connections — and it's open source.
+
+## When Nembrix is the wrong tool
+
+Being honest cuts both ways. Reach for something else when:
+
+- **You need engines beyond Postgres.** Nembrix is Postgres-first. For MySQL,
+  SQL Server, Oracle, Mongo, and friends in one window, DBeaver or DataGrip
+  fit better today.
+- **You want deep IDE-grade SQL refactoring / code intelligence.** DataGrip
+  leads here.
+- **You're on a workflow already centered on one of these.** If TablePlus or
+  Postico already does everything you need, there's no need to switch.
+
+## Where Nembrix wins
+
+- **Multi-session rail** — several live sessions per saved connection, drag to
+  reorder, recents one click away. See [Multiple sessions](/sessions/).
+- **Real `EXPLAIN ANALYZE`** — a heat-colored plan tree that surfaces hot
+  branches at a glance. See [Query analysis](/analysis/).
+- **Copy between connections** — move a table or a whole database between two
+  live connections with FK ordering handled for you. See
+  [Copy between connections](/copy-between-connections/).
+- **Free & open source** — no license tiers, no row caps, no telemetry by
+  default.
