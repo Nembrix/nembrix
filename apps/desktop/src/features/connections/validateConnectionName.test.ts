@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateConnectionName } from "./ConnectionForm";
+import { validateConnectionName } from "./validateConnectionName";
 
 // Minimal shape the validator reads — id + name.
 const conn = (id: string, name: string) => ({ id, name });
