@@ -247,3 +247,51 @@ async fn query_error_propagates_into_script() {
         out.logs
     );
 }
+
+#[tokio::test]
+async fn wall_clock_timeout_stops_a_pure_cpu_loop() {
+    // A `while (true) {}` with NO db.query and NO await never trips the
+    // query cap and never yields — only the interrupt-handler timeout can
+    // stop it. Use a short timeout so the test is fast.
+    let db = Arc::new(FakeDb::default());
+    let limits = Limits {
+        timeout: std::time::Duration::from_millis(150),
+        ..Default::default()
+    };
+    let started = std::time::Instant::now();
+    let err = run("while (true) {}", db, limits).await.unwrap_err();
+    // It actually terminated (didn't hang the test), and reports a timeout.
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(5),
+        "script should have been interrupted quickly",
+    );
+    assert!(
+        matches!(err, db_script::ScriptError::Timeout(_)),
+        "expected Timeout, got: {err:?}",
+    );
+}
+
+#[tokio::test]
+async fn cancellation_stops_a_running_script() {
+    // Flip the shared cancel flag shortly after the run starts; the engine's
+    // interrupt handler tears the (otherwise infinite) script down.
+    let db = Arc::new(FakeDb::default());
+    let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let limits = Limits {
+        // Long timeout so the TIMEOUT isn't what stops it — cancellation is.
+        timeout: std::time::Duration::from_secs(60),
+        cancel: cancel.clone(),
+        ..Default::default()
+    };
+    // Spawn a canceller that flips the flag after a beat.
+    let c = cancel.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        c.store(true, Ordering::Relaxed);
+    });
+    let err = run("while (true) {}", db, limits).await.unwrap_err();
+    assert!(
+        matches!(err, db_script::ScriptError::Cancelled),
+        "expected Cancelled, got: {err:?}",
+    );
+}

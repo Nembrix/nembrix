@@ -18,6 +18,10 @@ import net from "node:net";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..", "..");
+// The dev/sidecar scripts live in the desktop workspace, not the repo root
+// (post-monorepo). Spawn them from there so `yarn dev` / `yarn dev:sidecar`
+// resolve — from ROOT they'd fail with "command not found".
+const DESKTOP = join(ROOT, "apps", "desktop");
 
 const VITE_PORT = 1420;
 const SIDECAR_PORT = 1421;
@@ -51,7 +55,7 @@ export async function startStack(opts: StackOpts): Promise<StackHandle> {
     log(`attaching to existing sidecar on :${SIDECAR_PORT}`);
   } else {
     log("starting sidecar…");
-    owned.push(spawnLogged("yarn", ["dev:sidecar"], { cwd: ROOT }, "sidecar"));
+    owned.push(spawnLogged("yarn", ["dev:sidecar"], { cwd: DESKTOP }, "sidecar"));
     await waitForHttp(`http://localhost:${SIDECAR_PORT}/healthz`, 15_000);
     log("sidecar ready");
   }
@@ -67,7 +71,7 @@ export async function startStack(opts: StackOpts): Promise<StackHandle> {
     log(`attaching to existing vite on :${VITE_PORT}`);
   } else {
     log("starting vite…");
-    owned.push(spawnLogged("yarn", ["dev"], { cwd: ROOT }, "vite"));
+    owned.push(spawnLogged("yarn", ["dev"], { cwd: DESKTOP }, "vite"));
     await waitForHttp(`http://localhost:${VITE_PORT}/`, 15_000);
     log("vite ready");
   }

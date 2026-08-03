@@ -48,7 +48,16 @@ export default function QueryTab({ tab }: { tab: Tab }) {
   const isScript = tab.lang === "script";
   // Scripting mode is RDBMS-only. postgres/mysql/sqlite are SQL engines;
   // mongo/redis have their own languages, so we don't offer the toggle there.
-  const conn = useStore.getState().connections.find((c) => c.id === tab.connId);
+  // `tab.connId` is a SESSION id — resolve it to the underlying connection
+  // (session → connectionId → connection). Looking it up directly against
+  // `connections` never matched, so the language toggle silently never
+  // appeared.
+  const conn = (() => {
+    const st = useStore.getState();
+    const session = st.sessions.find((s) => s.id === tab.connId);
+    const connectionId = session?.connectionId ?? tab.connId; // legacy tabs stored a conn id directly
+    return st.connections.find((c) => c.id === connectionId);
+  })();
   const sqlEngines = new Set(["postgres", "mysql", "sqlite"]);
   const scriptingAvailable = sqlEngines.has(conn?.engine ?? "");
 
@@ -164,6 +173,12 @@ export default function QueryTab({ tab }: { tab: Tab }) {
   };
 
   const cancel = async () => {
+    // Script mode has no per-query handle — cancel by connection, which
+    // flips the engine's cancel flag. SQL mode cancels via the query handle.
+    if (isScript) {
+      try { await api.cancelScript(tab.connId); } catch (e) { console.error(e); }
+      return;
+    }
     if (!handleRef.current) return;
     try { await api.cancel(tab.connId, handleRef.current); } catch (e) { console.error(e); }
   };

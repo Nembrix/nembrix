@@ -97,16 +97,16 @@ impl QueryRunner for ScriptRunner {
     async fn query(
         &self,
         sql: &str,
-        _params: Vec<serde_json::Value>,
+        params: Vec<serde_json::Value>,
     ) -> Result<QueryResult, String> {
-        // The relational drivers ignore bound params today (`stream` takes an
-        // empty `Params`), so we don't yet forward `_params`. Wiring real
-        // parameter binding is tracked as its own step; until then a script
-        // that passes params still runs, the params just aren't bound. P5
-        // upgrades this together with driver-side param support.
+        // Bind the script's params positionally ($1, $2, …). We map the JS
+        // JSON values to driver CellValues; the driver .binds() them, so
+        // `db.query("… WHERE id = $1", [id])` is a real parameterized query
+        // (no string interpolation, no injection surface).
+        let bound: db_core::Params = params.into_iter().map(json_to_cell).collect();
         let (tx, mut rx) = tokio::sync::mpsc::channel::<RowBatch>(8);
         self.db
-            .stream(sql, vec![], tx)
+            .stream(sql, bound, tx)
             .await
             .map_err(|e| e.to_string())?;
 
@@ -182,6 +182,28 @@ fn cell_to_json(cell: CellValue) -> serde_json::Value {
     }
 }
 
+/// Map a JS param value (JSON) into a driver [`CellValue`] for binding.
+/// Inverse of [`cell_to_json`] for the shapes a script can pass. Numbers
+/// split int/float; objects/arrays become `Document` (bound as JSONB);
+/// strings stay `Text`. This is what makes `db.query(sql, params)` a real
+/// parameterized query.
+fn json_to_cell(v: serde_json::Value) -> CellValue {
+    use serde_json::Value;
+    match v {
+        Value::Null => CellValue::Null,
+        Value::Bool(b) => CellValue::Bool(b),
+        Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                CellValue::Int(i)
+            } else {
+                CellValue::Float(n.as_f64().unwrap_or(0.0))
+            }
+        }
+        Value::String(s) => CellValue::Text(s),
+        other @ (Value::Array(_) | Value::Object(_)) => CellValue::Document(other),
+    }
+}
+
 fn hex(bytes: &[u8]) -> String {
     let mut s = String::with_capacity(bytes.len() * 2);
     for b in bytes {
@@ -213,12 +235,61 @@ pub async fn run_script(
         })
     };
 
+    // Register a fresh cancel flag for this connection so `cancel_script`
+    // can reach the running engine. Replaces any stale flag (one script per
+    // connection). Removed in the guard below on every exit path.
+    let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    state
+        .script_cancels
+        .write()
+        .await
+        .insert(conn_id, cancel.clone());
+    // Ensure the flag is cleaned up even if the run errors/panics-unwinds.
+    struct CancelGuard {
+        cancels: Arc<
+            tokio::sync::RwLock<
+                std::collections::HashMap<Uuid, Arc<std::sync::atomic::AtomicBool>>,
+            >,
+        >,
+        id: Uuid,
+    }
+    impl Drop for CancelGuard {
+        fn drop(&mut self) {
+            let cancels = self.cancels.clone();
+            let id = self.id;
+            tokio::spawn(async move {
+                cancels.write().await.remove(&id);
+            });
+        }
+    }
+    let _guard = CancelGuard {
+        cancels: state.script_cancels.clone(),
+        id: conn_id,
+    };
+
+    let limits = db_script::Limits {
+        cancel,
+        ..Default::default()
+    };
+
     let started = std::time::Instant::now();
-    let outcome = db_script::run(&source, runner, db_script::Limits::default())
+    let outcome = db_script::run(&source, runner, limits)
         .await
         .map_err(|e| e.to_string())?;
     let _ = state
         .store
         .record_query(conn_id, &source, started.elapsed().as_millis() as u64);
     Ok(outcome)
+}
+
+/// Cancel a running script on `conn_id` by flipping its cancel flag — the
+/// script engine's interrupt handler tears the script down at the next check.
+/// No-op if no script is running on that connection.
+#[tauri::command]
+#[specta::specta]
+pub async fn cancel_script(state: State<'_, AppState>, conn_id: Uuid) -> Result<(), String> {
+    if let Some(flag) = state.script_cancels.read().await.get(&conn_id) {
+        flag.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+    Ok(())
 }

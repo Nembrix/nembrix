@@ -127,9 +127,9 @@ impl DbConnection for PgConn {
         introspect::introspect(&self.pool).await
     }
 
-    async fn execute(&self, query: &str, _params: Params) -> DbResult<ExecSummary> {
+    async fn execute(&self, query: &str, params: Params) -> DbResult<ExecSummary> {
         let started = Instant::now();
-        let res = sqlx::query(query)
+        let res = bind_params(sqlx::query(query), params)
             .execute(&self.pool)
             .await
             .map_err(|e| DbError::Driver(e.to_string()))?;
@@ -140,7 +140,7 @@ impl DbConnection for PgConn {
         })
     }
 
-    async fn stream(&self, query: &str, _params: Params, sink: RowSink) -> DbResult<QueryHandle> {
+    async fn stream(&self, query: &str, params: Params, sink: RowSink) -> DbResult<QueryHandle> {
         let handle = QueryHandle::new();
         let pool = self.pool.clone();
         let query = query.to_string();
@@ -173,7 +173,7 @@ impl DbConnection for PgConn {
                 }
             }
 
-            let mut stream = sqlx::query(&query).fetch(conn.as_mut());
+            let mut stream = bind_params(sqlx::query(&query), params).fetch(conn.as_mut());
             let mut buf: Vec<Vec<CellValue>> = Vec::with_capacity(STREAM_BATCH);
             let mut columns: Option<Vec<ColMeta>> = None;
             let mut emitted_first = false;
@@ -243,6 +243,28 @@ impl DbConnection for PgConn {
     fn as_any(&self) -> &dyn Any {
         self
     }
+}
+
+/// Bind driver [`Params`] positionally onto a sqlx query ($1, $2, …). Each
+/// [`CellValue`] maps to the natural Postgres type; `Document` binds as JSONB.
+/// `Raw` (lossless numeric/other text) binds as text — Postgres coerces it to
+/// the target column type, which is the safest general choice.
+fn bind_params<'q>(
+    mut q: sqlx::query::Query<'q, Postgres, sqlx::postgres::PgArguments>,
+    params: Params,
+) -> sqlx::query::Query<'q, Postgres, sqlx::postgres::PgArguments> {
+    for p in params {
+        q = match p {
+            CellValue::Null => q.bind(None::<String>),
+            CellValue::Bool(b) => q.bind(b),
+            CellValue::Int(i) => q.bind(i),
+            CellValue::Float(f) => q.bind(f),
+            CellValue::Text(s) | CellValue::Raw(s) => q.bind(s),
+            CellValue::Document(v) => q.bind(sqlx::types::Json(v)),
+            CellValue::Bytes(b) => q.bind(b),
+        };
+    }
+    q
 }
 
 fn extract_columns(row: &PgRow) -> Vec<ColMeta> {
