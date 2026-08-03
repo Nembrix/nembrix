@@ -44,10 +44,10 @@
     "cookie": "2.0.1"
   },
   "devDependencies": {
-    "@commitlint/cli": "^21.1.0",
+    "@commitlint/cli": "^21.2.1",
     "@commitlint/config-conventional": "^21.1.0",
     "husky": "^9.1.7",
-    "tsx": "^4.22.4",
-    "turbo": "^2.9.18"
+    "tsx": "^4.23.1",
+    "turbo": "^2.10.8"
   }
 }
