@@ -22,8 +22,15 @@ You can also run the web build for fast iteration.
     → **Open**.
   </TabItem>
   <TabItem label="Windows">
-    Download the `.msi` installer from
+    Download the `.msi` installer (or the `.exe` setup) from
     [Releases](https://github.com/oesukam/nembrix/releases) and run it.
+
+    Windows builds are **not code-signed yet**, so on first run
+    Microsoft Defender SmartScreen shows a blue **"Windows protected
+    your PC"** dialog. This is expected — click **More info → Run
+    anyway** to install. (Signing is on the roadmap; until then the
+    installer is unsigned but the download itself is the one built by
+    our CI.)
   </TabItem>
   <TabItem label="Linux">
     `.AppImage` and `.deb` builds are on the
