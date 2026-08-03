@@ -13,11 +13,16 @@ name: Pre-release (nightly)
 on:
   push:
     branches: [main]
-    # Skip pushes that only touch things that can't change the build/notes
-    # in a way worth re-cutting nightly for. Tweak as needed.
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
+    # Only auto-build nightly when the actual APP changes — an allow-list
+    # of what the desktop build depends on. A docs/brand/CI/README-only
+    # push no longer burns a (macOS-heavy) nightly build. To force a build
+    # for something outside this list, use the manual workflow_dispatch
+    # below. Keep in sync with what the build genuinely consumes.
+    paths:
+      - "apps/desktop/**"      # the app: frontend + src-tauri + crates
+      - "package.json"         # root workspace deps / scripts
+      - "yarn.lock"            # dependency lockfile
+      - ".github/workflows/prerelease.yml"  # the build pipeline itself
   # Manual trigger — rebuild the rolling nightly from the current tip of
   # main on demand. Use this when a `chore:`-titled squash merge skipped
   # the automatic build (the gate below force-runs for manual dispatch),
