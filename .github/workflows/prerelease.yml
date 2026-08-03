@@ -221,6 +221,15 @@ jobs:
             rust_targets: x86_64-unknown-linux-gnu
             args: ""
     runs-on: ${{ matrix.os }}
+    # Bind to the same GitHub Environment the manual Release workflow uses
+    # (release.yml). The Apple codesigning + notarization secrets live in
+    # this environment, NOT at repo scope — without this line nightly's
+    # macOS build can't see APPLE_CERTIFICATE, so tauri-action calls
+    # `security import` on an empty cert and the bundle step fails with
+    # "SecKeychainItemImport: One or more parameters ... were not valid".
+    # The environment has no required-reviewer gate, so nightly still runs
+    # unattended on every push.
+    environment: release
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
