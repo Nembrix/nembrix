@@ -54,9 +54,18 @@ export async function seedConnectedSession(
     { connId, name, database, sessionId },
   );
   await page.reload();
-  await page.locator(".rail-avatar").first().click();
+  // `reload()` resolves on the load event — BEFORE React mounts and renders
+  // the rail. Clicking `.rail-avatar` immediately races the mount and
+  // intermittently times out ("element not found"), which then cascades
+  // into "the grid never rendered" failures downstream. Wait for the
+  // avatar to actually be present first. (seedEmpty has the same guard.)
+  const avatar = page.locator(".rail-avatar").first();
+  await expect(avatar).toBeVisible();
+  await avatar.click();
   if (connect) {
-    await page.locator("[data-testid='connect-btn']").click();
+    const connectBtn = page.locator("[data-testid='connect-btn']");
+    await expect(connectBtn).toBeVisible();
+    await connectBtn.click();
   }
 }
 
