@@ -1,10 +1,11 @@
 /**
  * Generate the app icon SOURCE PNG from the Nembrix brand mark.
  *
- * Composites `brand/nembrix-mark.svg` (the steel-blue "expansion hex")
- * centered, with padding, onto a dark-slate rounded-square plate — the
- * shape macOS/Windows expect for an app icon — and writes a 1024×1024
- * PNG to `src-tauri/icons/source.png`.
+ * `brand/nembrix-mark.svg` is a transparent outline mark (the database
+ * puck), so we composite it centered onto a rounded-square plate — the
+ * shape macOS/Windows expect for an app icon — and write a 1024×1024 PNG
+ * to `src-tauri/icons/source.png`. The mark fills most of the plate
+ * (little padding) so it reads at small sizes.
  *
  * From there, `yarn tauri icon src-tauri/icons/source.png` produces every
  * variant the bundlers need (.icns, .ico, the PNG size series, the
@@ -24,27 +25,28 @@ const MARK_SVG = join(REPO_ROOT, "brand", "nembrix-mark.svg");
 const OUT = join(__dirname, "..", "src-tauri", "icons", "source.png");
 
 const SIZE = 1024;
-// Corner radius ~18% of the canvas — matches the macOS "squircle"-ish
-// rounding the previous placeholder used (180/1024).
+// Corner radius ~18% of the canvas — the macOS "squircle"-ish rounding.
 const RADIUS = 180;
-// Leave the mark at ~62% of the canvas so it breathes inside the plate
-// rather than bleeding to the corners.
-const MARK_FRAC = 0.62;
+// Fill most of the plate — minimal padding so the mark isn't lost in
+// empty space. ~0.8 leaves just a small margin off the plate edges.
+const MARK_FRAC = 0.8;
 
+// Light silver plate so the dark mark reads (matches the app's neutral
+// surfaces rather than a heavy black tile).
 const plate = `
 <svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#1e293b"/>
-      <stop offset="100%" stop-color="#0f172a"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0%" stop-color="#eef1f5"/>
+      <stop offset="55%" stop-color="#dfe4ea"/>
+      <stop offset="100%" stop-color="#cdd4dd"/>
     </linearGradient>
   </defs>
   <rect width="${SIZE}" height="${SIZE}" rx="${RADIUS}" fill="url(#bg)"/>
 </svg>
 `;
 
-// Render the brand mark to a transparent square at the target size,
-// preserving its aspect ratio (the source viewBox is 847×898).
+// Render the brand mark to a transparent square, preserving aspect ratio.
 const markPx = Math.round(SIZE * MARK_FRAC);
 const mark = await sharp(readFileSync(MARK_SVG))
   .resize(markPx, markPx, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
