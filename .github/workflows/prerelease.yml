@@ -195,11 +195,11 @@ jobs:
 
   # ─────────────────────────────────────────────────────────────────
   # Build nightly binaries and attach them to the rolling `nightly`
-  # release. Unlike the full Release workflow (8 targets), nightly ships
-  # only the three formats a tester actually installs: macOS universal
-  # .dmg, Windows x64 .msi/.exe, and Linux x86_64 .AppImage/.deb. Keep
-  # this matrix in sync with release.yml's build job when the toolchain
-  # or signing setup changes — the two are intentionally parallel.
+  # release. nightly ships the formats a tester actually installs: macOS
+  # as two separate .dmg builds (Apple Silicon + Intel), Windows x64
+  # .msi/.exe, and Linux x86_64 .AppImage/.deb/.rpm. Keep this matrix in
+  # sync with release.yml's build job when the toolchain or signing setup
+  # changes — the two are intentionally parallel.
   #
   # Runs after `nightly` (which creates/refreshes the release these
   # assets attach to). Because `nightly` is a single rolling release,
@@ -213,11 +213,16 @@ jobs:
       fail-fast: false  # One platform failing shouldn't kill the others.
       matrix:
         include:
-          - label: macOS (universal)
-            slug: macos-universal
+          - label: macOS (Apple Silicon)
+            slug: macos-aarch64
             os: macos-14
-            rust_targets: "x86_64-apple-darwin,aarch64-apple-darwin"
-            args: --target universal-apple-darwin
+            rust_targets: aarch64-apple-darwin
+            args: --target aarch64-apple-darwin
+          - label: macOS (Intel)
+            slug: macos-x86_64
+            os: macos-14
+            rust_targets: x86_64-apple-darwin
+            args: --target x86_64-apple-darwin
           - label: Windows x64
             slug: windows-x86_64
             os: windows-latest
@@ -308,10 +313,15 @@ jobs:
             // Platform → filename fragments its artifacts contain. Only
             // delete assets matching this matrix leg so parallel legs
             // don't race deleting each other's uploads.
+            // Arch-specific for macOS: the Silicon and Intel legs run in
+            // parallel and their dmg/tar.gz names differ by arch, so each
+            // must delete ONLY its own arch's stale assets or they'd race
+            // deleting each other's uploads.
             const patterns = {
-              'macos-universal': [/\.dmg$/i, /\.app\.tar\.gz$/i],
-              'windows-x86_64':  [/\.msi$/i, /-setup\.exe$/i, /\.exe$/i],
-              'linux-x86_64':    [/\.AppImage$/i, /\.deb$/i, /\.rpm$/i],
+              'macos-aarch64':  [/aarch64\.dmg$/i, /aarch64\.app\.tar\.gz$/i],
+              'macos-x86_64':   [/x64\.dmg$/i, /x64\.app\.tar\.gz$/i],
+              'windows-x86_64': [/\.msi$/i, /-setup\.exe$/i, /\.exe$/i],
+              'linux-x86_64':   [/\.AppImage$/i, /\.deb$/i, /\.rpm$/i],
             }[SLUG] || [];
             const assets = await github.rest.repos.listReleaseAssets({
               owner, repo, release_id: Number(RELEASE_ID), per_page: 100,
@@ -346,3 +356,82 @@ jobs:
           args: ${{ matrix.args }}
           projectPath: apps/desktop
           includeUpdaterJson: true
+
+  # ─────────────────────────────────────────────────────────────────
+  # After every platform has uploaded, rewrite the release body to lead
+  # with a per-OS "Downloads" table linking each installer directly, so
+  # a visitor picks their OS instead of scanning ~14 raw asset filenames
+  # (dmg/msi/exe/AppImage/deb/rpm plus .sig sidecars and latest.json).
+  # Runs after `build` because the assets must exist before we can link
+  # them. `if: always()` so a single failed platform still refreshes the
+  # table for the platforms that did upload.
+  # ─────────────────────────────────────────────────────────────────
+  downloads:
+    name: Refresh per-OS download table
+    needs: [nightly, build]
+    if: always() && needs.nightly.outputs.release_id != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          RELEASE_ID: ${{ needs.nightly.outputs.release_id }}
+          TAG: ${{ env.NIGHTLY_TAG }}
+        with:
+          script: |
+            const { RELEASE_ID, TAG } = process.env;
+            const { owner, repo } = context.repo;
+
+            const rel = await github.rest.repos.getRelease({
+              owner, repo, release_id: Number(RELEASE_ID),
+            });
+            const assets = (await github.rest.repos.listReleaseAssets({
+              owner, repo, release_id: Number(RELEASE_ID), per_page: 100,
+            })).data;
+
+            // Direct, tag-stable download URL for an asset by name.
+            const url = (name) =>
+              `https://github.com/${owner}/${repo}/releases/download/${TAG}/${encodeURIComponent(name)}`;
+            // First asset whose name matches — skip signatures/manifests.
+            const find = (re) => {
+              const a = assets.find(
+                (x) => re.test(x.name) && !/\.sig$/i.test(x.name) && x.name !== "latest.json",
+              );
+              return a ? a.name : null;
+            };
+
+            // One row per OS/build → the installer a user actually wants,
+            // with a human-facing label (people don't know "MSI" vs
+            // "setup.exe", or which .dmg fits their chip). macOS ships two
+            // separate builds: Apple Silicon and Intel.
+            const rows = [
+              ["🍎 macOS", "Apple Silicon", /aarch64\.dmg$/i],
+              ["🍎 macOS", "Intel",         /x64\.dmg$/i],
+              ["🪟 Windows", "Installer (.exe)",      /_x64-setup\.exe$/i],
+              ["🪟 Windows", "MSI package",           /\.msi$/i],
+              ["🐧 Linux",   "AppImage (portable)",   /\.AppImage$/i],
+              ["🐧 Linux",   "Debian (.deb)", /\.deb$/i],
+              ["🐧 Linux",   "Fedora (.rpm)", /\.rpm$/i],
+            ];
+
+            const lines = ["## Downloads", "", "| OS | Build | File |", "| --- | --- | --- |"];
+            let any = false;
+            for (const [os, desc, re] of rows) {
+              const name = find(re);
+              if (!name) continue;
+              any = true;
+              lines.push(`| ${os} | ${desc} | [\`${name}\`](${url(name)}) |`);
+            }
+            const table = any
+              ? lines.join("\n")
+              : "## Downloads\n\n_Builds are still uploading — refresh shortly._";
+
+            // Strip any previous Downloads block, then prepend the fresh
+            // one above the existing changelog/preamble so it stays idempotent.
+            const prevBody = rel.data.body || "";
+            const withoutOld = prevBody.replace(/## Downloads[\s\S]*?(?=\n## |\n> |$)/, "").trim();
+            const body = `${table}\n\n${withoutOld}`.trim();
+
+            await github.rest.repos.updateRelease({
+              owner, repo, release_id: Number(RELEASE_ID), body,
+            });
+            core.info("Refreshed per-OS download table.");

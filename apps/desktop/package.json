@@ -9,6 +9,7 @@
     "dev:all": "concurrently -n vite,sidecar -c blue,magenta \"npm:dev\" \"npm:dev:sidecar\"",
     "build": "tsc -b && vite build",
     "build:prod": "[ -f .env.signing ] && . ./.env.signing; yarn tsc -b --noEmit && yarn test:unit && yarn build && { yarn tauri build || true; } && yarn staple && yarn print-bundles",
+    "build:local": "[ -f .env.signing ] && . ./.env.signing; yarn build && yarn tauri build",
     "staple": "tsx scripts/staple.ts",
     "print-bundles": "tsx scripts/print-bundles.ts",
     "release:local": "tsx scripts/release-local.ts",
