@@ -11,6 +11,8 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { execSync } from "node:child_process";
+import { semverCmp } from "./semver-cmp";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // Script lives at apps/desktop/scripts/; the desktop app's manifests
@@ -41,6 +43,37 @@ if (tauriBefore !== cargoBefore) {
   console.error(
     `Versions are out of sync — tauri.conf.json: ${tauriBefore}, Cargo.toml: ${cargoBefore}. ` +
     `Fix the mismatch manually before bumping.`,
+  );
+  process.exit(1);
+}
+
+// Enforce a strictly INCREMENTAL bump against the last RELEASED version.
+// The baseline is the highest existing `vX.Y.Z` git tag — NOT the on-disk
+// version — so the very first release (no v* tags yet) can ship the
+// current 0.1.0 as-is, while every subsequent release must go strictly up.
+// The nightly rolling tag is ignored (it isn't a released version).
+function lastReleasedVersion(): string | null {
+  let raw: string;
+  try {
+    raw = execSync("git tag --list 'v[0-9]*'", { encoding: "utf8" });
+  } catch {
+    return null; // not a git repo / no git — skip the tag-based guard
+  }
+  const tags = raw.split("\n").map((t) => t.trim()).filter(Boolean);
+  const versions = tags
+    .map((t) => t.replace(/^v/, ""))
+    .filter((v) => /^\d+\.\d+\.\d+(-[\w.]+)?$/.test(v));
+  if (versions.length === 0) return null;
+  return versions.sort(semverCmp).at(-1) ?? null;
+}
+
+const baseline = lastReleasedVersion();
+if (baseline === null) {
+  console.log(`no prior release tag — allowing initial version ${next}.`);
+} else if (semverCmp(next, baseline) <= 0) {
+  console.error(
+    `Refusing to bump: ${next} is not greater than the last released v${baseline}. ` +
+    `The version must strictly increase.`,
   );
   process.exit(1);
 }

@@ -6,21 +6,30 @@ version, commit, then click "Run workflow".
 
 ## Quick procedure
 
-1. **Bump the version** locally — both files in lockstep:
-   ```sh
-   yarn bump-version 0.2.0
-   git add src-tauri/tauri.conf.json src-tauri/Cargo.toml
-   git commit -m "Release v0.2.0"
-   git push
-   ```
-   The bump script refuses to run if the two files disagree before
-   the bump.
+Bumping is now **done by the Release workflow** — you no longer have to
+run `yarn bump-version` locally first.
 
-2. **Go to Actions → Release → Run workflow**. Inputs:
-   - `version` — leave blank to read from `tauri.conf.json`.
+1. **Go to Actions → Release → Run workflow**. Inputs:
+   - `version` — the new version (no leading `v`). When set, the workflow
+     bumps `tauri.conf.json` + `Cargo.toml` to it and commits
+     `chore(release): vX.Y.Z` back to `main` before building. Leave blank
+     to release the **current** on-disk version unchanged.
    - `publish` — `false` (default) ships as a **draft** you can review
      and edit. `true` publishes immediately.
    - `prerelease` — flags the release as a pre-release.
+
+   **The version must be incremental.** The workflow refuses to release a
+   tag that already exists, and `bump-version` refuses any version that
+   isn't strictly greater than the last released `v*` tag. The **first**
+   release (no `v*` tags yet) may ship the current version as-is.
+
+> **Bumping locally instead (optional).** You can still bump by hand:
+> ```sh
+> yarn bump-version 0.2.0        # enforces incremental + lockstep
+> git commit -am "chore(release): v0.2.0" && git push
+> ```
+> then run the workflow with a blank `version`. The script refuses to run
+> if the two manifests disagree, or if the version isn't incremental.
 
 3. **Wait ~15 minutes.** macOS universal is the slowest leg; the
    matrix is `fail-fast: false`, so a single-platform regression

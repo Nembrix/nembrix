@@ -73,6 +73,46 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION"    >> "$GITHUB_OUTPUT"
 
+      # Refuse to (re)release a tag that already exists. `bump-version` also
+      # guards against non-incremental versions, but this is a fast, explicit
+      # gate that also covers the "no version input, current already tagged"
+      # case (someone re-running Release without bumping).
+      - name: Guard against re-releasing an existing tag
+        shell: bash
+        run: |
+          TAG="${{ steps.resolve.outputs.tag }}"
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "::error::Tag $TAG already exists — releases must be incremental. Bump the version first."
+            exit 1
+          fi
+          echo "$TAG is new — ok to release."
+
+      # When a version was entered in the Run-workflow form, bump the app
+      # manifests (tauri.conf.json + Cargo.toml) to it and commit back to
+      # main, so the shipped app + source record the released version
+      # without a separate manual `yarn bump-version` step. `bump-version`
+      # enforces a strictly-incremental bump against the last v* tag (the
+      # first release, with no tags yet, keeps the current version). When
+      # the input is blank we release the current on-disk version unchanged.
+      - name: Bump version (when provided) and commit
+        if: ${{ github.event.inputs.version != '' }}
+        shell: bash
+        run: |
+          set -e
+          CURRENT=$(jq -r .version apps/desktop/src-tauri/tauri.conf.json)
+          TARGET="${{ github.event.inputs.version }}"
+          if [[ "$CURRENT" == "$TARGET" ]]; then
+            echo "On-disk version already $TARGET — nothing to bump."
+            exit 0
+          fi
+          corepack enable || true
+          yarn --cwd apps/desktop bump-version "$TARGET"
+          git config user.name  "Nembrix release bot"
+          git config user.email "release-bot@users.noreply.github.com"
+          git add apps/desktop/src-tauri/tauri.conf.json apps/desktop/src-tauri/Cargo.toml
+          git commit -m "chore(release): v$TARGET"
+          git push origin HEAD:main
+
       # Build the changelog body from Conventional Commits. cliff.toml filters
       # out ci/test/chore/style/build (and *(ci)/*(test)/… scopes), so the
       # notes only carry user-facing changes. `--unreleased --tag` renders the
