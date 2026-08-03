@@ -37,6 +37,7 @@ export default defineConfig({
           label: "Get started",
           items: [
             { label: "What it is", link: "/" },
+            { label: "How it compares", link: "/comparison/" },
             { label: "Install", link: "/install/" },
             { label: "Your first connection", link: "/getting-started/" },
           ],
