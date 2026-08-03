@@ -164,6 +164,12 @@ export default function QueryTab({ tab }: { tab: Tab }) {
   };
 
   const cancel = async () => {
+    // Script mode has no per-query handle — cancel by connection, which
+    // flips the engine's cancel flag. SQL mode cancels via the query handle.
+    if (isScript) {
+      try { await api.cancelScript(tab.connId); } catch (e) { console.error(e); }
+      return;
+    }
     if (!handleRef.current) return;
     try { await api.cancel(tab.connId, handleRef.current); } catch (e) { console.error(e); }
   };

@@ -655,6 +655,8 @@ export const cancel = (connId: string, handle: QueryHandle) =>
  *  SQL connections — the backend rejects non-SQL drivers. */
 export const runScript = (connId: string, source: string) =>
   invoke<ScriptOutcome>("run_script", { connId: resolveConnId(connId), source });
+export const cancelScript = (connId: string) =>
+  invoke<void>("cancel_script", { connId: resolveConnId(connId) });
 
 export const formatSql = (sql: string) =>
   invoke<string>("format_sql", { sql, cfg: null });

@@ -64,18 +64,21 @@ pub enum ScriptError {
     /// A `db.query` call failed inside the script. Carries the driver message.
     #[error("query failed: {0}")]
     Query(String),
-    /// The script exceeded a configured guard (row cap, etc.). Timeouts are
-    /// enforced by the caller via [`run`]'s cancellation, not here.
+    /// The script exceeded a configured guard (row cap, query cap).
     #[error("script exceeded limit: {0}")]
     Limit(String),
+    /// The script ran longer than the configured wall-clock timeout.
+    #[error("script timed out after {0:?}")]
+    Timeout(std::time::Duration),
+    /// The script was cancelled by the user.
+    #[error("script cancelled")]
+    Cancelled,
     #[error("engine error: {0}")]
     Engine(String),
 }
 
-/// Guards applied to a single script run. Kept small in P1; P5 adds a
-/// wall-clock timeout (enforced by the caller wrapping [`run`] in a
-/// `tokio::time::timeout`) and memory limits.
-#[derive(Debug, Clone)]
+/// Guards applied to a single script run.
+#[derive(Clone)]
 pub struct Limits {
     /// Hard cap on total rows summed across every `db.query` the script runs.
     /// Prevents a loop of unbounded selects from exhausting memory.
@@ -83,6 +86,16 @@ pub struct Limits {
     /// Hard cap on `db.query` calls, so an accidental infinite loop that only
     /// queries (never allocates unboundedly) still terminates.
     pub max_queries: u32,
+    /// Wall-clock timeout for the whole run. Enforced by an rquickjs interrupt
+    /// handler that fires an uncatchable exception once elapsed — this is what
+    /// stops a pure `while (true) {}` that never awaits (a `tokio` timeout on
+    /// the caller can't, since the engine thread would spin forever).
+    pub timeout: std::time::Duration,
+    /// Cooperative cancellation flag. When flipped to `true` (by the Tauri
+    /// `cancel_script` command), the same interrupt handler tears the script
+    /// down at the next check. Shared so the engine thread and the command
+    /// handler point at one bool.
+    pub cancel: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Default for Limits {
@@ -90,6 +103,8 @@ impl Default for Limits {
         Self {
             max_total_rows: 1_000_000,
             max_queries: 100_000,
+            timeout: std::time::Duration::from_secs(30),
+            cancel: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
 }

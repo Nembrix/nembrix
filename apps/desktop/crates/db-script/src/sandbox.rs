@@ -33,6 +33,14 @@ struct Bridge {
     limits: Limits,
 }
 
+/// Why the interrupt handler tore the script down — used to turn the
+/// generic "interrupted" JS exception into a precise ScriptError.
+#[derive(Clone, Copy)]
+enum StopReason {
+    Timeout,
+    Cancelled,
+}
+
 pub(crate) async fn execute(
     source: &str,
     runner: Arc<dyn QueryRunner>,
@@ -48,6 +56,31 @@ pub(crate) async fn execute(
     });
 
     let rt = AsyncRuntime::new().map_err(engine)?;
+
+    // Wall-clock timeout + cooperative cancellation, both enforced through
+    // rquickjs's interrupt handler: it's called regularly while JS executes,
+    // and returning `true` raises an uncatchable exception that unwinds the
+    // engine. This is the ONLY thing that stops a pure `while (true) {}` — a
+    // tokio timeout on the caller can't, because the engine thread never
+    // yields. We record WHY it fired (deadline vs cancel) in a shared cell so
+    // the generic "interrupted" JS error can be reclassified below.
+    let deadline = std::time::Instant::now() + bridge.limits.timeout;
+    let cancel = bridge.limits.cancel.clone();
+    let stop_reason: Arc<Mutex<Option<StopReason>>> = Arc::new(Mutex::new(None));
+    let sr = stop_reason.clone();
+    rt.set_interrupt_handler(Some(Box::new(move || {
+        if cancel.load(Ordering::Relaxed) {
+            *sr.lock().unwrap() = Some(StopReason::Cancelled);
+            return true;
+        }
+        if std::time::Instant::now() >= deadline {
+            *sr.lock().unwrap() = Some(StopReason::Timeout);
+            return true;
+        }
+        false
+    })))
+    .await;
+
     let ctx = AsyncContext::full(&rt).await.map_err(engine)?;
 
     // Wrap the user's source in an async IIFE so top-level `return` works and
@@ -56,6 +89,8 @@ pub(crate) async fn execute(
     let wrapped = format!("globalThis.__nembrix_result = (async () => {{\n{source}\n}})();");
 
     let b_install = bridge.clone();
+    let sr_eval = stop_reason.clone();
+    let to_eval = bridge.limits.timeout;
     let run_result: Result<(), ScriptError> = ctx
         .async_with(async move |ctx| {
             install_console(&ctx, b_install.clone())?;
@@ -65,7 +100,7 @@ pub(crate) async fn execute(
             // on the first `await db.query(...)`.
             ctx.eval::<(), _>(wrapped.as_bytes())
                 .catch(&ctx)
-                .map_err(|e| ScriptError::Js(e.to_string()))?;
+                .map_err(|e| classify(&sr_eval, to_eval, e.to_string()))?;
             Ok(())
         })
         .await;
@@ -76,6 +111,8 @@ pub(crate) async fn execute(
     rt.idle().await;
 
     // Read back the resolved value of the IIFE promise.
+    let sr_await = stop_reason.clone();
+    let to_await = bridge.limits.timeout;
     let returned: Option<QueryResult> = ctx
         .async_with(async move |ctx| {
             let promise: rquickjs::Value = ctx
@@ -88,7 +125,7 @@ pub(crate) async fn execute(
                     .into_future::<rquickjs::Value>()
                     .await
                     .catch(&ctx)
-                    .map_err(|e| ScriptError::Js(e.to_string()))?,
+                    .map_err(|e| classify(&sr_await, to_await, e.to_string()))?,
                 None => return Ok::<_, ScriptError>(None),
             };
             // A `db.query` result is a `{ columns, rows }` object; anything else
@@ -336,4 +373,21 @@ fn leak_msg(s: String) -> &'static str {
 
 fn engine<E: std::fmt::Display>(e: E) -> ScriptError {
     ScriptError::Engine(e.to_string())
+}
+
+/// Turn a JS-side error into the right ScriptError. When the interrupt
+/// handler fired (timeout or cancel), QuickJS surfaces a generic
+/// "interrupted" exception — we reclassify it using the reason the handler
+/// recorded so the user sees "timed out" / "cancelled" instead of a cryptic
+/// JS error. Any other JS error passes through as ScriptError::Js.
+fn classify(
+    stop_reason: &Arc<Mutex<Option<StopReason>>>,
+    timeout: std::time::Duration,
+    msg: String,
+) -> ScriptError {
+    match *stop_reason.lock().unwrap() {
+        Some(StopReason::Timeout) => ScriptError::Timeout(timeout),
+        Some(StopReason::Cancelled) => ScriptError::Cancelled,
+        None => ScriptError::Js(msg),
+    }
 }
