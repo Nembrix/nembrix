@@ -60,6 +60,7 @@ export default defineConfig({
             { label: "Editing cells", link: "/editing-data/" },
             { label: "Filters", link: "/filters/" },
             { label: "SQL editor", link: "/editor/" },
+            { label: "JavaScript scripting", link: "/scripting/" },
             { label: "Query analysis", link: "/analysis/" },
           ],
         },
