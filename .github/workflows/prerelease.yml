@@ -41,14 +41,17 @@ env:
 
 jobs:
   # ─────────────────────────────────────────────────────────────────
-  # Gate: skip the whole nightly refresh for no-op commits. `paths-ignore`
-  # above already drops docs/markdown-only pushes; this additionally skips
-  # commits whose subject is a `chore` (chore: / chore(scope):) — routine
-  # housekeeping that doesn't warrant re-cutting nightly or rebuilding
-  # binaries. Every other commit type (feat/fix/perf/refactor/…) builds.
-  # A manual run (workflow_dispatch) always builds, regardless of the head
-  # commit subject — that's the escape hatch for a chore-titled squash
-  # merge that skipped the automatic build.
+  # Gate: only re-cut nightly for commits that would move the version
+  # under semver convention. `paths-ignore` above already drops
+  # docs/markdown-only pushes; this narrows further to the Conventional-
+  # Commit types that imply a release:
+  #   feat  → minor      fix / perf → patch      *! (breaking) → major
+  # Everything else (chore/docs/ci/test/refactor/style/build/revert) is
+  # housekeeping that doesn't warrant a new build, so nightly is skipped.
+  # A breaking-change marker (`!`) on ANY type still builds — a breaking
+  # refactor is a release even though `refactor` normally isn't.
+  # A manual run (workflow_dispatch) always builds regardless of subject —
+  # the escape hatch to force a build after a skipped merge.
   # ─────────────────────────────────────────────────────────────────
   gate:
     name: Decide whether to run
@@ -71,13 +74,18 @@ jobs:
           fi
           SUBJECT=$(git log -1 --pretty=%s)
           echo "Head commit: $SUBJECT"
-          # Match Conventional-Commit chore subjects, with or without a
-          # scope and with or without a `!` breaking-change marker.
-          if [[ "$SUBJECT" =~ ^chore(\(.+\))?!?: ]]; then
-            echo "chore commit — skipping nightly."
-            echo "run=false" >> "$GITHUB_OUTPUT"
-          else
+          # Allow-list the release-implying Conventional-Commit types.
+          # A `!` breaking marker on any type (e.g. refactor!: …) also
+          # builds, since that's a major release. Optional (scope) allowed.
+          if [[ "$SUBJECT" =~ ^(feat|fix|perf)(\(.+\))?!?: ]]; then
+            echo "version-bumping commit (feat/fix/perf) — building nightly."
             echo "run=true" >> "$GITHUB_OUTPUT"
+          elif [[ "$SUBJECT" =~ ^[a-z]+(\(.+\))?!: ]]; then
+            echo "breaking change (!) — building nightly."
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "non-release commit — skipping nightly."
+            echo "run=false" >> "$GITHUB_OUTPUT"
           fi
 
   nightly:
