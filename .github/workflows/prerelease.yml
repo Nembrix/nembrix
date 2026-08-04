@@ -1,32 +1,26 @@
 name: Pre-release (nightly)
 
-# On every merge to main, refresh a single rolling "nightly" pre-release
-# that points at the latest main and whose notes are regenerated from the
-# PRs/commits merged since the last stable release. No binaries are built
-# here — that stays on the manual Release workflow (release.yml). This is
-# notes + metadata only, so it's cheap enough to run on every push.
-#
-# The result: a always-current `nightly` pre-release on the Releases page
-# reflecting what's on main right now, with a changelog driven by the
-# (validated) PR titles.
+# Refresh a single rolling "nightly" pre-release + build signed installers
+# for it. Auto-runs AFTER the CI workflow succeeds on main (so a nightly is
+# never cut from a red commit), further gated to version-bumping commits
+# (feat/fix/perf/breaking) and the NIGHTLY_AUTO kill-switch. Manual
+# workflow_dispatch always force-runs. The result is an always-current
+# `nightly` pre-release reflecting the latest green main.
 
 on:
-  push:
+  # Auto-build only AFTER CI passes on main — so we never cut a nightly from
+  # a red commit, and pushes that fail CI burn zero (macOS-heavy) nightly
+  # minutes. The gate below still applies the semver-commit filter + the
+  # NIGHTLY_AUTO kill-switch on top of this. (workflow_run can't filter by
+  # changed paths, so the old paths allow-list is dropped; the CI-success +
+  # semver-commit gates are the trigger discipline now.)
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
     branches: [main]
-    # Only auto-build nightly when the actual APP changes — an allow-list
-    # of what the desktop build depends on. A docs/brand/CI/README-only
-    # push no longer burns a (macOS-heavy) nightly build. To force a build
-    # for something outside this list, use the manual workflow_dispatch
-    # below. Keep in sync with what the build genuinely consumes.
-    paths:
-      - "apps/desktop/**"      # the app: frontend + src-tauri + crates
-      - "package.json"         # root workspace deps / scripts
-      - "yarn.lock"            # dependency lockfile
-      - ".github/workflows/prerelease.yml"  # the build pipeline itself
   # Manual trigger — rebuild the rolling nightly from the current tip of
-  # main on demand. Use this when a `chore:`-titled squash merge skipped
-  # the automatic build (the gate below force-runs for manual dispatch),
-  # or to re-cut nightly covering everything since the last release.
+  # main on demand. Always forces a build (bypasses the gate + kill-switch),
+  # e.g. after a chore-titled merge that skipped the automatic build.
   workflow_dispatch:
 
 # Don't let two merges in quick succession race on the same rolling tag.
@@ -70,13 +64,39 @@ jobs:
         shell: bash
         env:
           EVENT: ${{ github.event_name }}
+          # The triggering CI run's conclusion (only set for workflow_run).
+          CI_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          # Kill-switch for the AUTOMATIC nightly. Set the repo variable
+          # NIGHTLY_AUTO to false/off/0 to pause auto-builds (e.g. to save
+          # macOS minutes); manual workflow_dispatch always still runs.
+          # Unset/anything-else = enabled (default).
+          #   Pause:  gh variable set NIGHTLY_AUTO --body false
+          #   Resume: gh variable set NIGHTLY_AUTO --body true   (or delete it)
+          NIGHTLY_AUTO: ${{ vars.NIGHTLY_AUTO }}
         run: |
           # A hand-triggered run always builds — the operator asked for it.
+          # Checked FIRST, so neither the CI-success gate nor the kill-switch
+          # below can block a manual dispatch.
           if [[ "$EVENT" == "workflow_dispatch" ]]; then
             echo "manual dispatch — forcing run."
             echo "run=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          # Auto-trigger fires on CI *completion*; only proceed when CI
+          # actually SUCCEEDED — never cut a nightly from a red commit.
+          if [[ "$CI_CONCLUSION" != "success" ]]; then
+            echo "CI on main concluded '${CI_CONCLUSION}' (not success) — skipping nightly."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Kill-switch: pause automatic nightlies without editing the workflow.
+          case "${NIGHTLY_AUTO,,}" in
+            false|off|0|no|disabled)
+              echo "NIGHTLY_AUTO=${NIGHTLY_AUTO} — automatic nightly is paused; skipping."
+              echo "run=false" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+          esac
           SUBJECT=$(git log -1 --pretty=%s)
           echo "Head commit: $SUBJECT"
           # Allow-list the release-implying Conventional-Commit types.
