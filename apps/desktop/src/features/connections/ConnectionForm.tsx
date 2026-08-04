@@ -243,27 +243,14 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
       setWorking(null);
       return;
     }
-    // Open the live session. If this fails despite the passing test (a
-    // transient issue, or a wasn't-a-new-connection edge), roll the save back
-    // for a brand-new connection so we don't leave a dead entry in the rail.
+    // Connect BEFORE creating any session, so a failed connect leaves
+    // nothing behind in the rail. Only once the driver is actually live do
+    // we open the session (and for a brand-new connection that failed, roll
+    // the save back too).
     const wasNew = !editing;
-    const store = useStore.getState();
-    const sessionId = openSession(saved.id);
-    store.setStatus(sessionId, "connecting");
     try {
       await api.connect(saved.id);
-      store.setStatus(sessionId, "connected");
-      // Introspection is best-effort — a failure here doesn't undo the
-      // connection; the inspector loads the schema lazily.
-      try {
-        const tree = await api.introspect(saved.id);
-        store.setSchema(sessionId, tree);
-      } catch {
-        /* ignore — connected, schema will load lazily */
-      }
-      onClose();
     } catch (e) {
-      store.setStatus(sessionId, "error");
       if (wasNew) {
         // Don't strand a brand-new connection that couldn't connect.
         try {
@@ -276,7 +263,21 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
       setTestMsg(`Connect failed: ${e}`);
       setTestResult("fail");
       setWorking(null);
+      return;
     }
+    // Connected — now surface it in the rail.
+    const store = useStore.getState();
+    const sessionId = openSession(saved.id);
+    store.setStatus(sessionId, "connected");
+    // Introspection is best-effort — a failure here doesn't undo the
+    // connection; the inspector loads the schema lazily.
+    try {
+      const tree = await api.introspect(saved.id);
+      store.setSchema(sessionId, tree);
+    } catch {
+      /* ignore — connected, schema will load lazily */
+    }
+    onClose();
   };
 
   return (

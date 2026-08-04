@@ -1,9 +1,8 @@
 use crate::state::AppState;
 use db_postgres::object_ops as ops;
-use db_postgres::PgConn;
+use db_postgres::{PgConn, PgPool};
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use sqlx::{Pool, Postgres};
 use tauri::State;
 use uuid::Uuid;
 
@@ -22,7 +21,7 @@ impl From<ops::OpPreview> for OpPreviewWire {
     }
 }
 
-async fn pg_pool(state: &AppState, conn_id: Uuid) -> Result<Pool<Postgres>, String> {
+async fn pg_pool(state: &AppState, conn_id: Uuid) -> Result<PgPool, String> {
     let g = state.conns.read().await;
     let live = g.get(&conn_id).ok_or("not connected")?;
     let pg = live

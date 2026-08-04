@@ -1,37 +1,101 @@
 //! Schema introspection — one cheap pass per (database, refresh) so the
 //! editor's autocomplete and sidebar tree can be populated up front.
+//!
+//! Every query runs on the **simple query protocol** (`simple_query`) for the
+//! same pooler-safety reason as the rest of the driver (see crate docs). That
+//! means all values arrive as text and array columns come back in Postgres'
+//! `{a,b,c}` array-literal form, which we parse by hand (see [`parse_pg_array`]).
 
 use db_core::{
     ColumnNode, DatabaseNode, DbError, DbResult, ForeignKey, FunctionNode, IndexNode, RelationNode,
     SchemaNode, SchemaTree,
 };
-use sqlx::{Pool, Postgres, Row};
 use std::collections::BTreeMap;
+use tokio_postgres::{Client, SimpleQueryMessage, SimpleQueryRow};
 
-pub async fn introspect(pool: &Pool<Postgres>) -> DbResult<SchemaTree> {
-    let db_name: String = sqlx::query_scalar("SELECT current_database()")
-        .persistent(false)
-        .fetch_one(pool)
+/// Run a `simple_query` and return only its data rows.
+async fn rows(client: &Client, sql: &str) -> DbResult<Vec<SimpleQueryRow>> {
+    let msgs = client
+        .simple_query(sql)
         .await
         .map_err(|e| DbError::Driver(e.to_string()))?;
+    Ok(msgs
+        .into_iter()
+        .filter_map(|m| match m {
+            SimpleQueryMessage::Row(r) => Some(r),
+            _ => None,
+        })
+        .collect())
+}
 
-    // Schemas — skip pg_* and information_schema unless they're useful.
-    // We keep `public`, user-created schemas, and pg_catalog (handy for power users).
-    let schemas: Vec<String> = sqlx::query_scalar(
-        "SELECT n.nspname FROM pg_namespace n
-         WHERE n.nspname NOT LIKE 'pg_temp_%'
-           AND n.nspname NOT LIKE 'pg_toast%'
+/// Column value by name, as an owned `String` (empty when NULL/absent).
+fn col(row: &SimpleQueryRow, name: &str) -> String {
+    row.get(name).unwrap_or("").to_string()
+}
+
+/// Parse a Postgres array literal (`{a,b,"c,d"}`) into its elements. Handles
+/// quoted elements with escaped quotes/backslashes; returns an empty vec for
+/// `{}` or a NULL/empty input.
+fn parse_pg_array(s: &str) -> Vec<String> {
+    let s = s.trim();
+    if s.len() < 2 || !s.starts_with('{') || !s.ends_with('}') {
+        return Vec::new();
+    }
+    let inner = &s[1..s.len() - 1];
+    if inner.is_empty() {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    let mut in_quotes = false;
+    let mut chars = inner.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '"' if !in_quotes => in_quotes = true,
+            '"' if in_quotes => in_quotes = false,
+            '\\' if in_quotes => {
+                if let Some(next) = chars.next() {
+                    cur.push(next);
+                }
+            }
+            ',' if !in_quotes => {
+                out.push(std::mem::take(&mut cur));
+            }
+            _ => cur.push(c),
+        }
+    }
+    out.push(cur);
+    // Unquoted NULL elements come through as the literal token `NULL`; the
+    // schema paths that use this (FK/index columns) never contain NULLs, so we
+    // keep them verbatim rather than special-casing.
+    out
+}
+
+pub async fn introspect(client: &Client) -> DbResult<SchemaTree> {
+    let db_name = rows(client, "SELECT current_database() AS db")
+        .await?
+        .first()
+        .map(|r| col(r, "db"))
+        .unwrap_or_default();
+
+    // Schemas — show user schemas only. Hide the Postgres internals
+    // (pg_catalog, pg_toast, pg_temp*, information_schema); otherwise the
+    // inspector defaults to pg_catalog's ~140 system tables instead of the
+    // user's own `public` schema, which reads as "wrong / not my tables".
+    let schema_rows = rows(
+        client,
+        "SELECT n.nspname AS name FROM pg_namespace n
+         WHERE n.nspname NOT LIKE 'pg_%'
            AND n.nspname <> 'information_schema'
          ORDER BY (n.nspname = 'public') DESC, n.nspname",
     )
-    .persistent(false)
-    .fetch_all(pool)
-    .await
-    .map_err(|e| DbError::Driver(e.to_string()))?;
+    .await?;
+    let schemas: Vec<String> = schema_rows.iter().map(|r| col(r, "name")).collect();
 
     // One pass for all relations across all schemas.
     // relkind: r=table, v=view, m=matview
-    let rel_rows = sqlx::query(
+    let rel_rows = rows(
+        client,
         r#"
         SELECT n.nspname AS schema,
                c.relname AS name,
@@ -39,19 +103,16 @@ pub async fn introspect(pool: &Pool<Postgres>) -> DbResult<SchemaTree> {
         FROM pg_class c
         JOIN pg_namespace n ON n.oid = c.relnamespace
         WHERE c.relkind IN ('r','v','m')
-          AND n.nspname NOT LIKE 'pg_temp_%'
-          AND n.nspname NOT LIKE 'pg_toast%'
+          AND n.nspname NOT LIKE 'pg_%'
           AND n.nspname <> 'information_schema'
         ORDER BY n.nspname, c.relname
         "#,
     )
-    .persistent(false)
-    .fetch_all(pool)
-    .await
-    .map_err(|e| DbError::Driver(e.to_string()))?;
+    .await?;
 
     // Columns for every (schema, table). One round trip via information_schema.
-    let col_rows = sqlx::query(
+    let col_rows = rows(
+        client,
         r#"
         SELECT table_schema, table_name, column_name, data_type, is_nullable, column_default,
                ordinal_position
@@ -61,12 +122,10 @@ pub async fn introspect(pool: &Pool<Postgres>) -> DbResult<SchemaTree> {
         ORDER BY table_schema, table_name, ordinal_position
         "#,
     )
-    .persistent(false)
-    .fetch_all(pool)
-    .await
-    .map_err(|e| DbError::Driver(e.to_string()))?;
+    .await?;
 
-    let pk_rows = sqlx::query(
+    let pk_rows = rows(
+        client,
         r#"
         SELECT tc.table_schema, tc.table_name, kcu.column_name, kcu.ordinal_position
         FROM information_schema.table_constraints tc
@@ -78,16 +137,15 @@ pub async fn introspect(pool: &Pool<Postgres>) -> DbResult<SchemaTree> {
         ORDER BY tc.table_schema, tc.table_name, kcu.ordinal_position
         "#,
     )
-    .persistent(false)
-    .fetch_all(pool)
-    .await
-    .map_err(|e| DbError::Driver(e.to_string()))?;
+    .await?;
 
     // Foreign keys via pg_constraint (FOREIGN KEY = 'f').
     // conkey / confkey are int2[] (column attnums); we join pg_attribute twice
     // to expand them into column names. unnest WITH ORDINALITY keeps the
-    // multi-column ordering aligned.
-    let fk_rows = sqlx::query(
+    // multi-column ordering aligned. The array_agg results come back as
+    // Postgres array literals we parse client-side.
+    let fk_rows = rows(
+        client,
         r#"
         WITH fks AS (
             SELECT c.conname,
@@ -126,13 +184,11 @@ pub async fn introspect(pool: &Pool<Postgres>) -> DbResult<SchemaTree> {
         ORDER BY fks.schema, fks.table_name, fks.conname
         "#,
     )
-    .persistent(false)
-    .fetch_all(pool)
-    .await
-    .map_err(|e| DbError::Driver(e.to_string()))?;
+    .await?;
 
     // Indexes via pg_index + pg_class + pg_am.
-    let idx_rows = sqlx::query(
+    let idx_rows = rows(
+        client,
         r#"
         SELECT n.nspname AS schema,
                t.relname AS table_name,
@@ -155,17 +211,15 @@ pub async fn introspect(pool: &Pool<Postgres>) -> DbResult<SchemaTree> {
         ORDER BY n.nspname, t.relname, i.relname
         "#,
     )
-    .persistent(false)
-    .fetch_all(pool)
-    .await
-    .map_err(|e| DbError::Driver(e.to_string()))?;
+    .await?;
 
     // User-defined functions only. prokind='f' keeps plain functions
     // (drops aggregates, window fns, procedures). The pg_depend check
     // excludes anything owned by an installed extension (e.g. postgis,
     // pgcrypto, hstore) — built-ins and extension routines should NOT
     // clutter the inspector's "Functions" list.
-    let func_rows = sqlx::query(
+    let func_rows = rows(
+        client,
         r#"
         SELECT n.nspname AS schema,
                p.proname AS name,
@@ -183,72 +237,63 @@ pub async fn introspect(pool: &Pool<Postgres>) -> DbResult<SchemaTree> {
         ORDER BY n.nspname, p.proname
         "#,
     )
-    .persistent(false)
-    .fetch_all(pool)
-    .await
-    .map_err(|e| DbError::Driver(e.to_string()))?;
+    .await?;
 
     // Index columns by (schema, table).
     let mut cols: BTreeMap<(String, String), Vec<ColumnNode>> = BTreeMap::new();
     for r in &col_rows {
-        let sc: String = r.get("table_schema");
-        let tn: String = r.get("table_name");
+        let sc = col(r, "table_schema");
+        let tn = col(r, "table_name");
+        let default = r.get("column_default").map(|s| s.to_string());
         cols.entry((sc, tn)).or_default().push(ColumnNode {
-            name: r.get("column_name"),
-            type_name: r.get("data_type"),
-            nullable: matches!(r.get::<String, _>("is_nullable").as_str(), "YES"),
-            default: r.get::<Option<String>, _>("column_default"),
+            name: col(r, "column_name"),
+            type_name: col(r, "data_type"),
+            nullable: col(r, "is_nullable") == "YES",
+            default,
         });
     }
 
     let mut pks: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
     for r in &pk_rows {
-        let sc: String = r.get("table_schema");
-        let tn: String = r.get("table_name");
-        pks.entry((sc, tn)).or_default().push(r.get("column_name"));
+        let sc = col(r, "table_schema");
+        let tn = col(r, "table_name");
+        pks.entry((sc, tn)).or_default().push(col(r, "column_name"));
     }
 
     let mut fks_by_table: BTreeMap<(String, String), Vec<ForeignKey>> = BTreeMap::new();
     for r in &fk_rows {
-        let sc: String = r.get("schema");
-        let tn: String = r.get("table_name");
-        let cols: Vec<String> = r.try_get::<Vec<String>, _>("columns").unwrap_or_default();
-        let ref_cols: Vec<String> = r
-            .try_get::<Vec<String>, _>("ref_columns")
-            .unwrap_or_default();
+        let sc = col(r, "schema");
+        let tn = col(r, "table_name");
         fks_by_table.entry((sc, tn)).or_default().push(ForeignKey {
-            name: r.get("name"),
-            columns: cols,
-            referenced_schema: r.get("ref_schema"),
-            referenced_table: r.get("ref_table"),
-            referenced_columns: ref_cols,
+            name: col(r, "name"),
+            columns: parse_pg_array(&col(r, "columns")),
+            referenced_schema: col(r, "ref_schema"),
+            referenced_table: col(r, "ref_table"),
+            referenced_columns: parse_pg_array(&col(r, "ref_columns")),
         });
     }
 
     let mut idx_by_table: BTreeMap<(String, String), Vec<IndexNode>> = BTreeMap::new();
     for r in &idx_rows {
-        let sc: String = r.get("schema");
-        let tn: String = r.get("table_name");
-        let columns: Vec<String> = r.try_get::<Vec<String>, _>("columns").unwrap_or_default();
+        let sc = col(r, "schema");
+        let tn = col(r, "table_name");
         idx_by_table.entry((sc, tn)).or_default().push(IndexNode {
-            name: r.get("name"),
-            columns,
-            is_unique: r.get("is_unique"),
-            is_primary: r.get("is_primary"),
-            method: r.get("method"),
-            definition: r.get("definition"),
+            name: col(r, "name"),
+            columns: parse_pg_array(&col(r, "columns")),
+            is_unique: col(r, "is_unique") == "t",
+            is_primary: col(r, "is_primary") == "t",
+            method: col(r, "method"),
+            definition: col(r, "definition"),
         });
     }
 
     let mut funcs_by_schema: BTreeMap<String, Vec<FunctionNode>> = BTreeMap::new();
     for r in &func_rows {
-        let sc: String = r.get("schema");
-        let args: String = r.get::<Option<String>, _>("args").unwrap_or_default();
+        let sc = col(r, "schema");
+        let args = col(r, "args");
         funcs_by_schema.entry(sc).or_default().push(FunctionNode {
-            name: r.get("name"),
-            return_type: r
-                .get::<Option<String>, _>("return_type")
-                .unwrap_or_default(),
+            name: col(r, "name"),
+            return_type: col(r, "return_type"),
             argument_types: args
                 .split(',')
                 .filter_map(|s| {
@@ -266,9 +311,9 @@ pub async fn introspect(pool: &Pool<Postgres>) -> DbResult<SchemaTree> {
     let mut tables_by_schema: BTreeMap<String, Vec<RelationNode>> = BTreeMap::new();
     let mut views_by_schema: BTreeMap<String, Vec<RelationNode>> = BTreeMap::new();
     for r in &rel_rows {
-        let sc: String = r.get("schema");
-        let nm: String = r.get("name");
-        let kind: i8 = r.get::<i8, _>("kind");
+        let sc = col(r, "schema");
+        let nm = col(r, "name");
+        let kind = col(r, "kind");
         let key = (sc.clone(), nm.clone());
         let node = RelationNode {
             name: nm,
@@ -277,10 +322,9 @@ pub async fn introspect(pool: &Pool<Postgres>) -> DbResult<SchemaTree> {
             foreign_keys: fks_by_table.remove(&key).unwrap_or_default(),
             indexes: idx_by_table.remove(&key).unwrap_or_default(),
         };
-        // 'r' = 0x72, 'v' = 0x76, 'm' = 0x6d
-        match kind as u8 as char {
-            'r' => tables_by_schema.entry(sc).or_default().push(node),
-            'v' | 'm' => views_by_schema.entry(sc).or_default().push(node),
+        match kind.as_str() {
+            "r" => tables_by_schema.entry(sc).or_default().push(node),
+            "v" | "m" => views_by_schema.entry(sc).or_default().push(node),
             _ => {}
         }
     }

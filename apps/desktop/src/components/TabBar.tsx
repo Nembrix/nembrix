@@ -4,6 +4,11 @@ import { useStore } from "@/store";
 export default function TabBar() {
   const { tabs, activeTabId, setActiveTab, closeTab, selectedConnId, addTab } = useStore();
 
+  // Tabs belong to a session (`connId` = the session id). Only show the ones
+  // for the currently-selected session — otherwise clicking another
+  // connection leaves the previous session's open tables on screen.
+  const visibleTabs = tabs.filter((t) => t.connId === selectedConnId);
+
   const newTab = () => {
     if (!selectedConnId) return;
     addTab({
@@ -21,7 +26,7 @@ export default function TabBar() {
           pinned on the right so the user can always reach it even
           when the list has grown past the viewport. */}
       <div className="tab-bar-scroll">
-        {tabs.map((t) => (
+        {visibleTabs.map((t) => (
           <div
             key={t.id}
             className={`tab ${t.id === activeTabId ? "active" : ""}`}

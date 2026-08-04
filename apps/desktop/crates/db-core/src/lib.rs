@@ -54,6 +54,27 @@ pub enum CellValue {
     Bytes(#[serde(with = "serde_bytes")] Vec<u8>),
 }
 
+/// JavaScript's `Number.MAX_SAFE_INTEGER` (2^53 − 1). An `i64` whose magnitude
+/// exceeds this can't be represented exactly once it reaches the frontend as a
+/// JSON number, so such values must travel as text ([`CellValue::Raw`]) instead
+/// of [`CellValue::Int`].
+pub const JS_MAX_SAFE_INT: i64 = 9_007_199_254_740_991;
+
+impl CellValue {
+    /// Build a numeric cell from an `i64`, preserving exactness end-to-end.
+    /// Values within JS's safe-integer range become [`CellValue::Int`] (a real
+    /// number in the grid); anything larger in magnitude becomes
+    /// [`CellValue::Raw`] with its exact decimal text, because the frontend
+    /// reads `Int` as a JS `number` and would silently round it past 2^53.
+    pub fn from_i64(v: i64) -> Self {
+        if v.unsigned_abs() <= JS_MAX_SAFE_INT as u64 {
+            CellValue::Int(v)
+        } else {
+            CellValue::Raw(v.to_string())
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct RowBatch {
     /// Sent on the first batch only; subsequent batches reuse the schema.
@@ -242,3 +263,39 @@ pub trait DbConnection: Send + Sync {
 }
 
 pub type DynConn = Arc<dyn DbConnection>;
+
+#[cfg(test)]
+mod cell_tests {
+    use super::*;
+
+    #[test]
+    fn from_i64_keeps_safe_ints_as_int() {
+        assert!(matches!(CellValue::from_i64(0), CellValue::Int(0)));
+        assert!(matches!(CellValue::from_i64(-42), CellValue::Int(-42)));
+        assert!(matches!(
+            CellValue::from_i64(JS_MAX_SAFE_INT),
+            CellValue::Int(_)
+        ));
+        assert!(matches!(
+            CellValue::from_i64(-JS_MAX_SAFE_INT),
+            CellValue::Int(_)
+        ));
+    }
+
+    #[test]
+    fn from_i64_routes_unsafe_ints_to_lossless_raw() {
+        // Just past the safe boundary, both signs.
+        match CellValue::from_i64(JS_MAX_SAFE_INT + 1) {
+            CellValue::Raw(s) => assert_eq!(s, "9007199254740992"),
+            other => panic!("expected Raw, got {other:?}"),
+        }
+        match CellValue::from_i64(i64::MAX) {
+            CellValue::Raw(s) => assert_eq!(s, "9223372036854775807"),
+            other => panic!("expected Raw, got {other:?}"),
+        }
+        match CellValue::from_i64(i64::MIN) {
+            CellValue::Raw(s) => assert_eq!(s, "-9223372036854775808"),
+            other => panic!("expected Raw, got {other:?}"),
+        }
+    }
+}

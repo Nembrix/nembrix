@@ -627,8 +627,14 @@ export const listConnections = () => invoke<ConnectionRecord[]>("list_connection
 export const saveConnection = (input: ConnectionInput) =>
   invoke<ConnectionRecord>("save_connection", { input });
 export const deleteConnection = (id: string) => invoke<void>("delete_connection", { id });
-export const connect = (id: string) => invoke<void>("connect", { id });
-export const disconnect = (id: string) => invoke<void>("disconnect", { id });
+// connect/disconnect operate on the saved-connection id. Callers pass a
+// *session* id (that's what the UI keys on), so resolve it — otherwise
+// disconnect removes the wrong key from the backend's live-connection map
+// (connect inserted under the connection id) and reconnecting breaks.
+export const connect = (id: string) =>
+  invoke<void>("connect", { id: resolveConnId(id) });
+export const disconnect = (id: string) =>
+  invoke<void>("disconnect", { id: resolveConnId(id) });
 export const testConnection = (input: ConnectionInput) =>
   invoke<number>("test_connection", { input });
 export const trustSshHost = (host: string, fingerprint: string) =>

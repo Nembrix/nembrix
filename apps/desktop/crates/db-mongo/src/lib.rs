@@ -373,7 +373,7 @@ async fn run_read(
                 .count_documents(filter)
                 .await
                 .map_err(drv)?;
-            emit_scalar(sink, "count", CellValue::Int(n as i64)).await
+            emit_scalar(sink, "count", CellValue::from_i64(n as i64)).await
         }
         Command::EstimatedDocumentCount { collection } => {
             let n = db
@@ -381,7 +381,7 @@ async fn run_read(
                 .estimated_document_count()
                 .await
                 .map_err(drv)?;
-            emit_scalar(sink, "count", CellValue::Int(n as i64)).await
+            emit_scalar(sink, "count", CellValue::from_i64(n as i64)).await
         }
         Command::Distinct {
             collection,

@@ -42,7 +42,11 @@ export default function App() {
     preferencesOpen, closePreferences,
     panels,
   } = useStore();
-  const active = tabs.find((t) => t.id === activeTabId);
+  // The active tab must belong to the selected session — otherwise switching
+  // connections would render the previous session's tab in the main pane.
+  const active = tabs.find(
+    (t) => t.id === activeTabId && t.connId === selectedConnId,
+  );
 
   // Register handlers + bridges once.
   useEffect(() => {

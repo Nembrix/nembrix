@@ -238,10 +238,12 @@ async fn build_driver(
                 database,
                 ssl_mode,
                 application_name: Some(app_name.to_string()),
-                // Postgres has its own statement timeout knob; the connect
-                // timeout used by test_connection doesn't map onto it, so we
-                // keep its prior behaviour (5s statement timeout on test).
+                // test_connection wants a short session statement timeout too,
+                // so a hung first query on Test doesn't sit forever.
                 statement_timeout_ms: connect_timeout_ms.map(|_| 5_000),
+                // Hard wall-clock bound on the whole handshake. Test passes a
+                // short one (fail fast); a live connect uses the driver default.
+                connect_timeout_ms: connect_timeout_ms.map(|ms| ms as u32),
             })
             .await
             .map_err(|e| short_connect_error(&e.to_string()))?;
