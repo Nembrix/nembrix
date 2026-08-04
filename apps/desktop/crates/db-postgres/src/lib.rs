@@ -67,6 +67,14 @@ impl PgConn {
             .port(cfg.port)
             .username(&cfg.user)
             .ssl_mode(cfg.ssl_mode.to_sqlx())
+            // Disable sqlx's prepared-statement cache. Through a connection
+            // pooler in transaction/statement mode (PgBouncer, Supabase's
+            // pooler, RDS Proxy, …) a prepared statement made on one backend
+            // isn't visible on the next, causing `prepared statement "sqlx_s_N"
+            // does not exist`. This is a desktop client where queries are
+            // user-paced, not a hot path, so the caching win is negligible —
+            // correctness through poolers is worth more.
+            .statement_cache_capacity(0)
             .application_name(cfg.application_name.as_deref().unwrap_or("nembrix"));
         let opts = if let Some(db) = &cfg.database {
             opts.database(db)
