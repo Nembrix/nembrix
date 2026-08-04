@@ -5,12 +5,12 @@ cask "nembrix" do
   # arch; the release job fills in each sha256 below.
   on_arm do
     sha256 "__SHA256_ARM__"
-    url "https://github.com/__OWNER__/__REPO__/releases/download/v#{version}/Nembrix_#{version}_aarch64.dmg",
+    url "https://github.com/__OWNER__/__REPO__/releases/download/v#{version}/Nembrix_#{version}_macOS_Apple_Silicon.dmg",
         verified: "github.com/__OWNER__/__REPO__/"
   end
   on_intel do
     sha256 "__SHA256_X64__"
-    url "https://github.com/__OWNER__/__REPO__/releases/download/v#{version}/Nembrix_#{version}_x64.dmg",
+    url "https://github.com/__OWNER__/__REPO__/releases/download/v#{version}/Nembrix_#{version}_macOS_Intel.dmg",
         verified: "github.com/__OWNER__/__REPO__/"
   end
 
