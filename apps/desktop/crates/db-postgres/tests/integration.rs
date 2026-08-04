@@ -422,3 +422,68 @@ async fn script_surfaces_real_query_error() -> anyhow::Result<()> {
     assert_eq!(out.logs[0].text, "caught");
     Ok(())
 }
+
+#[tokio::test]
+async fn connect_succeeds_with_correct_password() -> anyhow::Result<()> {
+    require_docker!();
+    let f = common::start_pg().await?;
+    let cfg = common::config_for(&f, Some("test"), db_postgres::PgSsl::Disable).await?;
+    let err = db_postgres::PgConn::connect(cfg).await.err();
+    assert!(err.is_none(), "correct creds should connect: {err:?}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn connect_fails_with_wrong_password() -> anyhow::Result<()> {
+    require_docker!();
+    let f = common::start_pg().await?;
+    let cfg = common::config_for(&f, Some("definitely-wrong"), db_postgres::PgSsl::Disable).await?;
+    assert!(
+        db_postgres::PgConn::connect(cfg).await.is_err(),
+        "wrong password must fail"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn connect_with_prefer_falls_back_when_server_has_no_tls() -> anyhow::Result<()> {
+    require_docker!();
+    // The testcontainer Postgres has TLS off. `prefer` must still connect by
+    // falling back to plaintext — the exact ssl-mode behaviour users rely on
+    // against non-TLS servers.
+    let f = common::start_pg().await?;
+    let cfg = common::config_for(&f, Some("test"), db_postgres::PgSsl::Prefer).await?;
+    assert!(
+        db_postgres::PgConn::connect(cfg).await.is_ok(),
+        "prefer should fall back to plaintext on a no-TLS server"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn parameterised_query_runs_end_to_end() -> anyhow::Result<()> {
+    require_docker!();
+    // Exercises the driver's stream() with bound params (unnamed prepared
+    // statements — the pooler fix). Insert then count.
+    let f = common::start_pg().await?;
+    sqlx::query("CREATE TABLE t (id int, name text)")
+        .execute(f.conn.pool())
+        .await?;
+    let (tx, mut rx) = mpsc::channel(8);
+    f.conn
+        .stream(
+            "INSERT INTO t (id, name) VALUES ($1, $2)",
+            vec![
+                db_core::CellValue::Int(1),
+                db_core::CellValue::Text("a".into()),
+            ],
+            tx,
+        )
+        .await?;
+    while rx.recv().await.is_some() {}
+    let n: i64 = sqlx::query_scalar("SELECT count(*) FROM t")
+        .fetch_one(f.conn.pool())
+        .await?;
+    assert_eq!(n, 1);
+    Ok(())
+}

@@ -54,6 +54,29 @@ pub async fn start_pg() -> anyhow::Result<PgFixture> {
     Ok(PgFixture { conn, container })
 }
 
+/// Build a `PgConfig` pointed at a running fixture's container, letting a
+/// test override the password / ssl mode to exercise connection validation.
+/// The seeded container uses user/db/password = test/testdb/test.
+#[allow(dead_code)]
+pub async fn config_for(
+    fixture: &PgFixture,
+    password: Option<&str>,
+    ssl_mode: PgSsl,
+) -> anyhow::Result<PgConfig> {
+    let host = fixture.container.get_host().await?.to_string();
+    let port = fixture.container.get_host_port_ipv4(5432).await?;
+    Ok(PgConfig {
+        host,
+        port,
+        user: "test".into(),
+        password: password.map(|p| p.to_string()),
+        database: Some("testdb".into()),
+        ssl_mode,
+        application_name: Some("nembrix-test".into()),
+        statement_timeout_ms: None,
+    })
+}
+
 /// Skip a test when Docker isn't available. Tests stay green on dev
 /// machines without Docker; CI sets DBCLIENT_REQUIRE_DOCKER=1 to enforce.
 #[macro_export]
