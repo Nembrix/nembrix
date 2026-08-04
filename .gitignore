@@ -17,7 +17,6 @@ playwright-report/
 # Local signing material — CSR, exported certs, .p12s. Never commit; the
 # .p12 is injected into CI via the APPLE_CERTIFICATE secret instead.
 .cert/
-.cask/
 # Tauri updater private signing key — never commit. Load into CI as the
 # TAURI_SIGNING_PRIVATE_KEY secret. The matching pubkey is committed in
 # tauri.conf.json (it isn't sensitive); the key files themselves stay out.
