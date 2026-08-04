@@ -17,11 +17,9 @@ the release workflow signs automatically on every run.
 > **Restrict the environment to `main`.** Add a deployment-branch policy
 > so the environment (and its secrets) is only exposed to workflows
 > running on `main` — `Settings → Environments → release → Deployment
-> branches → Selected branches → add `main``. This is what lets the
-> nightly build job read the signing secrets on a push to `main` while
-> keeping them out of PR branches and forks. Any job that needs these
-> secrets must declare `environment: release` (both `release.yml` and the
-> nightly `build` job in `prerelease.yml` do).
+> branches → Selected branches → add `main``. This keeps the signing
+> secrets out of PR branches and forks. Any job that needs these secrets
+> must declare `environment: release` (as `release.yml` does).
 
 Secrets never need to pass through anyone else — run every command below
 on your own machine.

@@ -26,9 +26,6 @@ on:
 
 permissions:
   contents: write
-  # Needed to cancel in-flight nightly prerelease runs when a stable
-  # release starts (see the "Cancel in-flight nightlies" step below).
-  actions: write
 
 # Cancel an older Release run for the same version if a new one starts —
 # avoids two concurrent runs racing each other when re-clicking the button.
@@ -59,25 +56,6 @@ jobs:
       release_id: ${{ steps.create.outputs.release_id }}
       upload_url: ${{ steps.create.outputs.upload_url }}
     steps:
-      # Cutting a stable release takes priority over any nightly. Cancel
-      # in-flight/queued prerelease runs up front so they don't compete for
-      # runners or race on release assets. (The prerelease gate also skips
-      # itself when a Release is running — this covers a nightly that started
-      # just before this run.)
-      - name: Cancel in-flight nightlies
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-        run: |
-          ids=$(gh run list --repo "$REPO" --workflow prerelease.yml \
-            --json databaseId,status \
-            --jq '.[] | select(.status=="in_progress" or .status=="queued") | .databaseId' 2>/dev/null || true)
-          for id in $ids; do
-            echo "Cancelling in-flight nightly run $id"
-            gh run cancel "$id" --repo "$REPO" || true
-          done
-          [ -z "$ids" ] && echo "No in-flight nightly runs to cancel." || true
-
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # git-cliff needs the full history + tags to compute the range.
@@ -132,24 +110,53 @@ jobs:
           # fails with exit 127 (tsx not found) on a fresh checkout.
           yarn install --frozen-lockfile
           yarn --cwd apps/desktop bump-version "$TARGET"
-          # Bump the pinned version in the docs landing pages' direct
-          # download links (EN + FR) so they point at the new release.
-          # Rewrites every "v<old>/Nembrix_<old>_" occurrence and the
-          # "Latest release: **v<old>**" / "Dernière version : **v<old>**"
-          # lines to $TARGET. Uses the current on-disk version as the source.
+          git config user.name  "Nembrix release bot"
+          git config user.email "release-bot@users.noreply.github.com"
+          git add apps/desktop/src-tauri/tauri.conf.json apps/desktop/src-tauri/Cargo.toml
+          git commit -m "chore(release): v$TARGET"
+          git push origin HEAD:main
+
+      # Point the docs landing pages' direct download links (EN + FR) at the
+      # release being cut. Runs on EVERY release — driven by the resolved
+      # version, not the manual `version` input — so the links never go stale
+      # even when a release is triggered without typing a version. The "old"
+      # version is read from the docs themselves (the "**vX.Y.Z**" line), so a
+      # re-run or an already-synced doc is a no-op. Commits only when something
+      # actually changed.
+      - name: Sync docs download links to the release version
+        shell: bash
+        env:
+          TARGET: ${{ steps.resolve.outputs.version }}
+        run: |
+          set -e
+          EN=apps/docs/src/content/docs/index.mdx
+          # The docs' current version, parsed from the "**vX.Y.Z**" marker.
+          OLD=$(grep -oE '\*\*v[0-9]+\.[0-9]+\.[0-9]+\*\*' "$EN" | head -1 | tr -d '*v')
+          if [[ -z "$OLD" ]]; then
+            echo "::warning::Could not find a **vX.Y.Z** marker in $EN — skipping docs link sync."
+            exit 0
+          fi
+          if [[ "$OLD" == "$TARGET" ]]; then
+            echo "Docs already point at v$TARGET — nothing to sync."
+            exit 0
+          fi
+          echo "Syncing docs download links: v$OLD → v$TARGET"
           for f in apps/docs/src/content/docs/index.mdx apps/docs/src/content/docs/fr/index.mdx; do
             sed -i \
-              -e "s#/download/v${CURRENT}/Nembrix_${CURRENT}_#/download/v${TARGET}/Nembrix_${TARGET}_#g" \
-              -e "s#/download/v${CURRENT}/Nembrix-${CURRENT}-#/download/v${TARGET}/Nembrix-${TARGET}-#g" \
-              -e "s#\*\*v${CURRENT}\*\*#**v${TARGET}**#g" \
+              -e "s#/download/v${OLD}/Nembrix_${OLD}_#/download/v${TARGET}/Nembrix_${TARGET}_#g" \
+              -e "s#/download/v${OLD}/Nembrix-${OLD}-#/download/v${TARGET}/Nembrix-${TARGET}-#g" \
+              -e "s#\*\*v${OLD}\*\*#**v${TARGET}**#g" \
               "$f"
           done
           git config user.name  "Nembrix release bot"
           git config user.email "release-bot@users.noreply.github.com"
-          git add apps/desktop/src-tauri/tauri.conf.json apps/desktop/src-tauri/Cargo.toml \
-                  apps/docs/src/content/docs/index.mdx apps/docs/src/content/docs/fr/index.mdx
-          git commit -m "chore(release): v$TARGET"
-          git push origin HEAD:main
+          git add apps/docs/src/content/docs/index.mdx apps/docs/src/content/docs/fr/index.mdx
+          if git diff --cached --quiet; then
+            echo "No docs changes to commit."
+          else
+            git commit -m "docs: point download links at v$TARGET"
+            git push origin HEAD:main
+          fi
 
       # Build the changelog body from Conventional Commits. cliff.toml filters
       # out ci/test/chore/style/build (and *(ci)/*(test)/… scopes), so the
