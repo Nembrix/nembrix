@@ -51,19 +51,19 @@ export default function AboutDialog() {
 
           <div className="about-links">
             <a
-              href="https://github.com/oesukam/nembrix"
+              href="https://github.com/nembrix/nembrix"
               target="_blank" rel="noreferrer"
             >
               <ExternalLink size={11} /> Repository
             </a>
             <a
-              href="https://github.com/oesukam/nembrix/blob/main/ARCHITECTURE.md"
+              href="https://github.com/nembrix/nembrix/blob/main/ARCHITECTURE.md"
               target="_blank" rel="noreferrer"
             >
               <ExternalLink size={11} /> Architecture
             </a>
             <a
-              href="https://github.com/oesukam/nembrix/issues/new"
+              href="https://github.com/nembrix/nembrix/issues/new"
               target="_blank" rel="noreferrer"
             >
               <ExternalLink size={11} /> Report an issue
