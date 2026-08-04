@@ -18,22 +18,23 @@ export default defineScene({
     await langSelect.selectOption("script");
     await page.waitForTimeout(300);
 
-    // Type a representative script: parameterized query + loop + log.
+    // Type a representative script, then trigger completion so the shot
+    // shows the scripting API + schema-aware suggestions.
     await page.locator(".cm-content").click();
     await page.keyboard.type(
       [
-        'const users = await db.query(',
-        '  "SELECT id, name FROM users WHERE id > $1",',
-        '  [0],',
-        ');',
+        'const users = await db.query("SELECT id, name FROM users");',
         'for (const u of users) {',
         '  console.log(`user ${u.id}: ${u.name}`);',
         '}',
-        'return users;',
+        'db.',
       ].join("\n"),
       { delay: 8 },
     );
-    await page.waitForTimeout(300);
+    // Open the autocomplete popover for `db.` (Ctrl-Space).
+    await page.keyboard.press("Control+Space");
+    await page.waitForSelector(".cm-tooltip-autocomplete", { timeout: 3000 }).catch(() => {});
+    await page.waitForTimeout(250);
     await shot();
   },
 });

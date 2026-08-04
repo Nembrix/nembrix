@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { keymap, EditorView } from "@codemirror/view";
 import { EditorSelection, Prec, StateEffect } from "@codemirror/state";
-import { javascript } from "@codemirror/lang-javascript";
+import { buildJsScriptExtension } from "@/editor/js-completion";
 import { Play, Square, Sparkles, Star } from "lucide-react";
 import { buildSqlExtension } from "@/editor/sql-completion";
 import { useStore, type Tab, type FilterChip } from "@/store";
@@ -241,10 +241,12 @@ export default function QueryTab({ tab }: { tab: Tab }) {
     cmdsRef.current = { run, cancel, format, saveAsNamed };
   });
 
-  // Language extension: JS syntax/highlighting in script mode, SQL completion
-  // otherwise. Swapping this by `tab.lang` is what makes the same editor a
-  // JavaScript surface when the user flips the toggle.
-  const langExt = isScript ? javascript() : buildSqlExtension(tree);
+  // Language extension: schema-aware completion for both modes. Script mode
+  // gets JS + the db/console API + SQL completion inside db.query("…")
+  // strings; SQL mode gets the Postgres dialect + schema completion.
+  // Swapping this by `tab.lang` is what makes the same editor a JavaScript
+  // surface when the user flips the toggle.
+  const langExt = isScript ? buildJsScriptExtension(tree) : buildSqlExtension(tree);
   const rowCount = tab.rows?.length ?? 0;
 
   // Editor height — user-draggable via the separator between the
