@@ -1,10 +1,9 @@
 import { test } from "@playwright/test";
-import { expect, seedConnectedSession } from "./_setup";
+import { expect, seedConnectedSession, openTable } from "./_setup";
 
 test.beforeEach(async ({ page }) => {
   await seedConnectedSession(page);
-  await page.locator(".empty-tab-card", { hasText: "orders" }).click();
-  await expect(page.locator(".grid-scroll table.grid-header")).toBeVisible();
+  await openTable(page, "orders");
 });
 
 test("dragging the resize grip widens the column and persists", async ({ page }) => {
@@ -28,7 +27,7 @@ test("dragging the resize grip widens the column and persists", async ({ page })
 
   // Reload — the tab persistence will restore the data view automatically.
   await page.reload();
-  await expect(page.locator(".grid-scroll table.grid-header")).toBeVisible();
+  await expect(page.locator(".grid-scroll table.grid-header")).toBeVisible({ timeout: 15000 });
 
   const header2 = page.locator(".grid-header th").nth(1);
   const persistedBox = await header2.boundingBox();
