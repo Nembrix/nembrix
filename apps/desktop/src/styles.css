@@ -1567,10 +1567,28 @@ tr.grid-filler.row-even > td {
   background: var(--bg-elev);
   border: 1px solid var(--border-soft);
   border-radius: var(--r-1);
-  padding: 5px 8px;
+  /* Explicit height + matching line-height so native <select> and <input>
+     line up exactly — otherwise a select renders a couple px taller than a
+     text input at the same padding (different default line-box metrics). */
+  height: 30px;
+  line-height: 28px;
+  padding: 0 8px;
   color: var(--fg);
   outline: none;
   width: 100%;
+  font-size: inherit;
+  font-family: inherit;
+}
+/* Select only: drop the native chevron (its reserved right-side space is
+   inconsistent across platforms) and draw our own at a fixed 10px from the
+   edge, with text padded clear of it. */
+.form-grid select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 30px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%238a8f98' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
 }
 .form-grid input:focus, .form-grid select:focus { border-color: var(--accent-ring); }
 /* Boolean checkboxes in the form (Use SSH, strict host check). The bare
