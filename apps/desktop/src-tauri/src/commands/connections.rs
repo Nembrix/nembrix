@@ -171,6 +171,11 @@ fn short_connect_error(raw: &str) -> String {
     if low.contains("password authentication failed") || low.contains("invalid_password") {
         return "Authentication failed — check the user and password.".into();
     }
+    if low.contains("no pool configured") {
+        // PgBouncer (or a similar pooler) has no pool registered for this
+        // database/user — a server-side config issue, not a Nembrix one.
+        return "No connection pool for this database on the server (pooler config).".into();
+    }
     if low.contains("does not exist") && low.contains("database") {
         return "Database not found — check the database name.".into();
     }
@@ -386,6 +391,7 @@ mod tests {
             ),
             ("Connection refused (os error 61)", "refused"),
             ("connection timed out", "timed out"),
+            ("FATAL: No pool configured for database: \"x\"", "pool"),
             (
                 "failed to lookup address information: nodename nor servname provided",
                 "reachable",
