@@ -341,6 +341,51 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
               )}
             </div>
 
+            <div className="form-row">
+              <div className="field">
+                <label htmlFor="cf-env">Environment</label>
+                <select
+                  id="cf-env"
+                  value={v.environment ?? "development"}
+                  onChange={(e) => {
+                    const env = e.target.value as Environment;
+                    // If the user hasn't customized the color, snap it to the env default.
+                    const stickColor = v.color && v.color !== ENV_COLOR[(v.environment ?? "development")];
+                    patch({
+                      environment: env,
+                      color: stickColor ? v.color : ENV_COLOR[env],
+                    });
+                  }}
+                >
+                  {ENVIRONMENTS.map((env) => (
+                    <option key={env} value={env}>{ENV_LABEL[env]}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>Color</label>
+                <div className="env-color-row">
+                  {Object.entries(ENV_COLOR).map(([envKey, hex]) => (
+                    <button
+                      key={envKey}
+                      type="button"
+                      className={`env-swatch ${(v.color ?? ENV_COLOR[v.environment ?? "development"]) === hex ? "selected" : ""}`}
+                      style={{ background: hex }}
+                      title={`${envKey} default`}
+                      onClick={() => patch({ color: hex })}
+                    />
+                  ))}
+                  <input
+                    type="color"
+                    aria-label="Custom color"
+                    className="env-color-custom"
+                    value={colorFor(v.environment, v.color)}
+                    onChange={(e) => patch({ color: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+
             {v.engine === "postgres" && (
               <>
                 <label>Input</label>
@@ -384,26 +429,44 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
               </>
             ) : (
               <>
-                <label htmlFor="cf-host">Host</label>
-                <input id="cf-host" type="text" value={v.host} onChange={(e) => patch({ host: e.target.value })} />
-                <label htmlFor="cf-port">Port</label>
-                <input id="cf-port" type="number" value={v.port}
-                  onChange={(e) => patch({ port: parseInt(e.target.value || "0") })} />
-                <label htmlFor="cf-user">User</label>
-                <input id="cf-user" type="text" value={v.username} onChange={(e) => patch({ username: e.target.value })} />
-                <label htmlFor="cf-password">Password</label>
-                <input id="cf-password" type="password" value={v.password ?? ""}
-                  onChange={(e) => patch({ password: e.target.value })} />
-                <label htmlFor="cf-database">Database</label>
-                <input id="cf-database" type="text" value={v.database ?? ""}
-                  onChange={(e) => patch({ database: e.target.value || null })} />
-                <label htmlFor="cf-ssl">SSL</label>
-                <select id="cf-ssl" value={v.ssl_mode}
-                  onChange={(e) => patch({ ssl_mode: e.target.value as never })}>
-                  <option value="disable">disable</option>
-                  <option value="prefer">prefer</option>
-                  <option value="require">require</option>
-                </select>
+                <div className="form-row host-port">
+                  <div className="field">
+                    <label htmlFor="cf-host">Host</label>
+                    <input id="cf-host" type="text" value={v.host} onChange={(e) => patch({ host: e.target.value })} />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="cf-port">Port</label>
+                    <input id="cf-port" type="number" value={v.port}
+                      onChange={(e) => patch({ port: parseInt(e.target.value || "0") })} />
+                  </div>
+                </div>
+                <div className="form-row">
+                  <div className="field">
+                    <label htmlFor="cf-user">User</label>
+                    <input id="cf-user" type="text" value={v.username} onChange={(e) => patch({ username: e.target.value })} />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="cf-password">Password</label>
+                    <input id="cf-password" type="password" value={v.password ?? ""}
+                      onChange={(e) => patch({ password: e.target.value })} />
+                  </div>
+                </div>
+                <div className="form-row">
+                  <div className="field">
+                    <label htmlFor="cf-database">Database</label>
+                    <input id="cf-database" type="text" value={v.database ?? ""}
+                      onChange={(e) => patch({ database: e.target.value || null })} />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="cf-ssl">SSL</label>
+                    <select id="cf-ssl" value={v.ssl_mode}
+                      onChange={(e) => patch({ ssl_mode: e.target.value as never })}>
+                      <option value="disable">disable</option>
+                      <option value="prefer">prefer</option>
+                      <option value="require">require</option>
+                    </select>
+                  </div>
+                </div>
               </>
             )}
 
@@ -425,68 +488,41 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
               )).map((g) => (<option key={g} value={g} />))}
             </datalist>
 
-            <div className="section-title">Environment</div>
-            <label htmlFor="cf-env">Type</label>
-            <select
-              id="cf-env"
-              value={v.environment ?? "development"}
-              onChange={(e) => {
-                const env = e.target.value as Environment;
-                // If the user hasn't customized the color, snap it to the env default.
-                const stickColor = v.color && v.color !== ENV_COLOR[(v.environment ?? "development")];
-                patch({
-                  environment: env,
-                  color: stickColor ? v.color : ENV_COLOR[env],
-                });
-              }}
-            >
-              {ENVIRONMENTS.map((env) => (
-                <option key={env} value={env}>{ENV_LABEL[env]}</option>
-              ))}
-            </select>
-            <label>Color</label>
-            <div className="env-color-row">
-              {Object.entries(ENV_COLOR).map(([envKey, hex]) => (
-                <button
-                  key={envKey}
-                  type="button"
-                  className={`env-swatch ${(v.color ?? ENV_COLOR[v.environment ?? "development"]) === hex ? "selected" : ""}`}
-                  style={{ background: hex }}
-                  title={`${envKey} default`}
-                  onClick={() => patch({ color: hex })}
-                />
-              ))}
-              <input
-                type="color"
-                aria-label="Custom color"
-                className="env-color-custom"
-                value={colorFor(v.environment, v.color)}
-                onChange={(e) => patch({ color: e.target.value })}
-              />
-            </div>
 
             <div className="section-title">SSH tunnel</div>
-            <label htmlFor="cf-ssh">Use SSH</label>
-            <div>
+            <label className="check-row" htmlFor="cf-ssh">
               <input id="cf-ssh" type="checkbox" checked={useSsh} onChange={(e) => setUseSsh(e.target.checked)} />
-            </div>
+              Use SSH
+            </label>
             {useSsh && (<>
-              <label htmlFor="cf-ssh-host">SSH host</label>
-              <input id="cf-ssh-host" type="text" value={v.ssh?.host ?? ""}
-                onChange={(e) => patchSsh({ host: e.target.value })} />
-              <label htmlFor="cf-ssh-port">SSH port</label>
-              <input id="cf-ssh-port" type="number" value={v.ssh?.port ?? 22}
-                onChange={(e) => patchSsh({ port: parseInt(e.target.value || "22") })} />
-              <label htmlFor="cf-ssh-user">SSH user</label>
-              <input id="cf-ssh-user" type="text" value={v.ssh?.user ?? ""}
-                onChange={(e) => patchSsh({ user: e.target.value })} />
-              <label htmlFor="cf-ssh-auth">Auth</label>
-              <select id="cf-ssh-auth" value={v.ssh?.auth_kind ?? "password"}
-                onChange={(e) => patchSsh({ auth_kind: e.target.value as never })}>
-                <option value="password">password</option>
-                <option value="key_file">key file</option>
-                <option value="agent">ssh-agent</option>
-              </select>
+              <div className="form-row host-port">
+                <div className="field">
+                  <label htmlFor="cf-ssh-host">SSH host</label>
+                  <input id="cf-ssh-host" type="text" value={v.ssh?.host ?? ""}
+                    onChange={(e) => patchSsh({ host: e.target.value })} />
+                </div>
+                <div className="field">
+                  <label htmlFor="cf-ssh-port">SSH port</label>
+                  <input id="cf-ssh-port" type="number" value={v.ssh?.port ?? 22}
+                    onChange={(e) => patchSsh({ port: parseInt(e.target.value || "22") })} />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="field">
+                  <label htmlFor="cf-ssh-user">SSH user</label>
+                  <input id="cf-ssh-user" type="text" value={v.ssh?.user ?? ""}
+                    onChange={(e) => patchSsh({ user: e.target.value })} />
+                </div>
+                <div className="field">
+                  <label htmlFor="cf-ssh-auth">Auth</label>
+                  <select id="cf-ssh-auth" value={v.ssh?.auth_kind ?? "password"}
+                    onChange={(e) => patchSsh({ auth_kind: e.target.value as never })}>
+                    <option value="password">password</option>
+                    <option value="key_file">key file</option>
+                    <option value="agent">ssh-agent</option>
+                  </select>
+                </div>
+              </div>
               {v.ssh?.auth_kind === "password" && (<>
                 <label htmlFor="cf-ssh-pw">SSH password</label>
                 <input id="cf-ssh-pw" type="password" value={v.ssh?.password ?? ""}
@@ -505,12 +541,12 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
                 <input id="cf-ssh-keypass" type="password" value={v.ssh?.key_passphrase ?? ""}
                   onChange={(e) => patchSsh({ key_passphrase: e.target.value || null })} />
               </>)}
-              <label htmlFor="cf-ssh-strict">Strict host key</label>
-              <div>
+              <label className="check-row" htmlFor="cf-ssh-strict">
                 <input id="cf-ssh-strict" type="checkbox"
                   checked={v.ssh?.strict_host_key ?? false}
                   onChange={(e) => patchSsh({ strict_host_key: e.target.checked })} />
-              </div>
+                Strict host key
+              </label>
             </>)}
           </div>
         </div>
