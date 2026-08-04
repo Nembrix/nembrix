@@ -11,13 +11,15 @@
 //! - Table duplicates default to **schema + data**; `with_data=false` makes
 //!   it `CREATE TABLE … (LIKE … INCLUDING ALL)` instead (no rows copied).
 
-use sqlx::{Pool, Postgres};
+use crate::PgPool;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum OpError {
-    #[error("sqlx: {0}")]
-    Sqlx(#[from] sqlx::Error),
+    #[error("driver: {0}")]
+    Driver(String),
+    #[error("pool: {0}")]
+    Pool(String),
     #[error("cannot perform this op on the database you're connected to ({0}); reconnect to a different DB first")]
     ConnectedToTarget(String),
     #[error("invalid identifier: {0}")]
@@ -169,30 +171,45 @@ pub fn preview_drop_table(schema: &str, name: &str, cascade: bool) -> Result<OpP
 
 // ───────────────────────── apply ─────────────────────────
 
-/// Run every statement in `preview.sql` in a single transaction.
-/// Refuses if the connected DB matches `forbidden_target` — used by the
-/// rename/duplicate/drop database ops to avoid self-targeted Postgres errors.
+/// Run every statement in `preview.sql`. Refuses if the connected DB matches
+/// `forbidden_target` — used by the rename/duplicate/drop database ops to avoid
+/// self-targeted Postgres errors.
+///
+/// Statements run on the simple query protocol (pooler-safe; see crate docs).
+/// Object ops that must NOT run inside a transaction — `CREATE DATABASE`,
+/// `DROP DATABASE`, `ALTER DATABASE … RENAME` — are the ones this is used for,
+/// so we deliberately do NOT wrap the batch in `BEGIN … COMMIT`. Table/schema
+/// ops here are single statements, so per-statement autocommit is equivalent to
+/// a transaction for them.
 pub async fn apply(
-    pool: &Pool<Postgres>,
+    pool: &PgPool,
     preview: &OpPreview,
     forbidden_target: Option<&str>,
 ) -> Result<()> {
+    let client = pool.get().await.map_err(|e| OpError::Pool(e.to_string()))?;
+
     if let Some(target) = forbidden_target {
-        let current: String = sqlx::query_scalar("SELECT current_database()")
-            .persistent(false)
-            .fetch_one(pool)
-            .await?;
+        let msgs = client
+            .simple_query("SELECT current_database() AS db")
+            .await
+            .map_err(|e| OpError::Driver(e.to_string()))?;
+        let current = msgs
+            .iter()
+            .find_map(|m| match m {
+                tokio_postgres::SimpleQueryMessage::Row(r) => r.get("db").map(|s| s.to_string()),
+                _ => None,
+            })
+            .unwrap_or_default();
         if current == target {
             return Err(OpError::ConnectedToTarget(target.to_string()));
         }
     }
-    let mut tx = pool.begin().await?;
+
     for stmt in &preview.sql {
-        sqlx::query(stmt)
-            .persistent(false)
-            .execute(tx.as_mut())
-            .await?;
+        client
+            .simple_query(stmt)
+            .await
+            .map_err(|e| OpError::Driver(e.to_string()))?;
     }
-    tx.commit().await?;
     Ok(())
 }

@@ -5,7 +5,7 @@ mod state;
 use crate::state::AppState;
 use secrets::Store;
 #[cfg(debug_assertions)]
-use specta_typescript::Typescript;
+use specta_typescript::{BigIntExportBehavior, Typescript};
 use tauri::Manager;
 use tauri_specta::{collect_commands, Builder};
 
@@ -52,7 +52,15 @@ pub fn run() {
 
     #[cfg(debug_assertions)]
     builder
-        .export(Typescript::default(), "../bindings/commands.ts")
+        .export(
+            // i64/u64 appear in the type graph (CellValue::Int, ExecSummary's
+            // rows_affected/elapsed_ms). specta's default is BigInt-Fail, which
+            // panics the whole app at startup ("BigIntForbidden"); export them
+            // as TS `number` — the frontend already treats these fields as
+            // numbers and Postgres row counts stay well within f64 range.
+            Typescript::default().bigint(BigIntExportBehavior::Number),
+            "../bindings/commands.ts",
+        )
         .expect("specta export");
 
     tauri::Builder::default()
