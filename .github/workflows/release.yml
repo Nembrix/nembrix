@@ -193,39 +193,27 @@ jobs:
       fail-fast: false  # One platform failing shouldn't kill the others.
       matrix:
         include:
-          # ── macOS ──────────────────────────────────────────────
-          - label: macOS (universal)
-            slug: macos-universal
-            os: macos-14
-            target: universal-apple-darwin
-            rust_targets: "x86_64-apple-darwin,aarch64-apple-darwin"
-            args: --target universal-apple-darwin
-          - label: macOS Intel (x86_64)
-            slug: macos-x86_64
-            os: macos-14
-            target: x86_64-apple-darwin
-            rust_targets: x86_64-apple-darwin
-            args: --target x86_64-apple-darwin
+          # ── macOS (separate Apple Silicon + Intel; no universal) ─
           - label: macOS Apple Silicon (aarch64)
             slug: macos-aarch64
             os: macos-14
             target: aarch64-apple-darwin
             rust_targets: aarch64-apple-darwin
             args: --target aarch64-apple-darwin
+          - label: macOS Intel (x86_64)
+            slug: macos-x86_64
+            os: macos-14
+            target: x86_64-apple-darwin
+            rust_targets: x86_64-apple-darwin
+            args: --target x86_64-apple-darwin
 
-          # ── Windows ────────────────────────────────────────────
+          # ── Windows (both .msi and .exe per arch) ──────────────
           - label: Windows x64
             slug: windows-x86_64
             os: windows-latest
             target: x86_64-pc-windows-msvc
             rust_targets: x86_64-pc-windows-msvc
             args: ""
-          - label: Windows x86 (32-bit)
-            slug: windows-i686
-            os: windows-latest
-            target: i686-pc-windows-msvc
-            rust_targets: i686-pc-windows-msvc
-            args: --target i686-pc-windows-msvc
           - label: Windows ARM64
             slug: windows-aarch64
             os: windows-latest
@@ -233,19 +221,15 @@ jobs:
             rust_targets: aarch64-pc-windows-msvc
             args: --target aarch64-pc-windows-msvc
 
-          # ── Linux (each emits .deb, .AppImage, .rpm) ───────────
+          # ── Linux x86_64 (emits .deb, .AppImage, .rpm) ─────────
+          # arm64 Linux + 32-bit Windows are intentionally omitted —
+          # they need cross-build work; tracked in the issue tracker.
           - label: Linux x86_64
             slug: linux-x86_64
             os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             rust_targets: x86_64-unknown-linux-gnu
             args: ""
-          - label: Linux arm64
-            slug: linux-aarch64
-            os: ubuntu-22.04
-            target: aarch64-unknown-linux-gnu
-            rust_targets: aarch64-unknown-linux-gnu
-            args: --target aarch64-unknown-linux-gnu
     runs-on: ${{ matrix.os }}
     # Exposed job-wide so the Windows signing steps can gate on it in a
     # single place (`if: ... && env.SIGNPATH_API_TOKEN != ''`). When the
@@ -292,29 +276,6 @@ jobs:
             patchelf \
             rpm
 
-      # ─── arm64 cross deps (Linux arm64 only) ───────────────────
-      - name: Install arm64 cross-compile deps
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
-        run: |
-          sudo dpkg --add-architecture arm64
-          # Add ports.ubuntu.com sources for arm64 packages.
-          sudo bash -c 'cat <<EOF > /etc/apt/sources.list.d/arm64.list
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy main restricted universe multiverse
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-updates main restricted universe multiverse
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-security main restricted universe multiverse
-          EOF'
-          # Restrict the default sources to amd64 so apt doesn't try to
-          # fetch arm64 from the wrong mirror.
-          sudo sed -i 's/^deb /deb [arch=amd64] /' /etc/apt/sources.list
-          sudo apt-get update
-          sudo apt-get install -y \
-            gcc-aarch64-linux-gnu \
-            g++-aarch64-linux-gnu \
-            libwebkit2gtk-4.1-dev:arm64 \
-            libssl-dev:arm64 \
-            libayatana-appindicator3-dev:arm64 \
-            librsvg2-dev:arm64
-
       # ─── Frontend ──────────────────────────────────────────────
       - name: Install dependencies
         run: yarn install --frozen-lockfile
@@ -360,11 +321,14 @@ jobs:
           # desktop app workspace. tauri-action runs `yarn build`
           # from this path, so vite + tsc see the right tsconfig.
           projectPath: apps/desktop
-          # Generate latest.json (the updater manifest) from the artifacts
-          # actually built and attach it to the release. The app's updater
-          # endpoint points at this file — no hand-maintained manifest, no
-          # drift between what shipped and what the updater advertises.
-          includeUpdaterJson: true
+          # Do NOT let each matrix job write latest.json — every job would
+          # upload its own copy and clobber the others (GitHub rejects
+          # duplicate asset names, so the manifest ends up as whichever job
+          # finished last, referencing a single platform + stale URLs). The
+          # `.sig` update signatures are still produced and uploaded here;
+          # the dedicated `manifest` job assembles ONE correct latest.json
+          # covering every platform once all builds finish.
+          includeUpdaterJson: false
           # Pull request builds skip signing/uploading. The tag is set
           # via the prepare job's tag output; tauri-action attaches the
           # built artifacts to that release.
@@ -550,7 +514,7 @@ jobs:
           for slug in sorted(os.listdir('.')):
               if not os.path.isdir(slug):
                   continue
-              # slug is e.g. "macos-universal", "windows-x86_64".
+              # slug is e.g. "macos-aarch64", "windows-x86_64".
               parts = slug.split('-', 1)
               platform = parts[0]
               arch = parts[1] if len(parts) > 1 else ''
@@ -578,6 +542,80 @@ jobs:
           echo "── manifest.json ──"
           cat manifest.json
 
+      # ─── Assemble the ONE correct latest.json ──────────────────
+      # Each build job produced update bundles (.app.tar.gz / .AppImage /
+      # -setup.exe / .msi) plus a matching .sig, but no per-job manifest
+      # (includeUpdaterJson:false). Here — with every platform's artifacts
+      # downloaded in one place — we map each bundle to its Tauri updater
+      # platform key, read its .sig, and write a single latest.json whose
+      # URLs point at the public release-download path for the tag. This is
+      # race-free: exactly one manifest, covering every shipped platform.
+      - name: Assemble latest.json (updater manifest)
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+        run: |
+          set -euo pipefail
+          cd "release/${VERSION}"
+          python3 - "$VERSION" "$TAG" "$OWNER" "$REPO" <<'PY' > latest.json
+          import json, os, sys, datetime
+          version, tag, owner, repo = sys.argv[1:5]
+          base = f"https://github.com/{owner}/{repo}/releases/download/{tag}"
+
+          # Map an update-bundle filename to its Tauri updater platform key.
+          # The updater looks up exactly these keys; the primary key + the
+          # format-suffixed alias (…-app / …-appimage / …-nsis / …-msi) are
+          # both emitted so either install flavor updates cleanly.
+          def keys_for(fname):
+              if fname.endswith("_aarch64.app.tar.gz"):
+                  return ["darwin-aarch64", "darwin-aarch64-app"]
+              if fname.endswith("_x64.app.tar.gz"):
+                  return ["darwin-x86_64", "darwin-x86_64-app"]
+              if fname.endswith("_amd64.AppImage"):
+                  return ["linux-x86_64", "linux-x86_64-appimage"]
+              if fname.endswith("_x64-setup.exe"):
+                  return ["windows-x86_64", "windows-x86_64-nsis"]
+              if fname.endswith("_arm64-setup.exe"):
+                  return ["windows-aarch64", "windows-aarch64-nsis"]
+              # .msi variants register only the -msi alias so they don't
+              # override the NSIS entry as the default updater target.
+              if fname.endswith("_x64_en-US.msi"):
+                  return ["windows-x86_64-msi"]
+              if fname.endswith("_arm64_en-US.msi"):
+                  return ["windows-aarch64-msi"]
+              return []
+
+          platforms = {}
+          for slug in sorted(os.listdir(".")):
+              if not os.path.isdir(slug):
+                  continue
+              for fname in sorted(os.listdir(slug)):
+                  sig = os.path.join(slug, fname + ".sig")
+                  if not fname.endswith(".sig") and os.path.isfile(sig):
+                      ks = keys_for(fname)
+                      if not ks:
+                          continue
+                      signature = open(sig).read().strip()
+                      for k in ks:
+                          platforms[k] = {"signature": signature,
+                                          "url": f"{base}/{fname}"}
+
+          out = {
+              "version": version,
+              "notes": f"Nembrix {version}",
+              "pub_date": datetime.datetime.now(datetime.timezone.utc)
+                          .isoformat().replace("+00:00", "Z"),
+              "platforms": platforms,
+          }
+          print(json.dumps(out, indent=2))
+          PY
+          echo "── latest.json ──"
+          cat latest.json
+          echo "── platform keys ──"
+          python3 -c "import json;print('\n'.join(sorted(json.load(open('latest.json'))['platforms'])))"
+
       - name: Upload checksums + manifest to the Release
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
@@ -589,7 +627,7 @@ jobs:
             const path = require('path');
             const { RELEASE_ID, VERSION } = process.env;
             const dir = `release/${VERSION}`;
-            const files = ['checksums.txt', 'manifest.json'];
+            const files = ['checksums.txt', 'manifest.json', 'latest.json'];
 
             // Drop any prior copies on the release so reruns don't
             // collide on the same name (GitHub rejects duplicates).
@@ -661,29 +699,35 @@ jobs:
         run: |
           set -euo pipefail
 
-          DMG_URL="https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/Nembrix_${VERSION}_universal.dmg"
-          echo "Fetching $DMG_URL"
+          # Fetch both per-arch dmgs and compute each sha256. The dmg
+          # uploads from the macOS build jobs race us, so poll until each
+          # asset is downloadable (or fail after 5 min).
+          fetch_sha() {
+            local file="$1" out="$2"
+            local url="https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/${file}"
+            echo "Fetching $url"
+            for i in $(seq 1 60); do
+              STATUS=$(curl -s -o "$out" -w "%{http_code}" -L -H "Authorization: token ${GH_TOKEN}" "$url" || true)
+              if [[ "$STATUS" == "200" ]] && [[ -s "$out" ]]; then
+                echo "  ready (try $i)"; break
+              fi
+              echo "  not ready (try $i, status=$STATUS); sleeping…"; sleep 5
+            done
+            test -s "$out"
+          }
 
-          # The dmg upload from the macOS build job races us — poll
-          # until the asset is downloadable (or fail after 5 min).
-          for i in $(seq 1 60); do
-            STATUS=$(curl -s -o dmg.bin -w "%{http_code}" -L -H "Authorization: token ${GH_TOKEN}" "$DMG_URL" || true)
-            if [[ "$STATUS" == "200" ]] && [[ -s dmg.bin ]]; then
-              echo "dmg ready (try $i)"
-              break
-            fi
-            echo "dmg not ready yet (try $i, status=$STATUS); sleeping…"
-            sleep 5
-          done
-          test -s dmg.bin
-
-          SHA=$(sha256sum dmg.bin | awk '{print $1}')
-          echo "sha256: $SHA"
+          fetch_sha "Nembrix_${VERSION}_aarch64.dmg" dmg-arm.bin
+          fetch_sha "Nembrix_${VERSION}_x64.dmg"     dmg-x64.bin
+          SHA_ARM=$(sha256sum dmg-arm.bin | awk '{print $1}')
+          SHA_X64=$(sha256sum dmg-x64.bin | awk '{print $1}')
+          echo "sha256 arm: $SHA_ARM"
+          echo "sha256 x64: $SHA_X64"
 
           # Render the cask template.
           sed \
             -e "s/__VERSION__/${VERSION}/g" \
-            -e "s/__SHA256__/${SHA}/g" \
+            -e "s/__SHA256_ARM__/${SHA_ARM}/g" \
+            -e "s/__SHA256_X64__/${SHA_X64}/g" \
             -e "s/__OWNER__/${OWNER}/g" \
             -e "s/__REPO__/${REPO}/g" \
             .cask/nembrix.rb.tmpl > /tmp/nembrix.rb
