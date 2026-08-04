@@ -15,17 +15,31 @@ export async function seedConnectedSession(
   page: Page,
   opts: { connId?: string; name?: string; database?: string; connect?: boolean } = {},
 ) {
-  const connId = opts.connId ?? "00000000-0000-0000-0000-000000000333";
+  const connId = opts.connId ?? crypto.randomUUID();
   const name = opts.name ?? "Demo";
   const database = opts.database ?? "d";
   const connect = opts.connect ?? true;
-  const sessionId = "00000000-0000-0000-0000-000000000444";
+  // Unique per call so leaked store/localStorage state from a prior test in
+  // the same worker can't collide (the old fixed 333/444 ids meant a stale
+  // session with the same id could linger and break the next test's grid).
+  const sessionId = crypto.randomUUID();
 
-  await page.goto("/");
-  await page.evaluate(
+  // Seed localStorage BEFORE the app ever loads, via an init script that
+  // runs on every navigation in this page. This is hermetic: the very first
+  // render already sees the seeded session, with no goto→clear→reload race
+  // (the old approach loaded the app once with empty storage, then seeded +
+  // reloaded, which was order-dependent and flaked when run in isolation).
+  await page.addInitScript(
     ({ connId, name, database, sessionId }) => {
+      // Seed ONCE, on the first load. This init script runs on every
+      // navigation (incl. a test's own page.reload()), so guard on a
+      // sentinel — otherwise we'd wipe state a test deliberately reloads to
+      // verify persistence (e.g. column-resize reloads to check the width
+      // survived). The clear only happens on that first seed.
+      if (localStorage.getItem("__seeded__")) return;
       localStorage.clear();
-      const now = new Date().toISOString();
+      localStorage.setItem("__seeded__", "1");
+      const now = new Date(0).toISOString(); // fixed — Date.now varies per run
       const rec = {
         id: connId,
         name,
@@ -53,12 +67,10 @@ export async function seedConnectedSession(
     },
     { connId, name, database, sessionId },
   );
-  await page.reload();
-  // `reload()` resolves on the load event — BEFORE React mounts and renders
-  // the rail. Clicking `.rail-avatar` immediately races the mount and
-  // intermittently times out ("element not found"), which then cascades
-  // into "the grid never rendered" failures downstream. Wait for the
-  // avatar to actually be present first. (seedEmpty has the same guard.)
+  await page.goto("/");
+  // The rail renders the session's avatar once React mounts. With the seed
+  // present from first load (above) it always appears; wait for it before
+  // interacting.
   const avatar = page.locator(".rail-avatar").first();
   await expect(avatar).toBeVisible();
   await avatar.click();
@@ -74,6 +86,20 @@ export async function seedConnectedSession(
     // carries the live status in data-state.
     await expect(connectBtn).toHaveAttribute("data-state", "connected", { timeout: 10_000 });
   }
+}
+
+/**
+ * Open a table's data view from the empty-tab landing card and wait for the
+ * grid to actually render. Waits for the card to be present before clicking
+ * (the click was racing the card's render) and gives the grid generous time
+ * to stream its first batch under load. Use this instead of clicking
+ * `.empty-tab-card` directly so the open-a-table flow is consistent + robust.
+ */
+export async function openTable(page: Page, name: string) {
+  const card = page.locator(".empty-tab-card", { hasText: name });
+  await expect(card).toBeVisible({ timeout: 15_000 });
+  await card.click();
+  await expect(page.locator(".grid-scroll table.grid-header")).toBeVisible({ timeout: 15_000 });
 }
 
 /** Start with a clean slate — no connections, no sessions. */
