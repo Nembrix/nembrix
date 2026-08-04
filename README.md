@@ -1,7 +1,7 @@
 # Nembrix
 
-[![Downloads](https://img.shields.io/github/downloads/oesukam/nembrix/total?label=downloads)](https://github.com/oesukam/nembrix/releases)
-[![Latest release](https://img.shields.io/github/v/release/oesukam/nembrix?include_prereleases&label=release)](https://github.com/oesukam/nembrix/releases)
+[![Downloads](https://img.shields.io/github/downloads/nembrix/nembrix/total?label=downloads)](https://github.com/nembrix/nembrix/releases)
+[![Latest release](https://img.shields.io/github/v/release/nembrix/nembrix?include_prereleases&label=release)](https://github.com/nembrix/nembrix/releases)
 
 Cross-platform desktop database client built on **Tauri 2** (Rust + React).
 Ships Postgres with SSH-tunnel connections, schema-aware autocomplete,
@@ -78,12 +78,12 @@ Full guide: [JavaScript scripting docs](apps/docs/src/content/docs/scripting.mdx
 ### macOS
 
 ```sh
-brew tap oesukam/nembrix
+brew tap nembrix/nembrix
 brew install --cask nembrix
 ```
 
 Or download the `.dmg` for your Mac from the
-[Releases](https://github.com/oesukam/nembrix/releases) page —
+[Releases](https://github.com/nembrix/nembrix/releases) page —
 **Apple Silicon** (`_aarch64.dmg`) or **Intel** (`_x64.dmg`).
 
 Builds are signed and **notarized**, so they open with a normal
@@ -94,7 +94,7 @@ the warning.)
 ### Windows
 
 Download the `.msi` installer or portable `.exe` from
-[Releases](https://github.com/oesukam/nembrix/releases).
+[Releases](https://github.com/nembrix/nembrix/releases).
 
 The installer is not yet **Authenticode-signed**, so Windows
 SmartScreen will show a "Microsoft Defender SmartScreen prevented an
@@ -114,7 +114,7 @@ sudo apt install ./Nembrix_*_amd64.deb
 
 Nightly ships `x86_64` Linux builds; tagged releases additionally
 include an `arm64` AppImage. See the
-[Releases](https://github.com/oesukam/nembrix/releases) page.
+[Releases](https://github.com/nembrix/nembrix/releases) page.
 
 ### From source
 

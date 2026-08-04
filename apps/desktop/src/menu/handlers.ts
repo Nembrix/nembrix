@@ -238,12 +238,12 @@ export function registerAllMenuHandlers() {
   // ─── App / Help ───
   registerMenu(MENU.PREFERENCES, () => s().openPreferences());
   registerMenu(MENU.HELP_DOCS, () => {
-    window.open("https://github.com/oesukam/nembrix/blob/main/README.md", "_blank");
+    window.open("https://github.com/nembrix/nembrix/blob/main/README.md", "_blank");
   });
   registerMenu(MENU.HELP_SHORTCUTS, () => s().openShortcuts());
   registerMenu(MENU.HELP_CHECK_UPDATES, () => s().checkForUpdates());
   registerMenu(MENU.HELP_REPORT_ISSUE, () => {
-    window.open("https://github.com/oesukam/nembrix/issues/new", "_blank");
+    window.open("https://github.com/nembrix/nembrix/issues/new", "_blank");
   });
   registerMenu(MENU.HELP_ABOUT, () => s().openAbout());
 

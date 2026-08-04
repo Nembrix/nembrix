@@ -14,7 +14,7 @@ yarn docs:build    # production build → dist/ (what CI runs)
 
 Built and deployed to **GitHub Pages** by `.github/workflows/docs.yml`
 on every push touching `apps/docs/**`. The site serves from the project
-Pages URL: <https://oesukam.github.io/nembrix/>.
+Pages URL: <https://nembrix.github.io/nembrix/>.
 
 Because that's a *project* site (served under `/nembrix/`, not a domain
 root), `astro.config.mjs` sets `base: "/nembrix"` so asset and internal
@@ -24,7 +24,7 @@ env-overridable:
 | Var | Default | Purpose |
 | --- | --- | --- |
 | `DOCS_BASE` | `/nembrix` | URL path prefix the site is served from |
-| `DOCS_SITE_URL` | `https://oesukam.github.io` | Canonical origin for links + sitemap |
+| `DOCS_SITE_URL` | `https://nembrix.github.io` | Canonical origin for links + sitemap |
 
 ### Moving to a custom domain
 
