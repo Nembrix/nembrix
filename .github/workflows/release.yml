@@ -547,78 +547,73 @@ jobs:
           cat manifest.json
 
       # ─── Assemble the ONE correct latest.json ──────────────────
-      # Each build job produced update bundles (.app.tar.gz / .AppImage /
-      # -setup.exe / .msi) plus a matching .sig, but no per-job manifest
-      # (uploadUpdaterJson:false). Here — with every platform's artifacts
-      # downloaded in one place — we map each bundle to its Tauri updater
-      # platform key, read its .sig, and write a single latest.json whose
-      # URLs point at the public release-download path for the tag. This is
-      # race-free: exactly one manifest, covering every shipped platform.
+      # Build the updater manifest from the RELEASE ASSETS (via the API),
+      # not the downloaded workflow artifacts. The release assets carry the
+      # arch-suffixed names tauri-action publishes (e.g.
+      # Nembrix_0.1.0_aarch64.app.tar.gz) and — crucially — the .sig files;
+      # the raw workflow artifacts do NOT (macOS bundles are the arch-less
+      # `Nembrix.app.tar.gz`, and no .sig is bundled). For each update
+      # bundle we fetch its .sig asset's content and map the bundle name to
+      # its Tauri updater platform key. Race-free: one manifest, every
+      # shipped platform, URLs on the public release-download path.
       - name: Assemble latest.json (updater manifest)
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
           VERSION: ${{ needs.prepare.outputs.version }}
           TAG: ${{ needs.prepare.outputs.tag }}
-          OWNER: ${{ github.repository_owner }}
-          REPO: ${{ github.event.repository.name }}
-        run: |
-          set -euo pipefail
-          cd "release/${VERSION}"
-          python3 - "$VERSION" "$TAG" "$OWNER" "$REPO" <<'PY' > latest.json
-          import json, os, sys, datetime
-          version, tag, owner, repo = sys.argv[1:5]
-          base = f"https://github.com/{owner}/{repo}/releases/download/{tag}"
+        with:
+          script: |
+            const fs = require('fs');
+            const { RELEASE_ID, VERSION, TAG } = process.env;
+            const base = `https://github.com/${context.repo.owner}/${context.repo.repo}/releases/download/${TAG}`;
 
-          # Map an update-bundle filename to its Tauri updater platform key.
-          # The updater looks up exactly these keys; the primary key + the
-          # format-suffixed alias (…-app / …-appimage / …-nsis / …-msi) are
-          # both emitted so either install flavor updates cleanly.
-          def keys_for(fname):
-              if fname.endswith("_aarch64.app.tar.gz"):
-                  return ["darwin-aarch64", "darwin-aarch64-app"]
-              if fname.endswith("_x64.app.tar.gz"):
-                  return ["darwin-x86_64", "darwin-x86_64-app"]
-              if fname.endswith("_amd64.AppImage"):
-                  return ["linux-x86_64", "linux-x86_64-appimage"]
-              if fname.endswith("_x64-setup.exe"):
-                  return ["windows-x86_64", "windows-x86_64-nsis"]
-              if fname.endswith("_arm64-setup.exe"):
-                  return ["windows-aarch64", "windows-aarch64-nsis"]
-              # .msi variants register only the -msi alias so they don't
-              # override the NSIS entry as the default updater target.
-              if fname.endswith("_x64_en-US.msi"):
-                  return ["windows-x86_64-msi"]
-              if fname.endswith("_arm64_en-US.msi"):
-                  return ["windows-aarch64-msi"]
-              return []
+            // Map an update-bundle filename to its Tauri updater key(s).
+            const keysFor = (n) => {
+              if (n.endsWith('_aarch64.app.tar.gz')) return ['darwin-aarch64', 'darwin-aarch64-app'];
+              if (n.endsWith('_x64.app.tar.gz'))     return ['darwin-x86_64', 'darwin-x86_64-app'];
+              if (n.endsWith('_amd64.AppImage'))     return ['linux-x86_64', 'linux-x86_64-appimage'];
+              if (n.endsWith('_x64-setup.exe'))      return ['windows-x86_64', 'windows-x86_64-nsis'];
+              if (n.endsWith('_arm64-setup.exe'))    return ['windows-aarch64', 'windows-aarch64-nsis'];
+              // .msi register only the -msi alias so they don't override NSIS.
+              if (n.endsWith('_x64_en-US.msi'))      return ['windows-x86_64-msi'];
+              if (n.endsWith('_arm64_en-US.msi'))    return ['windows-aarch64-msi'];
+              return [];
+            };
 
-          platforms = {}
-          for slug in sorted(os.listdir(".")):
-              if not os.path.isdir(slug):
-                  continue
-              for fname in sorted(os.listdir(slug)):
-                  sig = os.path.join(slug, fname + ".sig")
-                  if not fname.endswith(".sig") and os.path.isfile(sig):
-                      ks = keys_for(fname)
-                      if not ks:
-                          continue
-                      signature = open(sig).read().strip()
-                      for k in ks:
-                          platforms[k] = {"signature": signature,
-                                          "url": f"{base}/{fname}"}
+            const assets = await github.paginate(github.rest.repos.listReleaseAssets, {
+              owner: context.repo.owner, repo: context.repo.repo,
+              release_id: Number(RELEASE_ID), per_page: 100,
+            });
+            const byName = new Map(assets.map(a => [a.name, a]));
 
-          out = {
-              "version": version,
-              "notes": f"Nembrix {version}",
-              "pub_date": datetime.datetime.now(datetime.timezone.utc)
-                          .isoformat().replace("+00:00", "Z"),
-              "platforms": platforms,
-          }
-          print(json.dumps(out, indent=2))
-          PY
-          echo "── latest.json ──"
-          cat latest.json
-          echo "── platform keys ──"
-          python3 -c "import json;print('\n'.join(sorted(json.load(open('latest.json'))['platforms'])))"
+            const platforms = {};
+            for (const a of assets) {
+              const ks = keysFor(a.name);
+              if (!ks.length) continue;
+              const sigAsset = byName.get(a.name + '.sig');
+              if (!sigAsset) { core.warning(`No .sig for ${a.name}; skipping`); continue; }
+              // Fetch the .sig content (asset download needs the octet-stream accept header).
+              const sig = await github.rest.repos.getReleaseAsset({
+                owner: context.repo.owner, repo: context.repo.repo,
+                asset_id: sigAsset.id, headers: { accept: 'application/octet-stream' },
+              });
+              const signature = Buffer.from(sig.data).toString('utf8').trim();
+              for (const k of ks) platforms[k] = { signature, url: `${base}/${a.name}` };
+            }
+
+            const keys = Object.keys(platforms);
+            core.info(`latest.json platform keys (${keys.length}): ${keys.sort().join(', ')}`);
+            if (keys.length === 0) core.setFailed('latest.json has zero platforms — manifest would be empty.');
+
+            const out = {
+              version: VERSION,
+              notes: `Nembrix ${VERSION}`,
+              pub_date: new Date().toISOString(),
+              platforms,
+            };
+            fs.mkdirSync(`release/${VERSION}`, { recursive: true });
+            fs.writeFileSync(`release/${VERSION}/latest.json`, JSON.stringify(out, null, 2));
 
       - name: Upload checksums + manifest to the Release
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
