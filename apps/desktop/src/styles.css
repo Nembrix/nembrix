@@ -1567,10 +1567,17 @@ tr.grid-filler.row-even > td {
   background: var(--bg-elev);
   border: 1px solid var(--border-soft);
   border-radius: var(--r-1);
-  padding: 5px 8px;
+  /* Explicit height + matching line-height so native <select> and <input>
+     line up exactly — otherwise a select renders a couple px taller than a
+     text input at the same padding (different default line-box metrics). */
+  height: 30px;
+  padding: 0 8px;
+  line-height: 28px;
   color: var(--fg);
   outline: none;
   width: 100%;
+  font-size: inherit;
+  font-family: inherit;
 }
 .form-grid input:focus, .form-grid select:focus { border-color: var(--accent-ring); }
 /* Boolean checkboxes in the form (Use SSH, strict host check). The bare
