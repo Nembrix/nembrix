@@ -66,6 +66,13 @@ export async function seedConnectedSession(
     const connectBtn = page.locator("[data-testid='connect-btn']");
     await expect(connectBtn).toBeVisible();
     await connectBtn.click();
+    // Wait for the session to actually reach "connected" — the connect +
+    // introspect round-trip is async, and tests that immediately click a
+    // table need the schema loaded first. Without this the table click
+    // (and the grid that follows) races the introspect and intermittently
+    // finds an empty schema → "grid never rendered". The connect button
+    // carries the live status in data-state.
+    await expect(connectBtn).toHaveAttribute("data-state", "connected", { timeout: 10_000 });
   }
 }
 
