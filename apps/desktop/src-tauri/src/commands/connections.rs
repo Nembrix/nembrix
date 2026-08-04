@@ -193,7 +193,22 @@ async fn build_driver(
                 statement_timeout_ms: connect_timeout_ms.map(|_| 5_000),
             })
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| {
+                let msg = e.to_string();
+                // sqlx only raises "server does not support TLS" when the SSL
+                // mode requires TLS (require/verify-*) but the server has TLS
+                // off. "prefer" would silently fall back — so the fix is to
+                // relax the SSL mode. Rewrite the cryptic driver error into an
+                // actionable one instead of surfacing it raw.
+                if msg.contains("server does not support TLS") {
+                    "The server doesn't offer TLS, but this connection's SSL \
+                     mode requires it. Set SSL to \"prefer\" (tries TLS, falls \
+                     back to plaintext) or \"disable\" in the connection form."
+                        .to_string()
+                } else {
+                    msg
+                }
+            })?;
             Ok(pg as DynConn)
         }
         "mongo" => {
