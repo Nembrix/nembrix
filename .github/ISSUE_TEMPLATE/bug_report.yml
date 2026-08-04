@@ -1,0 +1,108 @@
+name: Bug report
+description: Something in Nembrix isn't working as expected.
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug! Please fill in as much as
+        you can — a clear repro is the single biggest help.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug — what you did and what went wrong.
+      placeholder: When I open a table with a JSONB column, the grid…
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+      description: What you expected to happen instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps so we can reproduce it.
+      placeholder: |
+        1. Save a connection to …
+        2. Open table …
+        3. Click …
+        4. See error
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Nembrix version
+      description: From **Help → About** (or the release you downloaded).
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Windows (x64)
+        - Windows (ARM64)
+        - Linux
+    validations:
+      required: true
+
+  - type: input
+    id: os-version
+    attributes:
+      label: OS version
+      placeholder: "macOS 15.5 / Windows 11 24H2 / Ubuntu 24.04"
+    validations:
+      required: false
+
+  - type: input
+    id: postgres
+    attributes:
+      label: Postgres version
+      description: The server you were connected to (if relevant).
+      placeholder: "PostgreSQL 16.3"
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: connection
+    attributes:
+      label: Connection details
+      options:
+        - label: The connection uses an SSH tunnel
+        - label: The connection uses SSL/TLS
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / screenshots
+      description: |
+        Paste any error text, a screenshot, or console output. On a crash,
+        include whatever the error dialog showed.
+      render: shell
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and didn't find a duplicate.
+          required: true
+        - label: I'm on the latest release (or noted my version above).
+          required: true
