@@ -1528,6 +1528,38 @@ tr.grid-filler.row-even > td {
   letter-spacing: 0.01em;
 }
 .form-grid .full { grid-column: 1 / -1; }
+/* Pair two related short fields on one line to keep the form compact
+   (Host+Port, User+Password, Database+SSL, …). Each .field is a
+   label-over-input stack; .form-row lays two of them side by side.
+   Collapses to one column on narrow widths. */
+.form-grid .form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+/* A narrow trailing field (e.g. Port next to Host) gets less width. */
+.form-grid .form-row.host-port { grid-template-columns: 1fr 96px; }
+.form-grid .field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.form-grid .field label { margin-bottom: 0; }
+/* Inline checkbox + label on a single row (Use SSH, Strict host key) —
+   the checkbox sits next to its text rather than stacked below a label. */
+.form-grid label.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  margin-bottom: 0;
+}
+.form-grid label.check-row input[type=checkbox] { margin: 0; }
+@media (max-width: 460px) {
+  .form-grid .form-row,
+  .form-grid .form-row.host-port { grid-template-columns: 1fr; }
+}
 .form-grid input[type=text],
 .form-grid input[type=number],
 .form-grid input[type=password],
