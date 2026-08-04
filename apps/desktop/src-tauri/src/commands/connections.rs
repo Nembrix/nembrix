@@ -156,6 +156,46 @@ pub async fn connect(state: State<'_, AppState>, id: Uuid) -> Result<(), String>
     Ok(())
 }
 
+/// Condense a verbose driver connect error into a short, human message —
+/// the Test-connection status area is small, so raw sqlx/tokio strings (which
+/// can be a paragraph long) don't fit. Falls back to a trimmed first line.
+///
+/// The TLS case: sqlx only raises "server does not support TLS" when the SSL
+/// mode requires TLS (require/verify-*) but the server has it off — "prefer"
+/// would silently fall back — so the actionable fix is to relax the SSL mode.
+fn short_connect_error(raw: &str) -> String {
+    let low = raw.to_lowercase();
+    if low.contains("server does not support tls") {
+        return "Server has no TLS — set SSL to \"prefer\" or \"disable\".".into();
+    }
+    if low.contains("password authentication failed") || low.contains("invalid_password") {
+        return "Authentication failed — check the user and password.".into();
+    }
+    if low.contains("does not exist") && low.contains("database") {
+        return "Database not found — check the database name.".into();
+    }
+    if low.contains("connection refused") {
+        return "Connection refused — check the host and port.".into();
+    }
+    if low.contains("timed out") || low.contains("timeout") {
+        return "Connection timed out — check the host, port, and network.".into();
+    }
+    if low.contains("no route to host")
+        || low.contains("name or service not known")
+        || low.contains("failed to lookup")
+        || low.contains("nodename nor servname")
+    {
+        return "Host not reachable — check the host name.".into();
+    }
+    // Fallback: first line, trimmed to a sensible length for the small area.
+    let first = raw.lines().next().unwrap_or(raw).trim();
+    if first.chars().count() > 120 {
+        format!("{}…", first.chars().take(119).collect::<String>())
+    } else {
+        first.to_string()
+    }
+}
+
 /// Construct a live driver for an engine. Shared by `connect` (long-lived,
 /// no timeout) and `test_connection` (short-lived, with a connect timeout so
 /// an unreachable host fails fast). Returns the engine-agnostic `DynConn` the
@@ -193,22 +233,7 @@ async fn build_driver(
                 statement_timeout_ms: connect_timeout_ms.map(|_| 5_000),
             })
             .await
-            .map_err(|e| {
-                let msg = e.to_string();
-                // sqlx only raises "server does not support TLS" when the SSL
-                // mode requires TLS (require/verify-*) but the server has TLS
-                // off. "prefer" would silently fall back — so the fix is to
-                // relax the SSL mode. Rewrite the cryptic driver error into an
-                // actionable one instead of surfacing it raw.
-                if msg.contains("server does not support TLS") {
-                    "The server doesn't offer TLS, but this connection's SSL \
-                     mode requires it. Set SSL to \"prefer\" (tries TLS, falls \
-                     back to plaintext) or \"disable\" in the connection form."
-                        .to_string()
-                } else {
-                    msg
-                }
-            })?;
+            .map_err(|e| short_connect_error(&e.to_string()))?;
             Ok(pg as DynConn)
         }
         "mongo" => {
@@ -230,7 +255,7 @@ async fn build_driver(
                 connect_timeout_ms,
             })
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| short_connect_error(&e.to_string()))?;
             Ok(mongo as DynConn)
         }
         other => Err(format!("unsupported engine: {other}")),
@@ -333,5 +358,51 @@ fn map_tunnel_err(e: TunnelError) -> String {
         TunnelError::HostKeyMismatch { host } => format!("HOST_KEY_MISMATCH::{host}"),
         TunnelError::AuthFailed => "AUTH_FAILED".to_string(),
         other => other.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::short_connect_error;
+
+    #[test]
+    fn tls_required_but_unavailable_is_short_and_actionable() {
+        let raw = "error occurred while attempting to establish a TLS \
+                   connection: server does not support TLS";
+        let out = short_connect_error(raw);
+        assert!(out.contains("prefer"), "should suggest a fix: {out}");
+        assert!(
+            out.chars().count() <= 60,
+            "too long for the status area: {out}"
+        );
+    }
+
+    #[test]
+    fn common_errors_map_to_short_messages() {
+        for (raw, needle) in [
+            (
+                "FATAL: password authentication failed for user \"x\"",
+                "Authentication",
+            ),
+            ("Connection refused (os error 61)", "refused"),
+            ("connection timed out", "timed out"),
+            (
+                "failed to lookup address information: nodename nor servname provided",
+                "reachable",
+            ),
+        ] {
+            let out = short_connect_error(raw);
+            assert!(out.contains(needle), "{raw:?} -> {out:?} (want {needle})");
+            assert!(out.chars().count() <= 80);
+        }
+    }
+
+    #[test]
+    fn unknown_error_falls_back_to_trimmed_first_line() {
+        let raw = "some totally unrecognized multi-line error\nsecond line ignored";
+        assert_eq!(
+            short_connect_error(raw),
+            "some totally unrecognized multi-line error"
+        );
     }
 }
