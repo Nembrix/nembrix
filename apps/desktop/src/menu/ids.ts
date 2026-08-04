@@ -150,6 +150,7 @@ export const MENUS: MenuGroup[] = [
   {
     label: "Connection",
     items: [
+      { id: MENU.NEW_CONNECTION, label: "New Connection…", accel: "⌘N" },
       { id: MENU.MANAGE_CONNECTIONS, label: "Manage Connections…", accel: "⌘⇧L" },
       { id: MENU.RECENT_CONNECTIONS_MARKER },
       { separator: true },
