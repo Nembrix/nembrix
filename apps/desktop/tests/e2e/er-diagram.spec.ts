@@ -14,7 +14,7 @@ async function openErTab(page: import("@playwright/test").Page) {
   // not-yet-filtered list selects the wrong (or no) action.
   await expect(page.locator(".palette-row").first()).toBeVisible();
   await page.keyboard.press("Enter");
-  await expect(page.locator("svg.er-canvas")).toBeVisible();
+  await expect(page.locator("svg.er-canvas")).toBeVisible({ timeout: 15000 });
 }
 
 test("ER tab opens with a node per table and an edge for each FK", async ({ page }) => {

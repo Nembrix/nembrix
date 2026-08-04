@@ -107,22 +107,34 @@ export default function TableDataTab({ tab }: { tab: Tab }) {
   // externally (e.g. the inspector re-clicks the same table). Guard with
   // a ref so React's StrictMode double-invoke in dev doesn't dispatch
   // the stream twice (which would double the rows in the grid).
+  //
+  // We do NOT gate on connection status: gating held the query in the
+  // normal open-a-table flow (the tab mounts before the session's status
+  // has settled to "connected"), leaving the grid stuck on "No results".
+  // Instead we always run, and separately re-run if a "not connected" error
+  // resolves once the session connects (the effect below).
   const lastKeyRef = useRef<string | null>(null);
   useEffect(() => {
-    // Don't fire a query while the session is (re)connecting or failed —
-    // it would hit "not connected". `undefined` means no status was ever
-    // set (browser/mock path), which is safe to run. When reconnect
-    // completes and status flips to "connected", this effect re-runs and
-    // dispatches the query that was held back.
-    if (connStatus === "connecting" || connStatus === "disconnected" || connStatus === "error") {
-      return;
-    }
     const key = `${sql}#${tab.refreshTick ?? 0}`;
     if (lastKeyRef.current === key) return;
     lastKeyRef.current = key;
     void run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sql, tab.refreshTick, connStatus]);
+  }, [sql, tab.refreshTick]);
+
+  // Reconnect recovery: on app restart a restored tab may run its query
+  // before the session's pool is re-established, failing with "not
+  // connected". When the session later flips to "connected", re-run so the
+  // grid fills itself instead of showing a stale error (what Refresh did
+  // manually). Only re-fires on a genuine not-connected failure, so it never
+  // interferes with the normal open-a-table flow.
+  useEffect(() => {
+    if (connStatus === "connected" && /not connected/i.test(tab.error ?? "")) {
+      lastKeyRef.current = null; // force the run effect's key check to re-dispatch
+      void run();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connStatus, tab.error]);
 
   /**
    * Two-phase row count. Fires after the data stream finishes (we use
