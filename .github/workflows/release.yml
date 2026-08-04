@@ -671,6 +671,11 @@ jobs:
     needs: [prepare, build]
     runs-on: ubuntu-latest
     if: ${{ github.event.inputs.prerelease != 'true' }}
+    # HOMEBREW_TAP_TOKEN is a PAT with write access to the tap repo — scope
+    # it to the `release` environment (restricted to `main`) so it's never
+    # exposed to workflow runs on other branches or PRs. The env carries no
+    # required reviewers, so binding here adds no approval pause.
+    environment: release
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
