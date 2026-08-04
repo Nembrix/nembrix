@@ -254,6 +254,7 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
   const onSaveAndConnect = async () => {
     if (nameError) { setNameTouched(true); setTestMsg(nameError); setTestResult("fail"); return; }
     setWorking("connect");
+    setTestResult(null);
     setTestMsg("Saving…");
     try {
       const saved = await api.saveConnection(finalInput());
@@ -265,20 +266,29 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
       try {
         await api.connect(saved.id);
         store.setStatus(sessionId, "connected");
-        const tree = await api.introspect(saved.id);
-        store.setSchema(sessionId, tree);
+        // Introspection is best-effort — if it fails the connection is
+        // still up, so don't treat it as a connect failure. Just close;
+        // the inspector will retry/refresh on its own.
+        try {
+          const tree = await api.introspect(saved.id);
+          store.setSchema(sessionId, tree);
+        } catch {
+          /* ignore — connected, schema will load lazily */
+        }
         onClose();
       } catch (e) {
         // Save already succeeded, so leave the connection in the list
-        // but flag the session as errored and surface the message —
+        // but flag the session as errored and surface the message in red —
         // the user can hit Retry from the rail without re-entering
         // credentials.
         store.setStatus(sessionId, "error");
         setTestMsg(`Connect failed: ${e}`);
+        setTestResult("fail");
         setWorking(null);
       }
     } catch (e) {
       setTestMsg(`Save failed: ${e}`);
+      setTestResult("fail");
       setWorking(null);
     }
   };
