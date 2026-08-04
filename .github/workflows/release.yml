@@ -129,9 +129,22 @@ jobs:
           fi
           corepack enable || true
           yarn --cwd apps/desktop bump-version "$TARGET"
+          # Bump the pinned version in the docs landing pages' direct
+          # download links (EN + FR) so they point at the new release.
+          # Rewrites every "v<old>/Nembrix_<old>_" occurrence and the
+          # "Latest release: **v<old>**" / "Dernière version : **v<old>**"
+          # lines to $TARGET. Uses the current on-disk version as the source.
+          for f in apps/docs/src/content/docs/index.mdx apps/docs/src/content/docs/fr/index.mdx; do
+            sed -i \
+              -e "s#/download/v${CURRENT}/Nembrix_${CURRENT}_#/download/v${TARGET}/Nembrix_${TARGET}_#g" \
+              -e "s#/download/v${CURRENT}/Nembrix-${CURRENT}-#/download/v${TARGET}/Nembrix-${TARGET}-#g" \
+              -e "s#\*\*v${CURRENT}\*\*#**v${TARGET}**#g" \
+              "$f"
+          done
           git config user.name  "Nembrix release bot"
           git config user.email "release-bot@users.noreply.github.com"
-          git add apps/desktop/src-tauri/tauri.conf.json apps/desktop/src-tauri/Cargo.toml
+          git add apps/desktop/src-tauri/tauri.conf.json apps/desktop/src-tauri/Cargo.toml \
+                  apps/docs/src/content/docs/index.mdx apps/docs/src/content/docs/fr/index.mdx
           git commit -m "chore(release): v$TARGET"
           git push origin HEAD:main
 
