@@ -139,7 +139,7 @@ async function renderCask(version: string, dmgSha: string): Promise<string> {
   let body = await readFile(CASK_TEMPLATE, "utf8");
   body = body.replace(/__VERSION__/g, version);
   body = body.replace(/__SHA256__/g, dmgSha);
-  body = body.replace(/__OWNER__/g, "oesukam");
+  body = body.replace(/__OWNER__/g, "nembrix");
   body = body.replace(/__REPO__/g, "nembrix");
   return body;
 }
