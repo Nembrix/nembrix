@@ -2224,10 +2224,10 @@
   resolved "https://registry.npmjs.org/@types/pako/-/pako-2.0.4.tgz"
   integrity sha512-VWDCbrLeVXJM9fihYodcLiIv0ku+AlOa/TQ1SvYOaBuyrSKgEcro95LJyIsJ4vSo6BXIxOKxiJAat04CmST9Fw==
 
-"@types/pg@^8.20.1":
-  version "8.20.1"
-  resolved "https://registry.yarnpkg.com/@types/pg/-/pg-8.20.1.tgz#0a0d4f75c211c03703a2343ca7060546a8dbf18d"
-  integrity sha512-ybDwWypSo+Rs2LhUxSTfz5VDoon8FMvntvAZMLbFx4U4csIoXVnDjRdnp634rKgqldGio33/aZSG6aN36CzAJg==
+"@types/pg@^8.20.3":
+  version "8.20.3"
+  resolved "https://registry.yarnpkg.com/@types/pg/-/pg-8.20.3.tgz#c8d02d0e680ab881171da01cd605f88c6286edc0"
+  integrity sha512-4Tvg+HO6+oQaAkpT8GTYoSExzpGGZz532GXgbbCElWJQeQdMozBWxEKNBhJJpHFjWXsMxqPbyypvj/89FWNoSQ==
   dependencies:
     "@types/node" "*"
     pg-protocol "*"
