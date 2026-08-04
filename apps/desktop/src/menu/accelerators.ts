@@ -63,9 +63,25 @@ export function installAccelerators() {
   if (installed || isTauri) return;
   installed = true;
   window.addEventListener("keydown", (e) => {
-    // Don't steal mod+c / mod+v / mod+a etc. — let CodeMirror handle them.
+    // Never steal keys while the user is typing in a plain form field
+    // (connection form inputs, filter values, dialogs, …). Otherwise combos
+    // like ⌘A (select all), ⌘C/⌘X/⌘V (clipboard) get preventDefault()ed or
+    // trigger a menu action — e.g. ⌘W would close the window mid-edit. Text
+    // editors (CodeMirror) manage their own keymap and shouldn't be caught
+    // here either. The command palette (⌘P/⌘⇧P) stays global so it can be
+    // opened from anywhere.
+    const t = e.target as HTMLElement | null;
+    const tag = t?.tagName;
+    const editable =
+      tag === "INPUT" ||
+      tag === "TEXTAREA" ||
+      tag === "SELECT" ||
+      t?.isContentEditable === true ||
+      !!t?.closest(".cm-editor");
     for (const b of BINDINGS) {
       if (matches(e, b.combo)) {
+        const isPalette = b.id === MENU.COMMAND_PALETTE;
+        if (editable && !isPalette) return; // let the field handle it
         e.preventDefault();
         dispatchMenu(b.id);
         return;
