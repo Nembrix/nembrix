@@ -42,16 +42,24 @@
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 1rem;
   margin: 2rem 0;
+  /* Rows stretch so every card in a row is the same height. */
+  align-items: stretch;
 }
 .feature-card {
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
   padding: 1rem 1.25rem;
   border: 1px solid var(--sl-color-hairline-light);
   border-radius: 10px;
   background: var(--sl-color-bg-nav);
 }
+/* Kill the top margin Starlight/Markdown gives the first heading — it was
+   collapsing inconsistently and pushing some titles down vs. others. */
 .feature-card h3 {
-  margin: 0 0 .25rem;
+  margin: 0;
   font-size: 1rem;
+  line-height: 1.3;
 }
 .feature-card p {
   margin: 0;
@@ -74,8 +82,17 @@
   background: var(--sl-color-bg-nav);
 }
 .download-card h3 {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
   margin: 0 0 .35rem;
   font-size: 1.05rem;
+}
+.os-icon {
+  width: 1.15em;
+  height: 1.15em;
+  flex: none;
+  opacity: .9;
 }
 .download-card p {
   margin: 0 0 .6rem;
