@@ -80,14 +80,20 @@ pub async fn save_connection(
         .store
         .upsert_connection(&rec)
         .map_err(|e| e.to_string())?;
-    if let Some(pw) = input.password.as_deref() {
+    // Only (over)write a secret when the form actually supplies a non-empty
+    // value. Editing an existing connection re-opens the form with the
+    // password blanked (we never read secrets back into the UI), so an empty
+    // field means "keep the stored one" — NOT "set it to empty". Writing the
+    // empty string here would wipe the real keychain password and break the
+    // next connect.
+    if let Some(pw) = input.password.as_deref().filter(|p| !p.is_empty()) {
         secrets::put_secret(id, SecretSlot::DbPassword, pw).map_err(|e| e.to_string())?;
     }
     if let Some(ssh) = input.ssh.as_ref() {
-        if let Some(pw) = ssh.password.as_deref() {
+        if let Some(pw) = ssh.password.as_deref().filter(|p| !p.is_empty()) {
             secrets::put_secret(id, SecretSlot::SshPassword, pw).map_err(|e| e.to_string())?;
         }
-        if let Some(pp) = ssh.key_passphrase.as_deref() {
+        if let Some(pp) = ssh.key_passphrase.as_deref().filter(|p| !p.is_empty()) {
             secrets::put_secret(id, SecretSlot::SshKeyPassphrase, pp).map_err(|e| e.to_string())?;
         }
     }

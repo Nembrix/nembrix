@@ -255,38 +255,41 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
     if (nameError) { setNameTouched(true); setTestMsg(nameError); setTestResult("fail"); return; }
     setWorking("connect");
     setTestResult(null);
-    setTestMsg("Saving…");
+    setTestMsg("Connecting…");
+    const input = finalInput();
     try {
-      const saved = await api.saveConnection(finalInput());
+      // Verify the connection FIRST, using the form's own credentials
+      // (finalInput carries the typed password). Only persist once it
+      // actually works — so we never save a broken connection, and editing
+      // with a blank password field can't overwrite the stored one before
+      // we've confirmed the new one is valid.
+      await api.testConnection(input);
+    } catch (e) {
+      setTestMsg(`Connect failed: ${e}`);
+      setTestResult("fail");
+      setWorking(null);
+      return;
+    }
+    // Connection is good — save it and open a live session.
+    try {
+      const saved = await api.saveConnection(input);
       setConnections(await api.listConnections());
       const sessionId = openSession(saved.id);
       const store = useStore.getState();
       store.setStatus(sessionId, "connecting");
-      setTestMsg("Connecting…");
+      await api.connect(saved.id);
+      store.setStatus(sessionId, "connected");
+      // Introspection is best-effort — a failure here doesn't undo the
+      // connection; the inspector loads the schema lazily.
       try {
-        await api.connect(saved.id);
-        store.setStatus(sessionId, "connected");
-        // Introspection is best-effort — if it fails the connection is
-        // still up, so don't treat it as a connect failure. Just close;
-        // the inspector will retry/refresh on its own.
-        try {
-          const tree = await api.introspect(saved.id);
-          store.setSchema(sessionId, tree);
-        } catch {
-          /* ignore — connected, schema will load lazily */
-        }
-        onClose();
-      } catch (e) {
-        // Save already succeeded, so leave the connection in the list
-        // but flag the session as errored and surface the message in red —
-        // the user can hit Retry from the rail without re-entering
-        // credentials.
-        store.setStatus(sessionId, "error");
-        setTestMsg(`Connect failed: ${e}`);
-        setTestResult("fail");
-        setWorking(null);
+        const tree = await api.introspect(saved.id);
+        store.setSchema(sessionId, tree);
+      } catch {
+        /* ignore — connected, schema will load lazily */
       }
+      onClose();
     } catch (e) {
+      // Test passed but save/open failed — surface it.
       setTestMsg(`Save failed: ${e}`);
       setTestResult("fail");
       setWorking(null);
