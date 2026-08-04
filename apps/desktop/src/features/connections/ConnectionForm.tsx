@@ -232,13 +232,25 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
       setWorking(null);
       return;
     }
-    // Connection is good — save it and open a live session.
+    // Test passed, so the config is valid. Persist it.
+    let saved;
     try {
-      const saved = await api.saveConnection(input);
+      saved = await api.saveConnection(input);
       setConnections(await api.listConnections());
-      const sessionId = openSession(saved.id);
-      const store = useStore.getState();
-      store.setStatus(sessionId, "connecting");
+    } catch (e) {
+      setTestMsg(`Save failed: ${e}`);
+      setTestResult("fail");
+      setWorking(null);
+      return;
+    }
+    // Open the live session. If this fails despite the passing test (a
+    // transient issue, or a wasn't-a-new-connection edge), roll the save back
+    // for a brand-new connection so we don't leave a dead entry in the rail.
+    const wasNew = !editing;
+    const store = useStore.getState();
+    const sessionId = openSession(saved.id);
+    store.setStatus(sessionId, "connecting");
+    try {
       await api.connect(saved.id);
       store.setStatus(sessionId, "connected");
       // Introspection is best-effort — a failure here doesn't undo the
@@ -251,8 +263,17 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
       }
       onClose();
     } catch (e) {
-      // Test passed but save/open failed — surface it.
-      setTestMsg(`Save failed: ${e}`);
+      store.setStatus(sessionId, "error");
+      if (wasNew) {
+        // Don't strand a brand-new connection that couldn't connect.
+        try {
+          await api.deleteConnection(saved.id);
+          setConnections(await api.listConnections());
+        } catch {
+          /* best effort */
+        }
+      }
+      setTestMsg(`Connect failed: ${e}`);
       setTestResult("fail");
       setWorking(null);
     }

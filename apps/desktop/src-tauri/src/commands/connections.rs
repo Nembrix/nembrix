@@ -293,13 +293,29 @@ pub async fn disconnect(state: State<'_, AppState>, id: Uuid) -> Result<(), Stri
 pub async fn test_connection(input: ConnectionInput) -> Result<u64, String> {
     let started = std::time::Instant::now();
     let (host, port, _tunnel) = if let Some(ssh) = input.ssh.as_ref() {
+        // Like the DB password, SSH secrets are blanked when the form re-opens
+        // for editing — fall back to the keychain when the field is empty and
+        // we have a saved id.
+        let stored = |slot: SecretSlot| {
+            input
+                .id
+                .and_then(|id| secrets::get_secret(id, slot).ok().flatten())
+        };
+        let ssh_password = match ssh.password.as_deref() {
+            Some(p) if !p.is_empty() => ssh.password.clone(),
+            _ => stored(SecretSlot::SshPassword),
+        };
+        let ssh_passphrase = match ssh.key_passphrase.as_deref() {
+            Some(p) if !p.is_empty() => ssh.key_passphrase.clone(),
+            _ => stored(SecretSlot::SshKeyPassphrase),
+        };
         let auth = match ssh.auth_kind.as_str() {
             "password" => SshAuth::Password {
-                password: ssh.password.clone().unwrap_or_default(),
+                password: ssh_password.unwrap_or_default(),
             },
             "key_file" => SshAuth::KeyFile {
                 path: ssh.key_path.clone().ok_or("missing key path")?,
-                passphrase: ssh.key_passphrase.clone(),
+                passphrase: ssh_passphrase,
             },
             _ => SshAuth::Agent,
         };
@@ -318,12 +334,27 @@ pub async fn test_connection(input: ConnectionInput) -> Result<u64, String> {
         (input.host.clone(), input.port, None)
     };
 
+    // When editing a saved connection, the form re-opens with the password
+    // blanked (we never read secrets back into the UI). So an empty password
+    // on an input that already has an id means "use the stored one" — fall
+    // back to the keychain rather than testing with an empty password (which
+    // would spuriously fail with "authentication failed").
+    let password = match input.password {
+        Some(ref p) if !p.is_empty() => input.password.clone(),
+        _ => match input.id {
+            Some(id) => secrets::get_secret(id, SecretSlot::DbPassword)
+                .ok()
+                .flatten(),
+            None => input.password.clone(),
+        },
+    };
+
     let db = build_driver(
         &input.engine,
         host,
         port,
         &input.username,
-        input.password,
+        password,
         input.database,
         &input.ssl_mode,
         "nembrix-test",
