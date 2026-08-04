@@ -321,14 +321,18 @@ jobs:
           # desktop app workspace. tauri-action runs `yarn build`
           # from this path, so vite + tsc see the right tsconfig.
           projectPath: apps/desktop
-          # Do NOT let each matrix job write latest.json — every job would
+          # Do NOT let each matrix job upload latest.json — every job would
           # upload its own copy and clobber the others (GitHub rejects
           # duplicate asset names, so the manifest ends up as whichever job
           # finished last, referencing a single platform + stale URLs). The
-          # `.sig` update signatures are still produced and uploaded here;
-          # the dedicated `manifest` job assembles ONE correct latest.json
-          # covering every platform once all builds finish.
-          includeUpdaterJson: false
+          # dedicated `manifest` job assembles ONE correct latest.json from
+          # every platform's .sig once all builds finish.
+          # NOTE: the input is `uploadUpdaterJson` (NOT `includeUpdaterJson`,
+          # which tauri-action silently ignores → the buggy default of
+          # uploading a per-job manifest). Keep uploadUpdaterSignatures on so
+          # the .sig files the manifest job reads still land on the release.
+          uploadUpdaterJson: false
+          uploadUpdaterSignatures: true
           # Pull request builds skip signing/uploading. The tag is set
           # via the prepare job's tag output; tauri-action attaches the
           # built artifacts to that release.
@@ -545,7 +549,7 @@ jobs:
       # ─── Assemble the ONE correct latest.json ──────────────────
       # Each build job produced update bundles (.app.tar.gz / .AppImage /
       # -setup.exe / .msi) plus a matching .sig, but no per-job manifest
-      # (includeUpdaterJson:false). Here — with every platform's artifacts
+      # (uploadUpdaterJson:false). Here — with every platform's artifacts
       # downloaded in one place — we map each bundle to its Tauri updater
       # platform key, read its .sig, and write a single latest.json whose
       # URLs point at the public release-download path for the tag. This is
