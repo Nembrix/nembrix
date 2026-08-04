@@ -588,7 +588,7 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
           <button
             className="btn-pill"
             onClick={onSave}
-            disabled={!!working || !!nameError}
+            disabled={!!working}
             title={nameError ?? undefined}
           >
             {working === "save"
@@ -598,7 +598,7 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
           <button
             className="btn-pill primary"
             onClick={onSaveAndConnect}
-            disabled={!!working || !!nameError}
+            disabled={!!working}
             title={nameError ?? (editing
               ? "Update this connection and connect to it"
               : "Save this connection and connect to it now")}
