@@ -84,7 +84,7 @@ brew install --cask nembrix
 
 Or download the `.dmg` for your Mac from the
 [Releases](https://github.com/nembrix/nembrix/releases) page —
-**Apple Silicon** (`_aarch64.dmg`) or **Intel** (`_x64.dmg`).
+**Apple Silicon** (`_macOS_Apple_Silicon.dmg`) or **Intel** (`_macOS_Intel.dmg`).
 
 Builds are signed and **notarized**, so they open with a normal
 double-click. (If you grabbed an older, pre-notarization build,
