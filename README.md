@@ -13,6 +13,60 @@ For end-user documentation, see [`apps/docs/`](apps/docs/) — Astro
 Starlight site, runnable with `yarn docs:dev`. See [Layout](#layout)
 for the workspace structure.
 
+## Features
+
+- **Multi-session rail** — multiple live sessions per saved connection,
+  drag-to-reorder, one-click recents.
+- **SSH-first** — native russh tunnels (password / key / agent auth) with
+  TOFU host verification.
+- **Editable result grid** — double-click a cell to edit; ⌘S commits all
+  pending changes in one transaction; right-click to copy / set NULL.
+- **Schema-aware SQL editor** — CodeMirror with autocomplete off your live
+  schema, SQL formatting, streamed results with cancel.
+- **JavaScript scripting** — write JS with `await db.query(...)`, loops,
+  and `console.log` over a live SQL connection ([below](#javascript-scripting)).
+- **Real `EXPLAIN ANALYZE`** — heat-colored plan tree; hot branches surface
+  at a glance.
+- **Schema tools** — structure pane, schema diff with migration preview,
+  ER diagram, role/grant matrix.
+- **Copy between connections** — move a table or a whole database between
+  two live connections with FK ordering handled for you.
+- **Import / export** — CSV / JSON / SQL, plus a bulk multi-table export.
+- **Command palette** — `⌘P` fuzzy-search across actions, connections,
+  schema items, open tabs, and recent SQL.
+- **Native & private** — Postgres-first, cross-platform (macOS / Windows /
+  Linux), no required cloud account, no telemetry by default.
+
+## JavaScript scripting
+
+Toggle a **Query** tab from SQL to **JavaScript** (the `Lang` picker in
+the editor toolbar) to run JS over your live connection — useful for
+per-row work and quick data munging that's awkward in one statement.
+Scripting is SQL-engine only (Postgres / MySQL / SQLite).
+
+```js
+// Parameters are bound positionally ($1, $2, …) — never string-interpolated.
+const users = await db.query(
+  "SELECT id, email FROM users WHERE id > $1",
+  [0],
+);
+
+for (const u of users) {
+  console.log(`user ${u.id}: ${u.email}`);   // → Message tab
+}
+
+return users;                                 // → Data grid
+```
+
+- `await db.query(sql, params?)` returns an array of row objects.
+- `console.log(...)` → the **Message** tab; the returned/last query → the
+  **Data** grid.
+- Scripts run in a sandbox with **only** `db` and `console` (no filesystem
+  or network), a **wall-clock timeout** (a runaway loop can't hang the
+  app), and a **Cancel** button.
+
+Full guide: [JavaScript scripting docs](apps/docs/src/content/docs/scripting.mdx).
+
 ## Install (pre-release)
 
 > [!WARNING]
