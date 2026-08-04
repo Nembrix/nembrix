@@ -1546,6 +1546,16 @@ tr.grid-filler.row-even > td {
   min-width: 0;
 }
 .form-grid .field label { margin-bottom: 0; }
+/* Inline checkbox + label on a single row (Use SSH, Strict host key) —
+   the checkbox sits next to its text rather than stacked below a label. */
+.form-grid label.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  margin-bottom: 0;
+}
+.form-grid label.check-row input[type=checkbox] { margin: 0; }
 @media (max-width: 460px) {
   .form-grid .form-row,
   .form-grid .form-row.host-port { grid-template-columns: 1fr; }

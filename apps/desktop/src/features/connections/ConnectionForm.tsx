@@ -341,6 +341,51 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
               )}
             </div>
 
+            <div className="form-row">
+              <div className="field">
+                <label htmlFor="cf-env">Environment</label>
+                <select
+                  id="cf-env"
+                  value={v.environment ?? "development"}
+                  onChange={(e) => {
+                    const env = e.target.value as Environment;
+                    // If the user hasn't customized the color, snap it to the env default.
+                    const stickColor = v.color && v.color !== ENV_COLOR[(v.environment ?? "development")];
+                    patch({
+                      environment: env,
+                      color: stickColor ? v.color : ENV_COLOR[env],
+                    });
+                  }}
+                >
+                  {ENVIRONMENTS.map((env) => (
+                    <option key={env} value={env}>{ENV_LABEL[env]}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>Color</label>
+                <div className="env-color-row">
+                  {Object.entries(ENV_COLOR).map(([envKey, hex]) => (
+                    <button
+                      key={envKey}
+                      type="button"
+                      className={`env-swatch ${(v.color ?? ENV_COLOR[v.environment ?? "development"]) === hex ? "selected" : ""}`}
+                      style={{ background: hex }}
+                      title={`${envKey} default`}
+                      onClick={() => patch({ color: hex })}
+                    />
+                  ))}
+                  <input
+                    type="color"
+                    aria-label="Custom color"
+                    className="env-color-custom"
+                    value={colorFor(v.environment, v.color)}
+                    onChange={(e) => patch({ color: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+
             {v.engine === "postgres" && (
               <>
                 <label>Input</label>
@@ -443,51 +488,12 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
               )).map((g) => (<option key={g} value={g} />))}
             </datalist>
 
-            <div className="section-title">Environment</div>
-            <label htmlFor="cf-env">Type</label>
-            <select
-              id="cf-env"
-              value={v.environment ?? "development"}
-              onChange={(e) => {
-                const env = e.target.value as Environment;
-                // If the user hasn't customized the color, snap it to the env default.
-                const stickColor = v.color && v.color !== ENV_COLOR[(v.environment ?? "development")];
-                patch({
-                  environment: env,
-                  color: stickColor ? v.color : ENV_COLOR[env],
-                });
-              }}
-            >
-              {ENVIRONMENTS.map((env) => (
-                <option key={env} value={env}>{ENV_LABEL[env]}</option>
-              ))}
-            </select>
-            <label>Color</label>
-            <div className="env-color-row">
-              {Object.entries(ENV_COLOR).map(([envKey, hex]) => (
-                <button
-                  key={envKey}
-                  type="button"
-                  className={`env-swatch ${(v.color ?? ENV_COLOR[v.environment ?? "development"]) === hex ? "selected" : ""}`}
-                  style={{ background: hex }}
-                  title={`${envKey} default`}
-                  onClick={() => patch({ color: hex })}
-                />
-              ))}
-              <input
-                type="color"
-                aria-label="Custom color"
-                className="env-color-custom"
-                value={colorFor(v.environment, v.color)}
-                onChange={(e) => patch({ color: e.target.value })}
-              />
-            </div>
 
             <div className="section-title">SSH tunnel</div>
-            <label htmlFor="cf-ssh">Use SSH</label>
-            <div>
+            <label className="check-row" htmlFor="cf-ssh">
               <input id="cf-ssh" type="checkbox" checked={useSsh} onChange={(e) => setUseSsh(e.target.checked)} />
-            </div>
+              Use SSH
+            </label>
             {useSsh && (<>
               <div className="form-row host-port">
                 <div className="field">
@@ -535,12 +541,12 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
                 <input id="cf-ssh-keypass" type="password" value={v.ssh?.key_passphrase ?? ""}
                   onChange={(e) => patchSsh({ key_passphrase: e.target.value || null })} />
               </>)}
-              <label htmlFor="cf-ssh-strict">Strict host key</label>
-              <div>
+              <label className="check-row" htmlFor="cf-ssh-strict">
                 <input id="cf-ssh-strict" type="checkbox"
                   checked={v.ssh?.strict_host_key ?? false}
                   onChange={(e) => patchSsh({ strict_host_key: e.target.checked })} />
-              </div>
+                Strict host key
+              </label>
             </>)}
           </div>
         </div>
