@@ -1,7 +1,7 @@
 # git-cliff configuration — generates release notes from Conventional Commits.
 #
-# Used by .github/workflows/release.yml (stable) and prerelease.yml (nightly)
-# to build changelog bodies. Replaces GitHub's PR-title-based auto-notes so
+# Used by .github/workflows/release.yml to build changelog bodies. Replaces
+# GitHub's PR-title-based auto-notes so
 # that ci/test/chore/style/build commits are filtered out automatically — the
 # changelog only carries user-facing change types.
 #
@@ -65,7 +65,5 @@ commit_parsers = [
 protect_breaking_commits = true
 # Sort newest-first within each group.
 sort_commits = "newest"
-# Only include tags shaped like vX.Y.Z (plus the rolling "nightly" tag is
-# excluded so it doesn't act as a release boundary).
+# Only include tags shaped like vX.Y.Z as release boundaries.
 tag_pattern = "v[0-9]*"
-skip_tags = "nightly"
