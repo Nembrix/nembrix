@@ -66,6 +66,9 @@ jobs:
           EVENT: ${{ github.event_name }}
           # The triggering CI run's conclusion (only set for workflow_run).
           CI_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          # For the "is a stable Release running?" check below.
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
           # Kill-switch for the AUTOMATIC nightly. Set the repo variable
           # NIGHTLY_AUTO to false/off/0 to pause auto-builds (e.g. to save
           # macOS minutes); manual workflow_dispatch always still runs.
@@ -80,6 +83,19 @@ jobs:
           if [[ "$EVENT" == "workflow_dispatch" ]]; then
             echo "manual dispatch — forcing run."
             echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Defer to an in-progress stable Release: cutting a nightly while a
+          # release builds wastes runners (both do heavy multi-platform Tauri
+          # builds) and races on release assets. The Release takes priority;
+          # this auto-nightly re-fires on the next qualifying merge anyway.
+          RELEASING=$(gh run list --repo "$REPO" --workflow release.yml \
+            --status in_progress --json databaseId --jq 'length' 2>/dev/null || echo 0)
+          RELEASING_Q=$(gh run list --repo "$REPO" --workflow release.yml \
+            --status queued --json databaseId --jq 'length' 2>/dev/null || echo 0)
+          if [[ "${RELEASING:-0}" -gt 0 || "${RELEASING_Q:-0}" -gt 0 ]]; then
+            echo "A stable Release is in progress — skipping the automatic nightly."
+            echo "run=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           # Auto-trigger fires on CI *completion*; only proceed when CI

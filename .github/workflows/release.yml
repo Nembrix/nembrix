@@ -26,6 +26,9 @@ on:
 
 permissions:
   contents: write
+  # Needed to cancel in-flight nightly prerelease runs when a stable
+  # release starts (see the "Cancel in-flight nightlies" step below).
+  actions: write
 
 # Cancel an older Release run for the same version if a new one starts —
 # avoids two concurrent runs racing each other when re-clicking the button.
@@ -56,6 +59,25 @@ jobs:
       release_id: ${{ steps.create.outputs.release_id }}
       upload_url: ${{ steps.create.outputs.upload_url }}
     steps:
+      # Cutting a stable release takes priority over any nightly. Cancel
+      # in-flight/queued prerelease runs up front so they don't compete for
+      # runners or race on release assets. (The prerelease gate also skips
+      # itself when a Release is running — this covers a nightly that started
+      # just before this run.)
+      - name: Cancel in-flight nightlies
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          ids=$(gh run list --repo "$REPO" --workflow prerelease.yml \
+            --json databaseId,status \
+            --jq '.[] | select(.status=="in_progress" or .status=="queued") | .databaseId' 2>/dev/null || true)
+          for id in $ids; do
+            echo "Cancelling in-flight nightly run $id"
+            gh run cancel "$id" --repo "$REPO" || true
+          done
+          [ -z "$ids" ] && echo "No in-flight nightly runs to cancel." || true
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # git-cliff needs the full history + tags to compute the range.
