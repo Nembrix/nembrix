@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96">
+  <!-- White rounded tile so the mark reads on any header background
+       (esp. the dark docs theme and the mobile header). -->
+  <rect x="2" y="2" width="92" height="92" rx="22" fill="#ffffff"/>
+  <path d="M23 30 v31 a25 11 0 0 0 50 0 v-31" fill="none" stroke="#17181a" stroke-width="10"/>
+  <ellipse cx="48" cy="30" rx="30" ry="10.5" fill="#5a86c4"/>
+</svg>
