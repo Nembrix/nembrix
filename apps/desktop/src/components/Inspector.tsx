@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Search, Table2, Eye, FunctionSquare as FunctionIcon, ChevronDown,
-  RefreshCcw, Plus, Trash2, Star, X,
+  RefreshCcw, Plus, Trash2, Star, X, Database,
 } from "lucide-react";
 import { useStore } from "@/store";
 import * as api from "@/ipc/commands";
@@ -246,6 +246,12 @@ export default function Inspector() {
 
   return (
     <aside className="inspector">
+      {db?.name && (
+        <div className="inspector-db" title={`Connected database: ${db.name}`}>
+          <Database size={13} />
+          <span className="inspector-db-name">{db.name}</span>
+        </div>
+      )}
       <div className="inspector-segments">
         <div className="segmented" role="tablist">
           <button

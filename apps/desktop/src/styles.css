@@ -446,6 +446,22 @@ button, input, select, textarea { font: inherit; color: inherit; }
   height: 100%;
   overflow: hidden;
 }
+/* Connected-database header — tells you which DB the inspector is showing. */
+.inspector-db {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px 4px;
+  color: var(--fg-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+.inspector-db-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg);
+}
 .inspector-segments {
   display: flex;
   gap: 2px;

@@ -6,18 +6,49 @@ use db_core::{DbConnection, RowBatch};
 use db_postgres::object_ops;
 use tokio::sync::mpsc;
 
+/// A connect against a black-hole address (a routable-looking IP that never
+/// answers the SYN) must bail on the hard timeout, not hang forever. This is
+/// the exact failure mode of a pooler that accepts the socket but stalls the
+/// handshake — regression guard for the "Test connection spins indefinitely"
+/// bug. No Docker needed.
+#[tokio::test]
+async fn connect_honours_hard_timeout_on_blackhole() {
+    use db_postgres::{PgConfig, PgConn, PgSsl};
+    use std::time::Instant;
+
+    let cfg = PgConfig {
+        host: "10.255.255.1".into(), // non-routable: SYN goes unanswered
+        port: 30432,
+        user: "x".into(),
+        password: Some("x".into()),
+        database: Some("x".into()),
+        ssl_mode: PgSsl::Prefer,
+        application_name: Some("timeout-test".into()),
+        statement_timeout_ms: None,
+        connect_timeout_ms: Some(2_000),
+    };
+    let started = Instant::now();
+    let res = PgConn::connect(cfg).await;
+    let elapsed = started.elapsed();
+    assert!(res.is_err(), "expected a timeout error, got Ok");
+    assert!(
+        elapsed.as_secs() < 5,
+        "connect should bail within ~2s, took {elapsed:?}"
+    );
+}
+
 #[tokio::test]
 async fn introspect_lists_tables_and_columns() -> anyhow::Result<()> {
     require_docker!();
     let f = common::start_pg().await?;
-    sqlx::query(
+    common::exec(
+        &f,
         "CREATE TABLE widgets (
             id serial PRIMARY KEY,
             name text NOT NULL,
             tags text[] DEFAULT '{}'
         );",
     )
-    .execute(f.conn.pool())
     .await?;
 
     let tree = f.conn.introspect().await?;
@@ -45,7 +76,8 @@ async fn introspect_lists_tables_and_columns() -> anyhow::Result<()> {
 async fn introspect_returns_foreign_keys() -> anyhow::Result<()> {
     require_docker!();
     let f = common::start_pg().await?;
-    sqlx::query(
+    common::exec(
+        &f,
         "CREATE TABLE u (id serial PRIMARY KEY, email text NOT NULL);
          CREATE TABLE o (
             id serial PRIMARY KEY,
@@ -53,7 +85,6 @@ async fn introspect_returns_foreign_keys() -> anyhow::Result<()> {
             total bigint
          );",
     )
-    .execute(f.conn.pool())
     .await?;
     let tree = f.conn.introspect().await?;
     let public = &tree.databases[0]
@@ -75,11 +106,11 @@ async fn introspect_returns_foreign_keys() -> anyhow::Result<()> {
 async fn stream_emits_batches_and_finishes() -> anyhow::Result<()> {
     require_docker!();
     let f = common::start_pg().await?;
-    sqlx::query(
+    common::exec(
+        &f,
         "CREATE TABLE k (v int);
          INSERT INTO k SELECT generate_series(1, 50);",
     )
-    .execute(f.conn.pool())
     .await?;
 
     let (tx, mut rx) = mpsc::channel::<RowBatch>(16);
@@ -109,14 +140,14 @@ async fn stream_join_returns_orders_per_user() -> anyhow::Result<()> {
     // there is no app-side loop or `pool` in that path.
     require_docker!();
     let f = common::start_pg().await?;
-    sqlx::query(
+    common::exec(
+        &f,
         "CREATE TABLE u (id serial PRIMARY KEY, active boolean NOT NULL);
          CREATE TABLE o (id serial PRIMARY KEY, user_id integer REFERENCES u(id), total bigint);
          INSERT INTO u (active) VALUES (true), (true), (false);
          -- user 1: two orders, user 2: one order, user 3 (inactive): none
          INSERT INTO o (user_id, total) VALUES (1, 10), (1, 20), (2, 30);",
     )
-    .execute(f.conn.pool())
     .await?;
 
     // INNER JOIN over active users: user 1 (2 orders) + user 2 (1 order) = 3 rows.
@@ -157,14 +188,14 @@ async fn stream_left_join_keeps_users_without_orders() -> anyhow::Result<()> {
     // form to use when "for each user" must include users that have no orders.
     require_docker!();
     let f = common::start_pg().await?;
-    sqlx::query(
+    common::exec(
+        &f,
         "CREATE TABLE u (id serial PRIMARY KEY, active boolean NOT NULL);
          CREATE TABLE o (id serial PRIMARY KEY, user_id integer REFERENCES u(id), total bigint);
          INSERT INTO u (active) VALUES (true), (true);
          -- user 1 has one order, user 2 has none
          INSERT INTO o (user_id, total) VALUES (1, 10);",
     )
-    .execute(f.conn.pool())
     .await?;
 
     let (tx, mut rx) = mpsc::channel::<RowBatch>(16);
@@ -227,37 +258,29 @@ async fn cancel_stops_a_long_query() -> anyhow::Result<()> {
 async fn object_ops_duplicate_table_with_and_without_data() -> anyhow::Result<()> {
     require_docker!();
     let f = common::start_pg().await?;
-    sqlx::query(
+    common::exec(
+        &f,
         "CREATE TABLE src (id int PRIMARY KEY, name text);
          INSERT INTO src VALUES (1, 'a'), (2, 'b');",
     )
-    .execute(f.conn.pool())
     .await?;
 
     let with_data =
         object_ops::preview_duplicate_table("public", "src", "public", "dup_data", true)?;
     object_ops::apply(f.conn.pool(), &with_data, None).await?;
-    let n: i64 = sqlx::query_scalar("SELECT count(*) FROM dup_data")
-        .fetch_one(f.conn.pool())
-        .await?;
+    let n = common::scalar_i64(&f, "SELECT count(*) FROM dup_data").await?;
     assert_eq!(n, 2);
 
     let schema_only =
         object_ops::preview_duplicate_table("public", "src", "public", "dup_schema", false)?;
     object_ops::apply(f.conn.pool(), &schema_only, None).await?;
-    let n: i64 = sqlx::query_scalar("SELECT count(*) FROM dup_schema")
-        .fetch_one(f.conn.pool())
-        .await?;
+    let n = common::scalar_i64(&f, "SELECT count(*) FROM dup_schema").await?;
     assert_eq!(n, 0);
     // LIKE … INCLUDING ALL copies the PK constraint — verify by trying to
     // insert a duplicate id.
-    sqlx::query("INSERT INTO dup_schema VALUES (1, 'a')")
-        .execute(f.conn.pool())
-        .await?;
-    let dup_pk = sqlx::query("INSERT INTO dup_schema VALUES (1, 'b')")
-        .execute(f.conn.pool())
-        .await;
-    assert!(dup_pk.is_err(), "PK constraint should have been copied");
+    common::exec(&f, "INSERT INTO dup_schema VALUES (1, 'a')").await?;
+    let dup_pk = common::try_exec(&f, "INSERT INTO dup_schema VALUES (1, 'b')").await;
+    assert!(dup_pk, "PK constraint should have been copied");
     Ok(())
 }
 
@@ -265,17 +288,15 @@ async fn object_ops_duplicate_table_with_and_without_data() -> anyhow::Result<()
 async fn object_ops_rename_table_round_trip() -> anyhow::Result<()> {
     require_docker!();
     let f = common::start_pg().await?;
-    sqlx::query("CREATE TABLE old_name (v int);")
-        .execute(f.conn.pool())
-        .await?;
+    common::exec(&f, "CREATE TABLE old_name (v int);").await?;
     let p = object_ops::preview_rename_table("public", "old_name", "new_name")?;
     object_ops::apply(f.conn.pool(), &p, None).await?;
-    let exists: bool = sqlx::query_scalar(
+    let exists = common::scalar(
+        &f,
         "SELECT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname='public' AND tablename='new_name')",
     )
-    .fetch_one(f.conn.pool())
     .await?;
-    assert!(exists);
+    assert_eq!(exists.as_deref(), Some("t"));
     Ok(())
 }
 
@@ -363,13 +384,13 @@ async fn script_loops_over_real_rows() -> anyhow::Result<()> {
     // streaming path the SQL editor uses.
     require_docker!();
     let f = common::start_pg().await?;
-    sqlx::query(
+    common::exec(
+        &f,
         "CREATE TABLE u (id serial PRIMARY KEY, name text);
          CREATE TABLE o (id serial PRIMARY KEY, user_id integer, total bigint);
          INSERT INTO u (name) VALUES ('ann'), ('bob'), ('cy');
          INSERT INTO o (user_id, total) VALUES (1, 100), (1, 50), (2, 30);",
     )
-    .execute(f.conn.pool())
     .await?;
 
     let runner: Arc<dyn QueryRunner> = Arc::new(PgScriptRunner { db: f.conn.clone() });
@@ -463,12 +484,11 @@ async fn connect_with_prefer_falls_back_when_server_has_no_tls() -> anyhow::Resu
 #[tokio::test]
 async fn parameterised_query_runs_end_to_end() -> anyhow::Result<()> {
     require_docker!();
-    // Exercises the driver's stream() with bound params (unnamed prepared
-    // statements — the pooler fix). Insert then count.
+    // Exercises the driver's stream() with params. In the simple-protocol
+    // driver, params are inlined client-side as quoted literals (no prepared
+    // statement at all — the pooler fix). Insert then count.
     let f = common::start_pg().await?;
-    sqlx::query("CREATE TABLE t (id int, name text)")
-        .execute(f.conn.pool())
-        .await?;
+    common::exec(&f, "CREATE TABLE t (id int, name text)").await?;
     let (tx, mut rx) = mpsc::channel(8);
     f.conn
         .stream(
@@ -481,9 +501,7 @@ async fn parameterised_query_runs_end_to_end() -> anyhow::Result<()> {
         )
         .await?;
     while rx.recv().await.is_some() {}
-    let n: i64 = sqlx::query_scalar("SELECT count(*) FROM t")
-        .fetch_one(f.conn.pool())
-        .await?;
+    let n = common::scalar_i64(&f, "SELECT count(*) FROM t").await?;
     assert_eq!(n, 1);
     Ok(())
 }

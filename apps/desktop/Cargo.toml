@@ -48,6 +48,13 @@ sqlx = { version = "0.8", default-features = false, features = [
 ] }
 deadpool-postgres = "0.14"
 tokio-postgres = { version = "0.7", features = ["with-chrono-0_4", "with-uuid-1", "with-serde_json-1"] }
+# TLS for tokio-postgres. rustls 0.23 matches the rest of the tree (tokio-rustls
+# 0.26, russh, tauri) so there's a single rustls in the graph. We don't verify
+# certificates by default: the SSL-mode ladder mirrors libpq (Disable / Prefer /
+# Require), where Require encrypts but does NOT authenticate the server — same
+# posture as `sslmode=require` in psql. Stricter verification is a future knob.
+tokio-postgres-rustls = "0.14"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 
 # Mongo. The driver bundles its own connection pooling, so unlike the
 # Postgres path there's no sqlx-style Pool to manage by hand. We use
@@ -63,7 +70,17 @@ mongodb = "3"
 russh = "0.43"
 russh-keys = "0.43"
 
-keyring = "3"
+# keyring v3 makes the platform credential stores OPT-IN via features.
+# Without them it silently uses a no-op mock: set_password is discarded and
+# get_password returns NoEntry — so every saved DB password vanished and
+# connect authenticated with an empty password ("password authentication
+# failed"). Enable the real stores per platform.
+keyring = { version = "3", features = [
+    "apple-native",
+    "windows-native",
+    "sync-secret-service",
+    "crypto-rust",
+] }
 rusqlite = { version = "0.32", features = ["bundled"] }
 
 sqlformat = "0.2"
@@ -80,5 +97,9 @@ sql-format = { path = "crates/sql-format" }
 codegen-units = 1
 lto = true
 opt-level = "s"
-panic = "abort"
+# `unwind` (not `abort`) so a panic deep in a dependency — e.g. a driver's row
+# decoder tripping over an unexpected protocol reply from a connection pooler —
+# unwinds the offending task (queries stream on their own tokio task) instead of
+# taking the whole app down with SIGABRT.
+panic = "unwind"
 strip = true

@@ -82,7 +82,9 @@ pub fn bson_to_cell(b: &Bson) -> CellValue {
         Bson::Null | Bson::Undefined => CellValue::Null,
         Bson::Boolean(v) => CellValue::Bool(*v),
         Bson::Int32(v) => CellValue::Int(*v as i64),
-        Bson::Int64(v) => CellValue::Int(*v),
+        // Int64 past JS's safe range would round in the browser — `from_i64`
+        // routes those to a lossless `Raw` string. Int32 always fits.
+        Bson::Int64(v) => CellValue::from_i64(*v),
         Bson::Double(v) => CellValue::Float(*v),
         Bson::String(v) => CellValue::Text(v.clone()),
         // ObjectId is the single most common cell; show its hex directly
@@ -114,4 +116,59 @@ pub fn bson_to_cell(b: &Bson) -> CellValue {
 /// have a natural document shape.
 pub fn scalar_row(v: CellValue) -> Vec<CellValue> {
     vec![v]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mongodb::bson::oid::ObjectId;
+
+    #[test]
+    fn scalars_map_to_scalar_cells() {
+        assert!(matches!(
+            bson_to_cell(&Bson::Boolean(true)),
+            CellValue::Bool(true)
+        ));
+        assert!(matches!(bson_to_cell(&Bson::Int32(5)), CellValue::Int(5)));
+        assert!(matches!(bson_to_cell(&Bson::Int64(5)), CellValue::Int(5)));
+        assert!(matches!(
+            bson_to_cell(&Bson::Double(1.5)),
+            CellValue::Float(_)
+        ));
+        assert!(matches!(bson_to_cell(&Bson::Null), CellValue::Null));
+        match bson_to_cell(&Bson::String("hi".into())) {
+            CellValue::Text(s) => assert_eq!(s, "hi"),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn int64_past_js_safe_range_is_lossless_raw() {
+        // A big counter that would round in the browser must survive exactly.
+        let big = 9_007_199_254_740_993_i64; // 2^53 + 1
+        match bson_to_cell(&Bson::Int64(big)) {
+            CellValue::Raw(s) => assert_eq!(s, "9007199254740993"),
+            other => panic!("expected lossless Raw, got {other:?}"),
+        }
+        // A safe-range Int64 stays Int.
+        assert!(matches!(
+            bson_to_cell(&Bson::Int64(1000)),
+            CellValue::Int(1000)
+        ));
+    }
+
+    #[test]
+    fn objectid_shows_hex_not_extjson() {
+        let oid = ObjectId::parse_str("507f1f77bcf86cd799439011").unwrap();
+        match bson_to_cell(&Bson::ObjectId(oid)) {
+            CellValue::Text(s) => assert_eq!(s, "507f1f77bcf86cd799439011"),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn structural_types_become_documents() {
+        let arr = Bson::Array(vec![Bson::Int32(1), Bson::Int32(2)]);
+        assert!(matches!(bson_to_cell(&arr), CellValue::Document(_)));
+    }
 }
