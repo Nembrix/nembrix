@@ -359,6 +359,43 @@ jobs:
           # via the prepare job's tag output; tauri-action attaches the
           # built artifacts to that release.
 
+      # ─── Friendlier macOS .dmg names ───────────────────────────
+      # tauri-action names the dmg from the Rust target arch
+      # (…_aarch64.dmg / …_x64.dmg). Rename the uploaded .dmg *release
+      # asset* to the human labels users expect. Only the .dmg (the human
+      # download) is renamed — the .app.tar.gz updater bundles keep their
+      # arch names, since latest.json references them by URL and renaming
+      # would break auto-update.
+      - name: Rename macOS dmg asset
+        if: startsWith(matrix.os, 'macos')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          SLUG: ${{ matrix.slug }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$SLUG" in
+            macos-aarch64) from="Nembrix_${VERSION}_aarch64.dmg"; to="Nembrix_${VERSION}_macOS_Apple_Silicon.dmg" ;;
+            macos-x86_64)  from="Nembrix_${VERSION}_x64.dmg";     to="Nembrix_${VERSION}_macOS_Intel.dmg" ;;
+            *) echo "No dmg rename for slug $SLUG"; exit 0 ;;
+          esac
+          # tauri-action uploads can lag; poll for the asset id.
+          for i in $(seq 1 30); do
+            aid=$(gh api "repos/${REPO}/releases/${RELEASE_ID}/assets" --paginate \
+              --jq ".[] | select(.name==\"${from}\") | .id" 2>/dev/null || true)
+            [ -n "$aid" ] && break
+            echo "waiting for ${from} to appear (try $i)…"; sleep 4
+          done
+          if [ -z "${aid:-}" ]; then
+            echo "::warning::${from} not found; leaving dmg name unchanged."
+            exit 0
+          fi
+          gh api -X PATCH "repos/${REPO}/releases/assets/${aid}" -f name="${to}" --jq '.name'
+          echo "Renamed ${from} → ${to}"
+
       # ─── Windows signing (separate pass — Tauri's signing hook is
       #     Apple-only; on Windows we sign the produced installers after
       #     the build via SignPath's free OSS program). SignPath is a
@@ -449,6 +486,14 @@ jobs:
             -o -name '*.msi' \
             -o -name '*.exe' \) \
             -exec cp -v {} "$DEST/" \;
+          # Match the friendlier .dmg name we give the release asset, so the
+          # checksums.txt / manifest.json built from these artifacts line up
+          # with what users download. Only the .dmg is renamed (not the
+          # .app.tar.gz updater bundle).
+          [ -f "$DEST/Nembrix_${VERSION}_aarch64.dmg" ] && \
+            mv "$DEST/Nembrix_${VERSION}_aarch64.dmg" "$DEST/Nembrix_${VERSION}_macOS_Apple_Silicon.dmg" || true
+          [ -f "$DEST/Nembrix_${VERSION}_x64.dmg" ] && \
+            mv "$DEST/Nembrix_${VERSION}_x64.dmg" "$DEST/Nembrix_${VERSION}_macOS_Intel.dmg" || true
           echo "── contents of $DEST ──"
           ls -la "$DEST" || true
 
@@ -742,8 +787,8 @@ jobs:
             test -s "$out"
           }
 
-          fetch_sha "Nembrix_${VERSION}_aarch64.dmg" dmg-arm.bin
-          fetch_sha "Nembrix_${VERSION}_x64.dmg"     dmg-x64.bin
+          fetch_sha "Nembrix_${VERSION}_macOS_Apple_Silicon.dmg" dmg-arm.bin
+          fetch_sha "Nembrix_${VERSION}_macOS_Intel.dmg"     dmg-x64.bin
           SHA_ARM=$(sha256sum dmg-arm.bin | awk '{print $1}')
           SHA_X64=$(sha256sum dmg-x64.bin | awk '{print $1}')
           echo "sha256 arm: $SHA_ARM"
