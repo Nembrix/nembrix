@@ -101,6 +101,7 @@ impl PgConn {
 
         if let Some(ms) = cfg.statement_timeout_ms {
             let _ = sqlx::query(&format!("SET statement_timeout = {ms}"))
+                .persistent(false)
                 .execute(&pool)
                 .await;
         }
@@ -125,6 +126,7 @@ impl DbConnection for PgConn {
 
     async fn ping(&self) -> DbResult<()> {
         sqlx::query("SELECT 1")
+            .persistent(false)
             .execute(&self.pool)
             .await
             .map_err(|e| DbError::Driver(e.to_string()))?;
@@ -172,6 +174,7 @@ impl DbConnection for PgConn {
             };
             // Capture backend PID so we can cancel via pg_cancel_backend.
             if let Ok(row) = sqlx::query("SELECT pg_backend_pid()")
+                .persistent(false)
                 .fetch_one(conn.as_mut())
                 .await
             {
@@ -241,6 +244,7 @@ impl DbConnection for PgConn {
             .map(|e| *e.value())
             .ok_or(DbError::UnknownHandle)?;
         sqlx::query("SELECT pg_cancel_backend($1)")
+            .persistent(false)
             .bind(pid)
             .execute(&self.cancel_pool)
             .await
@@ -258,9 +262,17 @@ impl DbConnection for PgConn {
 /// `Raw` (lossless numeric/other text) binds as text — Postgres coerces it to
 /// the target column type, which is the safest general choice.
 fn bind_params<'q>(
-    mut q: sqlx::query::Query<'q, Postgres, sqlx::postgres::PgArguments>,
+    q: sqlx::query::Query<'q, Postgres, sqlx::postgres::PgArguments>,
     params: Params,
 ) -> sqlx::query::Query<'q, Postgres, sqlx::postgres::PgArguments> {
+    // `persistent(false)` makes sqlx use an UNNAMED prepared statement rather
+    // than a named `sqlx_s_N`. Named statements don't survive a transaction
+    // pooler (PgBouncer/Supabase/RDS Proxy) — the next query lands on a
+    // different backend and fails with `prepared statement … does not exist`.
+    // The unnamed statement is per-execution, so it works through poolers.
+    // (statement_cache_capacity(0) alone is NOT enough — it only disables
+    // reuse, sqlx still creates a *named* statement by default.)
+    let mut q = q.persistent(false);
     for p in params {
         q = match p {
             CellValue::Null => q.bind(None::<String>),
