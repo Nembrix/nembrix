@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📖 Documentation
+    url: https://nembrix.github.io/nembrix/
+    about: Install guides, feature docs, and how-tos. Check here before filing.
+  - name: ❓ Question
+    url: https://github.com/nembrix/nembrix/issues/new?labels=question&template=bug_report.yml
+    about: Not sure if it's a bug? Open an issue and label it "question".
