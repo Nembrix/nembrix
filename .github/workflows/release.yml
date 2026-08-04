@@ -128,6 +128,9 @@ jobs:
             exit 0
           fi
           corepack enable || true
+          # bump-version runs `tsx …`, a dev dependency — install first, or it
+          # fails with exit 127 (tsx not found) on a fresh checkout.
+          yarn install --frozen-lockfile
           yarn --cwd apps/desktop bump-version "$TARGET"
           # Bump the pinned version in the docs landing pages' direct
           # download links (EN + FR) so they point at the new release.
