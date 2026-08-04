@@ -629,6 +629,7 @@ jobs:
           RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
           VERSION: ${{ needs.prepare.outputs.version }}
           TAG: ${{ needs.prepare.outputs.tag }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           script: |
             const fs = require('fs');
@@ -660,12 +661,21 @@ jobs:
               if (!ks.length) continue;
               const sigAsset = byName.get(a.name + '.sig');
               if (!sigAsset) { core.warning(`No .sig for ${a.name}; skipping`); continue; }
-              // Fetch the .sig content (asset download needs the octet-stream accept header).
-              const sig = await github.rest.repos.getReleaseAsset({
-                owner: context.repo.owner, repo: context.repo.repo,
-                asset_id: sigAsset.id, headers: { accept: 'application/octet-stream' },
+              // Download the .sig content. octokit's getReleaseAsset with an
+              // octet-stream accept redirects to a signed URL that octokit
+              // mishandles (esp. on draft releases) — it returned a 404 body,
+              // not bytes. Use fetch() on the asset API URL instead: it follows
+              // the 302 to storage natively with the token attached.
+              const res = await fetch(sigAsset.url, {
+                headers: {
+                  Authorization: `token ${process.env.GITHUB_TOKEN}`,
+                  Accept: 'application/octet-stream',
+                  'User-Agent': 'nembrix-release',
+                },
               });
-              const signature = Buffer.from(sig.data).toString('utf8').trim();
+              if (!res.ok) { core.setFailed(`Failed to fetch ${sigAsset.name}: HTTP ${res.status}`); return; }
+              const signature = (await res.text()).trim();
+              if (!signature) { core.setFailed(`Empty signature for ${sigAsset.name}`); return; }
               for (const k of ks) platforms[k] = { signature, url: `${base}/${a.name}` };
             }
 
