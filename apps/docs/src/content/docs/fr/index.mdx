@@ -1,0 +1,88 @@
+---
+title: Nembrix
+description: Un client de base de données de bureau rapide et open source pour Postgres — multi-session, SSH d'abord, grille éditable, scriptable en JavaScript.
+template: splash
+hero:
+  tagline: Un client de base de données rapide et open source. Postgres d'abord, multi-session, SSH d'abord, scriptable, natif.
+  image:
+    file: ../../../assets/media/result-grid.png
+    alt: La grille de résultats de Nembrix affichant des lignes en flux, l'édition en ligne et l'inspecteur.
+  actions:
+    - text: Installer
+      link: install/
+      icon: right-arrow
+      variant: primary
+    - text: Premiers pas
+      link: getting-started/
+      icon: rocket
+      variant: secondary
+    - text: Voir sur GitHub
+      link: https://github.com/oesukam/nembrix
+      icon: external
+---
+
+import { Card, CardGrid } from "@astrojs/starlight/components";
+
+## Pourquoi un autre client de base de données ?
+
+Nembrix est conçu pour les développeurs qui gardent trois connexions
+ouvertes en livrant une migration. Il traite les sessions, les schémas et
+les onglets comme un état de première classe, et s'efface une fois que vous
+éditez réellement des lignes — gratuit, open source, natif et Postgres
+d'abord.
+
+<div class="feature-grid">
+  <div class="feature-card">
+    <h3>Rail multi-session</h3>
+    <p>Plusieurs sessions actives par connexion enregistrée, réorganisation par glissement, connexions récentes en un clic.</p>
+  </div>
+  <div class="feature-card">
+    <h3>SSH d'abord</h3>
+    <p>Tunnels russh natifs avec authentification par mot de passe / clé / agent et vérification d'hôte TOFU.</p>
+  </div>
+  <div class="feature-card">
+    <h3>Grille éditable</h3>
+    <p>Double-cliquez une cellule, éditez, ⌘S valide toutes les modifications en une seule transaction. Clic droit pour copier / mettre à&nbsp;NULL.</p>
+  </div>
+  <div class="feature-card">
+    <h3>Scripting JavaScript</h3>
+    <p>Écrivez du JS avec <code>await db.query(...)</code>, des boucles et <code>console.log</code> sur une connexion SQL active — en bac à sable, avec délai d'expiration et annulation.</p>
+  </div>
+  <div class="feature-card">
+    <h3>Véritable EXPLAIN ANALYZE</h3>
+    <p>Arbre de plan coloré selon la chaleur, coût ou temps réel par nœud, les branches chaudes ressortent instantanément.</p>
+  </div>
+  <div class="feature-card">
+    <h3>Outils de schéma</h3>
+    <p>Volet de structure, diff de schéma avec aperçu de migration, diagramme ER et matrice de rôles / privilèges.</p>
+  </div>
+  <div class="feature-card">
+    <h3>Copie entre connexions</h3>
+    <p>Déplacez une table — ou une base entière — d'une connexion active vers une autre, l'ordre des clés étrangères étant géré pour vous.</p>
+  </div>
+  <div class="feature-card">
+    <h3>Privé par défaut</h3>
+    <p>Multiplateforme (macOS / Windows / Linux). Aucun compte cloud requis, aucune télémétrie, aucun démon.</p>
+  </div>
+</div>
+
+## Pour commencer
+
+<CardGrid>
+  <Card title="Se connecter" icon="rocket">
+    Parcourez l'enregistrement de votre première connexion, les tunnels SSH et les groupes.
+    [→ Premiers pas](getting-started/)
+  </Card>
+  <Card title="Travailler avec les tables" icon="document">
+    Inspecteur, grille de résultats, édition en ligne, filtres, éditeur SQL.
+    [→ Tables & données](inspector/)
+  </Card>
+  <Card title="Scriptez-le" icon="seti:javascript">
+    Exécutez du JavaScript sur une connexion active avec `db.query`, des boucles et des logs.
+    [→ Scripting JavaScript](scripting/)
+  </Card>
+  <Card title="Outils de schéma" icon="setting">
+    Volet de structure, EXPLAIN, diff de schéma, diagramme ER, matrice de rôles/privilèges.
+    [→ Schéma](structure/)
+  </Card>
+</CardGrid>

@@ -1,9 +1,12 @@
 ---
 title: Nembrix
-description: A modern desktop database client for Postgres — fast inspector, editable grid, SSH-first, multi-session.
+description: A fast, open-source desktop database client for Postgres — multi-session, SSH-first, editable grid, JavaScript scriptable.
 template: splash
 hero:
-  tagline: A fast, opinionated database client. Postgres-first, multi-session, scriptable, native-feeling.
+  tagline: A fast, open-source database client. Postgres-first, multi-session, SSH-first, scriptable, native-feeling.
+  image:
+    file: ../../assets/media/result-grid.png
+    alt: The Nembrix result grid showing streamed rows, inline editing, and the inspector.
   actions:
     - text: Install
       # Relative so it resolves under the configured `base` (/nembrix/) —
@@ -12,6 +15,10 @@ hero:
       link: install/
       icon: right-arrow
       variant: primary
+    - text: Get started
+      link: getting-started/
+      icon: rocket
+      variant: secondary
     - text: View on GitHub
       link: https://github.com/oesukam/nembrix
       icon: external
@@ -23,7 +30,8 @@ import { Card, CardGrid } from "@astrojs/starlight/components";
 
 Nembrix is built for engineers who keep three connections open while
 shipping a migration. It treats sessions, schemas, and tabs as first-class
-state, and gets out of the way once you're actually editing rows.
+state, and gets out of the way once you're actually editing rows — free,
+open source, native, and Postgres-first.
 
 <div class="feature-grid">
   <div class="feature-card">
@@ -31,28 +39,36 @@ state, and gets out of the way once you're actually editing rows.
     <p>Multiple live sessions per saved connection, drag-to-reorder, recent connections in one click.</p>
   </div>
   <div class="feature-card">
-    <h3>Editable grid</h3>
-    <p>Double-click a cell, edit, ⌘S commits all pending changes in one transaction. Right-click for copy / set NULL.</p>
-  </div>
-  <div class="feature-card">
     <h3>SSH first</h3>
     <p>Native russh tunnels with password / key / agent auth and TOFU host verification.</p>
+  </div>
+  <div class="feature-card">
+    <h3>Editable grid</h3>
+    <p>Double-click a cell, edit, ⌘S commits every pending change in one transaction. Right-click for copy / set&nbsp;NULL.</p>
+  </div>
+  <div class="feature-card">
+    <h3>JavaScript scripting</h3>
+    <p>Write JS with <code>await db.query(...)</code>, loops, and <code>console.log</code> over a live SQL connection — sandboxed, with a timeout &amp; cancel.</p>
   </div>
   <div class="feature-card">
     <h3>Real EXPLAIN ANALYZE</h3>
     <p>Heat-colored plan tree, per-node cost or actual time, hot branches surface instantly.</p>
   </div>
   <div class="feature-card">
+    <h3>Schema tools</h3>
+    <p>Structure pane, schema diff with a migration preview, ER diagram, and a role / grant matrix.</p>
+  </div>
+  <div class="feature-card">
     <h3>Copy between connections</h3>
     <p>Move a table — or a whole database — from one live connection to another with FK ordering handled for you.</p>
   </div>
   <div class="feature-card">
-    <h3>Filters that read like English</h3>
-    <p>"contains", "is null", "icontains" — operators that match what you mean, with per-row enable toggles.</p>
+    <h3>Private by default</h3>
+    <p>Cross-platform (macOS / Windows / Linux). No required cloud account, no telemetry, no daemon.</p>
   </div>
 </div>
 
-## What's next
+## Dive in
 
 <CardGrid>
   <Card title="Get connected" icon="rocket">
@@ -63,12 +79,12 @@ state, and gets out of the way once you're actually editing rows.
     Inspector, the result grid, inline editing, filters, the SQL editor.
     [→ Tables & data](inspector/)
   </Card>
+  <Card title="Script it" icon="seti:javascript">
+    Run JavaScript over a live connection with `db.query`, loops, and logs.
+    [→ JavaScript scripting](scripting/)
+  </Card>
   <Card title="Schema tools" icon="setting">
     Structure pane, EXPLAIN, schema diff, ER diagram, role/grant matrix.
     [→ Schema](structure/)
-  </Card>
-  <Card title="Reference" icon="open-book">
-    Keyboard shortcuts, filter operators, preferences.
-    [→ Reference](reference/keyboard-shortcuts/)
   </Card>
 </CardGrid>

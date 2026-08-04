@@ -21,6 +21,18 @@ export default defineConfig({
     starlight({
       title: "Nembrix",
       tagline: "Connect. Query. Control.",
+      // Header logo — the mark on a white tile so it reads on any header
+      // background (the dark docs theme, and the mobile header). Shown
+      // alongside the "Nembrix" title.
+      logo: { src: "./src/assets/logo.svg" },
+      // English default + French. Pages live at content/docs/<slug> (English)
+      // and content/docs/fr/<slug> (French). Untranslated FR pages fall back
+      // to English, and a language switcher appears in the header.
+      defaultLocale: "root",
+      locales: {
+        root: { label: "English", lang: "en" },
+        fr: { label: "Français", lang: "fr" },
+      },
       // Pagefind is bundled by default — searchable static text out of the box.
       // No Algolia signup required.
       customCss: ["./src/styles/custom.css"],

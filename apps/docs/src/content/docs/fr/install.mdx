@@ -1,0 +1,52 @@
+---
+title: Installation
+description: Télécharger et lancer Nembrix.
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Nembrix est une application de bureau native pour macOS, Windows et Linux.
+Vous pouvez aussi lancer la version web pour itérer rapidement.
+
+## Bureau
+
+<Tabs>
+  <TabItem label="macOS">
+    Téléchargez le dernier `.dmg` depuis les
+    [Releases](https://github.com/oesukam/nembrix/releases), ouvrez-le et
+    glissez l'application dans Applications.
+
+    Les versions signées et notariées s'ouvrent normalement. Si vous avez
+    récupéré une version antérieure à la signature (ou une nightly non
+    signée), macOS peut vous demander de confirmer le développeur au
+    premier lancement — clic droit sur l'app → **Ouvrir**.
+  </TabItem>
+  <TabItem label="Windows">
+    Téléchargez l'installeur `.msi` (ou le programme `.exe`) depuis les
+    [Releases](https://github.com/oesukam/nembrix/releases) et exécutez-le.
+
+    Les versions Windows **ne sont pas encore signées**, donc au premier
+    lancement Microsoft Defender SmartScreen affiche une boîte de dialogue
+    bleue **« Windows a protégé votre ordinateur »**. C'est normal —
+    cliquez sur **Informations complémentaires → Exécuter quand même**
+    pour installer. (La signature est prévue ; d'ici là l'installeur n'est
+    pas signé, mais le téléchargement est bien celui produit par notre CI.)
+  </TabItem>
+  <TabItem label="Linux">
+    Les versions `.AppImage` et `.deb` sont sur la page
+    [Releases](https://github.com/oesukam/nembrix/releases).
+
+    ```sh
+    chmod +x Nembrix.AppImage
+    ./Nembrix.AppImage
+    ```
+  </TabItem>
+</Tabs>
+
+## Ce dont vous avez besoin
+
+- Un serveur Postgres accessible (en local ou via SSH).
+- Pour les tunnels SSH : un ssh-agent configuré, ou un fichier de clé à
+  nous indiquer.
+- Rien d'autre. Aucun compte cloud requis, aucune télémétrie par défaut,
+  aucun démon.
