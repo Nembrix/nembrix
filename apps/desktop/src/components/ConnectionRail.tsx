@@ -71,8 +71,26 @@ export default function ConnectionRail({ onNewConnection }: { onNewConnection: (
         </div>
       )}
       {sessions.map((sess) => {
-        const c = connections.find((cn) => cn.id === sess.connectionId);
-        if (!c) return null;
+        // The full connection record loads asynchronously via
+        // `listConnections`. While it's in flight, DON'T drop the session's
+        // avatar (that made the rail flash empty on boot and was the root of
+        // the intermittent ".rail-avatar not found" e2e flake) — render a
+        // lightweight placeholder from what the session already knows, and
+        // enrich it once the record arrives.
+        const loaded = connections.find((cn) => cn.id === sess.connectionId);
+        const c = loaded ?? {
+          id: sess.connectionId,
+          name: sess.label ?? "Connection",
+          engine: "postgres",
+          host: "",
+          port: 0,
+          username: "",
+          database: undefined,
+          ssl_mode: "prefer",
+          ssh: null,
+          color: null,
+          environment: undefined,
+        } as unknown as (typeof connections)[number];
         const st = status[sess.id] ?? "disconnected";
         const active = selectedConnId === sess.id;
         const db = c.database ?? "—";
