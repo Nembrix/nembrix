@@ -10,6 +10,8 @@ playwright-report/
 .turbo/
 .DS_Store
 *.log
+# TypeScript incremental build cache — regenerated on every `tsc` run.
+*.tsbuildinfo
 .env.signing
 *.cer
 # Local signing material — CSR, exported certs, .p12s. Never commit; the
