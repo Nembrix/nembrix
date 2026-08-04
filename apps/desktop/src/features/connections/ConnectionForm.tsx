@@ -6,6 +6,7 @@ import type { ConnectionInput, ConnectionRecord, Environment } from "@/ipc/types
 import { useStore } from "@/store";
 import { ENV_COLOR, ENV_LABEL, ENVIRONMENTS, colorFor } from "./environment";
 import { validateConnectionName } from "./validateConnectionName";
+import { buildPostgresUri, parsePostgresUri } from "./postgresUri";
 
 /** Engines we ship now vs. the ones on the roadmap. The form lists every
  *  engine — the unsupported ones are shown disabled with a "Coming soon"
@@ -29,45 +30,6 @@ const DEFAULT_PORT: Record<EngineKey, number> = {
   mongo: 27017,
   redis: 6379,
 };
-
-/** Build a libpq-style URI from the current form values. The password
- *  is intentionally omitted from the *display* string (Test/Connect
- *  still uses the password field) — pasted URIs include passwords, but
- *  rendering them back in a visible field is a security smell. */
-function buildPostgresUri(v: ConnectionInput): string {
-  const user = encodeURIComponent(v.username || "");
-  const host = v.host || "";
-  const port = v.port || 5432;
-  const db = v.database ? `/${encodeURIComponent(v.database)}` : "";
-  const params: string[] = [];
-  if (v.ssl_mode && v.ssl_mode !== "prefer") params.push(`sslmode=${v.ssl_mode}`);
-  const q = params.length ? `?${params.join("&")}` : "";
-  return `postgresql://${user}${user ? "@" : ""}${host}:${port}${db}${q}`;
-}
-
-/** Parse a postgres:// or postgresql:// URI into a partial input.
- *  Returns null when the string isn't a recognisable Postgres URI so
- *  the caller can show a "couldn't parse" hint rather than silently
- *  blanking the form. */
-function parsePostgresUri(raw: string): Partial<ConnectionInput> | null {
-  const s = raw.trim();
-  if (!s) return null;
-  if (!/^postgres(ql)?:\/\//i.test(s)) return null;
-  let u: URL;
-  try { u = new URL(s); } catch { return null; }
-  const out: Partial<ConnectionInput> = {};
-  if (u.hostname) out.host = u.hostname;
-  if (u.port) out.port = parseInt(u.port, 10) || 5432;
-  if (u.username) out.username = decodeURIComponent(u.username);
-  if (u.password) out.password = decodeURIComponent(u.password);
-  const path = u.pathname.replace(/^\//, "");
-  if (path) out.database = decodeURIComponent(path);
-  const sslmode = u.searchParams.get("sslmode");
-  if (sslmode === "disable" || sslmode === "prefer" || sslmode === "require") {
-    out.ssl_mode = sslmode;
-  }
-  return out;
-}
 
 const empty: ConnectionInput = {
   id: null,
@@ -255,39 +217,63 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
     if (nameError) { setNameTouched(true); setTestMsg(nameError); setTestResult("fail"); return; }
     setWorking("connect");
     setTestResult(null);
-    setTestMsg("Saving…");
+    setTestMsg("Connecting…");
+    const input = finalInput();
     try {
-      const saved = await api.saveConnection(finalInput());
+      // Verify the connection FIRST, using the form's own credentials
+      // (finalInput carries the typed password). Only persist once it
+      // actually works — so we never save a broken connection, and editing
+      // with a blank password field can't overwrite the stored one before
+      // we've confirmed the new one is valid.
+      await api.testConnection(input);
+    } catch (e) {
+      setTestMsg(`Connect failed: ${e}`);
+      setTestResult("fail");
+      setWorking(null);
+      return;
+    }
+    // Test passed, so the config is valid. Persist it.
+    let saved;
+    try {
+      saved = await api.saveConnection(input);
       setConnections(await api.listConnections());
-      const sessionId = openSession(saved.id);
-      const store = useStore.getState();
-      store.setStatus(sessionId, "connecting");
-      setTestMsg("Connecting…");
-      try {
-        await api.connect(saved.id);
-        store.setStatus(sessionId, "connected");
-        // Introspection is best-effort — if it fails the connection is
-        // still up, so don't treat it as a connect failure. Just close;
-        // the inspector will retry/refresh on its own.
-        try {
-          const tree = await api.introspect(saved.id);
-          store.setSchema(sessionId, tree);
-        } catch {
-          /* ignore — connected, schema will load lazily */
-        }
-        onClose();
-      } catch (e) {
-        // Save already succeeded, so leave the connection in the list
-        // but flag the session as errored and surface the message in red —
-        // the user can hit Retry from the rail without re-entering
-        // credentials.
-        store.setStatus(sessionId, "error");
-        setTestMsg(`Connect failed: ${e}`);
-        setTestResult("fail");
-        setWorking(null);
-      }
     } catch (e) {
       setTestMsg(`Save failed: ${e}`);
+      setTestResult("fail");
+      setWorking(null);
+      return;
+    }
+    // Open the live session. If this fails despite the passing test (a
+    // transient issue, or a wasn't-a-new-connection edge), roll the save back
+    // for a brand-new connection so we don't leave a dead entry in the rail.
+    const wasNew = !editing;
+    const store = useStore.getState();
+    const sessionId = openSession(saved.id);
+    store.setStatus(sessionId, "connecting");
+    try {
+      await api.connect(saved.id);
+      store.setStatus(sessionId, "connected");
+      // Introspection is best-effort — a failure here doesn't undo the
+      // connection; the inspector loads the schema lazily.
+      try {
+        const tree = await api.introspect(saved.id);
+        store.setSchema(sessionId, tree);
+      } catch {
+        /* ignore — connected, schema will load lazily */
+      }
+      onClose();
+    } catch (e) {
+      store.setStatus(sessionId, "error");
+      if (wasNew) {
+        // Don't strand a brand-new connection that couldn't connect.
+        try {
+          await api.deleteConnection(saved.id);
+          setConnections(await api.listConnections());
+        } catch {
+          /* best effort */
+        }
+      }
+      setTestMsg(`Connect failed: ${e}`);
       setTestResult("fail");
       setWorking(null);
     }
