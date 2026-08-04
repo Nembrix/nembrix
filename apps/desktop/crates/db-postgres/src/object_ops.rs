@@ -179,6 +179,7 @@ pub async fn apply(
 ) -> Result<()> {
     if let Some(target) = forbidden_target {
         let current: String = sqlx::query_scalar("SELECT current_database()")
+            .persistent(false)
             .fetch_one(pool)
             .await?;
         if current == target {
@@ -187,7 +188,10 @@ pub async fn apply(
     }
     let mut tx = pool.begin().await?;
     for stmt in &preview.sql {
-        sqlx::query(stmt).execute(tx.as_mut()).await?;
+        sqlx::query(stmt)
+            .persistent(false)
+            .execute(tx.as_mut())
+            .await?;
     }
     tx.commit().await?;
     Ok(())

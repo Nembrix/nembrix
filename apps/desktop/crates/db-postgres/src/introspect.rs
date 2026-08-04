@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 
 pub async fn introspect(pool: &Pool<Postgres>) -> DbResult<SchemaTree> {
     let db_name: String = sqlx::query_scalar("SELECT current_database()")
+        .persistent(false)
         .fetch_one(pool)
         .await
         .map_err(|e| DbError::Driver(e.to_string()))?;
@@ -23,6 +24,7 @@ pub async fn introspect(pool: &Pool<Postgres>) -> DbResult<SchemaTree> {
            AND n.nspname <> 'information_schema'
          ORDER BY (n.nspname = 'public') DESC, n.nspname",
     )
+    .persistent(false)
     .fetch_all(pool)
     .await
     .map_err(|e| DbError::Driver(e.to_string()))?;
@@ -43,6 +45,7 @@ pub async fn introspect(pool: &Pool<Postgres>) -> DbResult<SchemaTree> {
         ORDER BY n.nspname, c.relname
         "#,
     )
+    .persistent(false)
     .fetch_all(pool)
     .await
     .map_err(|e| DbError::Driver(e.to_string()))?;
@@ -58,6 +61,7 @@ pub async fn introspect(pool: &Pool<Postgres>) -> DbResult<SchemaTree> {
         ORDER BY table_schema, table_name, ordinal_position
         "#,
     )
+    .persistent(false)
     .fetch_all(pool)
     .await
     .map_err(|e| DbError::Driver(e.to_string()))?;
@@ -74,6 +78,7 @@ pub async fn introspect(pool: &Pool<Postgres>) -> DbResult<SchemaTree> {
         ORDER BY tc.table_schema, tc.table_name, kcu.ordinal_position
         "#,
     )
+    .persistent(false)
     .fetch_all(pool)
     .await
     .map_err(|e| DbError::Driver(e.to_string()))?;
@@ -121,6 +126,7 @@ pub async fn introspect(pool: &Pool<Postgres>) -> DbResult<SchemaTree> {
         ORDER BY fks.schema, fks.table_name, fks.conname
         "#,
     )
+    .persistent(false)
     .fetch_all(pool)
     .await
     .map_err(|e| DbError::Driver(e.to_string()))?;
@@ -149,6 +155,7 @@ pub async fn introspect(pool: &Pool<Postgres>) -> DbResult<SchemaTree> {
         ORDER BY n.nspname, t.relname, i.relname
         "#,
     )
+    .persistent(false)
     .fetch_all(pool)
     .await
     .map_err(|e| DbError::Driver(e.to_string()))?;
@@ -176,6 +183,7 @@ pub async fn introspect(pool: &Pool<Postgres>) -> DbResult<SchemaTree> {
         ORDER BY n.nspname, p.proname
         "#,
     )
+    .persistent(false)
     .fetch_all(pool)
     .await
     .map_err(|e| DbError::Driver(e.to_string()))?;
