@@ -55,7 +55,7 @@ export function buildJsScriptExtension(tree: SchemaTree | undefined): Extension 
   const API: Completion[] = [
     { label: "db.query", type: "function", info: "await db.query(sql, params?) → rows[]", apply: "db.query(" },
     { label: "db", type: "namespace", info: "The database handle — only db.query is exposed." },
-    { label: "console.log", type: "function", info: "console.log(...args) → Message tab", apply: "console.log(" },
+    { label: "console.log", type: "function", info: "console.log(...args) → Console tab", apply: "console.log(" },
     { label: "await", type: "keyword" },
     { label: "const", type: "keyword" },
     { label: "let", type: "keyword" },

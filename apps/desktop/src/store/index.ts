@@ -379,7 +379,23 @@ export const useStore = create<State>((set, get) => ({
     set({ activeTabId: tabs[next].id });
   },
 
-  selectConn: (id) => set({ selectedConnId: id, selectedTable: null }),
+  selectConn: (id) =>
+    set((st) => {
+      // Switching connections must also move focus to a tab that belongs to
+      // the newly-selected session — otherwise the main pane (which renders
+      // `activeTabId && connId === selectedConnId`) goes blank because the
+      // active tab still points at the previous connection's tab. Keep the
+      // current active tab if it already belongs to this session; else pick
+      // that session's most-recent tab (or none, letting the empty state
+      // offer to open one).
+      const activeStillValid = st.tabs.some(
+        (t) => t.id === st.activeTabId && t.connId === id,
+      );
+      const nextActive = activeStillValid
+        ? st.activeTabId
+        : [...st.tabs].reverse().find((t) => t.connId === id)?.id ?? null;
+      return { selectedConnId: id, selectedTable: null, activeTabId: nextActive };
+    }),
   selectTable: (t) => set({ selectedTable: t }),
   setInspectorView: (v) => set({ inspectorView: v }),
   setActiveSchema: (connId, schema) =>

@@ -110,10 +110,13 @@ pub(crate) async fn execute(
     // this, the promise from the IIFE never settles.
     rt.idle().await;
 
-    // Read back the resolved value of the IIFE promise.
+    // Read back the resolved value of the IIFE promise. We return two things:
+    // the tabular `QueryResult` (for the grid, when the return value is one),
+    // and a human string form of the return value (for the console, so a
+    // script that `return`s a scalar/object shows *something* — like a REPL).
     let sr_await = stop_reason.clone();
     let to_await = bridge.limits.timeout;
-    let returned: Option<QueryResult> = ctx
+    let (returned, return_repr): (Option<QueryResult>, Option<String>) = ctx
         .async_with(async move |ctx| {
             let promise: rquickjs::Value = ctx
                 .globals()
@@ -126,16 +129,34 @@ pub(crate) async fn execute(
                     .await
                     .catch(&ctx)
                     .map_err(|e| classify(&sr_await, to_await, e.to_string()))?,
-                None => return Ok::<_, ScriptError>(None),
+                None => return Ok::<_, ScriptError>((None, None)),
             };
             // A `db.query` result is a `{ columns, rows }` object; anything else
             // (undefined, a number, a string) is not tabular, so we fall back to
             // the last query result instead.
-            Ok(coerce_query_result(&ctx, settled))
+            let tabular = coerce_query_result(&ctx, settled.clone());
+            // A string form of the return value for the console — but only when
+            // it isn't a grid-shaped result (that's shown as a table already)
+            // and isn't undefined (a script with no `return`). This makes a
+            // `return 42` / `return {ok:true}` visible REPL-style.
+            let repr = if settled.is_undefined() || tabular.is_some() {
+                None
+            } else {
+                Some(stringify(&settled))
+            };
+            Ok((tabular, repr))
         })
         .await?;
 
-    let logs = std::mem::take(&mut *bridge.logs.lock().unwrap());
+    let mut logs = std::mem::take(&mut *bridge.logs.lock().unwrap());
+    // Echo the script's return value as a final console line (REPL-style), so
+    // `return result` is visible even when it isn't a grid-shaped table.
+    if let Some(repr) = return_repr {
+        logs.push(LogLine {
+            level: LogLevel::Log,
+            text: format!("\u{2190} {repr}"), // "← <value>"
+        });
+    }
     let last = bridge.last_result.lock().unwrap().clone();
     let query_count = bridge.query_count.load(Ordering::Relaxed);
 
@@ -247,25 +268,42 @@ fn install_db(ctx: &rquickjs::Ctx<'_>, bridge: Arc<Bridge>) -> Result<(), Script
     Ok(())
 }
 
-/// Newtype so we can implement `IntoJs` for a `QueryResult` shaped the way a
-/// script expects: `{ columns, rows, rowCount }`.
+/// Newtype so we can implement `IntoJs` for a `QueryResult`. A `db.query`
+/// result is exposed as **the array of row objects** so a script can iterate
+/// it directly (`for (const u of users)`, `users.length`, `users.map(...)`) —
+/// the ergonomic shape the docs teach. For callers that want metadata, the
+/// array also carries `.columns`, `.rowCount`, and a `.rows` self-reference
+/// (so older `result.rows` code keeps working).
 struct QueryResultJs(QueryResult);
 
 impl<'js> rquickjs::IntoJs<'js> for QueryResultJs {
     fn into_js(self, ctx: &rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
-        let obj = Object::new(ctx.clone())?;
-        obj.set("columns", self.0.columns.clone())?;
-        obj.set("rowCount", self.0.rows.len() as i64)?;
-        // rows: array of objects. Round-trip via serde_json → JS.
+        // Build the JS array of row objects.
         let rows_json = serde_json::Value::Array(
             self.0
                 .rows
-                .into_iter()
+                .iter()
+                .cloned()
                 .map(serde_json::Value::Object)
                 .collect(),
         );
-        obj.set("rows", json_to_js(ctx, &rows_json)?)?;
-        Ok(obj.into_value())
+        let arr_val = json_to_js(ctx, &rows_json)?;
+        let arr = arr_val
+            .as_array()
+            .ok_or_else(|| {
+                rquickjs::Error::new_from_js_message("db.query", "rows", "expected an array")
+            })?
+            .clone();
+
+        // Attach metadata as named properties on the array (arrays are objects
+        // in JS, so `for..of` still iterates only the numeric indices).
+        let obj = arr.as_object();
+        obj.set("columns", self.0.columns.clone())?;
+        obj.set("rowCount", self.0.rows.len() as i64)?;
+        // Back-compat: `result.rows` still returns the rows (the array itself).
+        obj.set("rows", arr.clone())?;
+
+        Ok(arr.into_value())
     }
 }
 
@@ -355,12 +393,20 @@ fn coerce_query_result(_ctx: &rquickjs::Ctx<'_>, v: rquickjs::Value<'_>) -> Opti
 }
 
 fn stringify(v: &rquickjs::Value<'_>) -> String {
+    // A bare string logs as-is (no surrounding quotes) — matches how a browser
+    // console prints `console.log("hi")` as `hi`.
     if let Some(s) = v.as_string() {
-        s.to_string().unwrap_or_default()
-    } else {
-        serde_json_from_js(v)
-            .map(|j| j.to_string())
-            .unwrap_or_else(|| "[unserializable]".into())
+        return s.to_string().unwrap_or_default();
+    }
+    match serde_json_from_js(v) {
+        // Objects and arrays pretty-print as indented JSON so a logged row or
+        // query result is readable (not a single dense line, and never
+        // "[object Object]"). Scalars keep their compact form.
+        Some(j @ serde_json::Value::Object(_)) | Some(j @ serde_json::Value::Array(_)) => {
+            serde_json::to_string_pretty(&j).unwrap_or_else(|_| j.to_string())
+        }
+        Some(j) => j.to_string(),
+        None => "[unserializable]".into(),
     }
 }
 

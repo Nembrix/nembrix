@@ -15,6 +15,7 @@ export default tseslint.config(
       "playwright-report/**",
       "test-results/**",
       "src/bindings/**", // generated from Rust (commands.ts etc.)
+      "bindings/**", // ditto — tauri-specta writes here (../bindings from src-tauri)
       "vite.config.ts",
     ],
   },

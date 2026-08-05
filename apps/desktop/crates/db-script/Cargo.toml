@@ -28,3 +28,10 @@ rquickjs = { version = "0.12", features = ["futures"] }
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }
 anyhow.workspace = true
+# Real-driver integration test: run `db.query` through the actual Postgres
+# driver (not the in-memory fake) to catch executor-interaction bugs the fake
+# can't — e.g. the JS engine's async runtime not driving the driver's
+# tokio::spawn streaming, which hangs a live `await db.query(...)`.
+db-postgres = { path = "../db-postgres" }
+testcontainers = { workspace = true }
+testcontainers-modules = { workspace = true }
