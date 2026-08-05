@@ -473,6 +473,27 @@ async function mockInvoke<T>(cmd: string, args: Record<string, unknown> = {}): P
       return sql.replace(KW, (m) => m.toUpperCase()) as unknown as T;
     }
 
+    case "run_script": {
+      // Browser-dev stand-in for the JS scripting engine (which runs in Rust
+      // via rquickjs). We can't execute the script here, so return a valid,
+      // empty ScriptOutcome instead of undefined — otherwise the caller does
+      // `outcome.data` on undefined and throws "reading 'data'". A note in the
+      // console makes it clear scripting only really runs in the Tauri app.
+      return {
+        data: null,
+        logs: [
+          {
+            level: "warn",
+            text: "Scripting runs in the Tauri app, not browser-dev mode. Launch the desktop app to execute scripts.",
+          },
+        ],
+        query_count: 0,
+      } as unknown as T;
+    }
+
+    case "cancel_script":
+      return undefined as unknown as T;
+
     default:
       console.warn(`[mock] unhandled command "${cmd}"`, args);
       return undefined as unknown as T;

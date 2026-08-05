@@ -22,6 +22,88 @@ type ResultView = "data" | "message" | "chart" | "analysis";
 /** Map a JSON value coming back from a script's query result into the grid's
  *  tagged CellValue union, so script results render through the same DataGrid
  *  as normal queries. Objects/arrays land in the collapsible `document` cell. */
+/**
+ * Heuristic: does this text look like a JavaScript script rather than SQL?
+ * Used to catch a script typed into a SQL-mode tab (which would otherwise be
+ * sent to Postgres and fail with a cryptic "syntax error at or near const").
+ * Matches tokens that appear in the scripting API / JS syntax but never in
+ * plain SQL. Scans the whole text so a leading comment can't hide the opener.
+ */
+export function looksLikeJavaScript(text: string): boolean {
+  return (
+    /\bdb\.query\s*\(/.test(text) ||       // the scripting API
+    /\bconsole\.(log|warn|error)\s*\(/.test(text) ||
+    /\bawait\b/.test(text) ||              // SQL has no await
+    /=>/.test(text) ||                     // arrow functions
+    /\$\{[^}]*\}/.test(text) ||            // template literals
+    /\bfor\s*\(\s*(const|let|var)\b/.test(text) || // JS for-of/for-let
+    /^\s*(const|let|var|function|async)\b/m.test(text) // JS declarations, any line
+  );
+}
+
+/** A line as (absolute start offset, text) — the minimal shape the comment
+ *  toggler needs, so the core logic is testable without a real EditorView. */
+export interface CommentLine {
+  from: number;
+  text: string;
+}
+
+/**
+ * Pure core of the comment toggle: given the selected lines and a token
+ * (`--` / `//`), return the document changes. If every non-blank line is
+ * already commented, uncomment; otherwise comment. Indentation is preserved
+ * (the token goes after leading whitespace). No DOM / EditorView needed.
+ */
+export function computeCommentToggle(
+  lines: CommentLine[],
+  token: string,
+): { from: number; to?: number; insert?: string }[] {
+  const prefix = token + " ";
+  const nonBlank = lines.filter((l) => l.text.trim().length > 0);
+  const allCommented =
+    nonBlank.length > 0 &&
+    nonBlank.every((l) => l.text.trimStart().startsWith(token));
+  const changes: { from: number; to?: number; insert?: string }[] = [];
+  for (const line of lines) {
+    const indent = line.text.length - line.text.trimStart().length;
+    if (allCommented) {
+      const rest = line.text.slice(indent);
+      if (rest.startsWith(token)) {
+        const cut = rest.startsWith(prefix) ? prefix.length : token.length;
+        changes.push({ from: line.from + indent, to: line.from + indent + cut });
+      }
+    } else if (line.text.trim().length > 0) {
+      changes.push({ from: line.from + indent, insert: prefix });
+    }
+  }
+  return changes;
+}
+
+/**
+ * Toggle a line comment across the selected lines using the given token
+ * (`--` for SQL, `//` for JavaScript). Written by hand (via
+ * [`computeCommentToggle`]) rather than via `@codemirror/commands` to avoid a
+ * monorepo dep-identity clash between the hoisted `@codemirror/state`/`view`
+ * copies.
+ */
+export function toggleLineComment(view: EditorView, token: string): boolean {
+  const { state } = view;
+  const lineNums = new Set<number>();
+  for (const range of state.selection.ranges) {
+    const first = state.doc.lineAt(range.from).number;
+    const last = state.doc.lineAt(range.to).number;
+    for (let n = first; n <= last; n++) lineNums.add(n);
+  }
+  const lines: CommentLine[] = [...lineNums].map((n) => {
+    const l = state.doc.line(n);
+    return { from: l.from, text: l.text };
+  });
+  const changes = computeCommentToggle(lines, token);
+  if (!changes.length) return false;
+  view.dispatch(state.update({ changes }));
+  return true;
+}
+
 function toCell(v: unknown): import("@/ipc/types").CellValue {
   if (v === null || v === undefined) return { kind: "null" };
   if (typeof v === "boolean") return { kind: "bool", value: v };
@@ -84,10 +166,16 @@ export default function QueryTab({ tab }: { tab: Tab }) {
       queryStartedAt: started, elapsedMs: undefined,
     });
     setStatusMsg("Running script…");
-    setView("data");
     try {
       const outcome = await api.runScript(tab.connId, source);
       const ms = Math.round(performance.now() - started);
+      // Defensive: a malformed/empty IPC response would otherwise throw an
+      // opaque "reading 'data' of undefined". Surface a clear message instead.
+      if (!outcome || typeof outcome !== "object") {
+        throw new Error(
+          `run_script returned no result (${outcome === undefined ? "undefined" : JSON.stringify(outcome)})`,
+        );
+      }
       // Project the script's { columns, rows: Record<>[] } result into the
       // grid's positional shape (ColMeta[] + CellValue[][]) so DataGrid renders
       // it exactly like a normal query result.
@@ -105,6 +193,10 @@ export default function QueryTab({ tab }: { tab: Tab }) {
         columns, rows: rows ?? [], logs: outcome.logs,
         running: false, elapsedMs: ms,
       });
+      // The console is always visible in the strip below, so keep the top pane
+      // on Data — it shows the result set when there is one, and the console
+      // shows logs + return value regardless.
+      setView("data");
       useStore.getState().bumpHistory();
       const n = outcome.query_count;
       const rowsN = rows?.length ?? 0;
@@ -122,6 +214,24 @@ export default function QueryTab({ tab }: { tab: Tab }) {
     if (isScript) return runScriptMode();
     const rawSql = tab.sql ?? "";
     if (!rawSql.trim()) return;
+    // Guard: JavaScript typed into a SQL tab would be sent to Postgres as SQL
+    // and come back as a cryptic "syntax error at or near const". Detect the
+    // constructs and point the user at the Lang → JavaScript toggle instead of
+    // running it — a common mix-up when the tab defaults to SQL. We scan the
+    // whole script (not just the first line) because a leading comment can hide
+    // the `const`/`await` opener, and match the scripting-only tokens
+    // (`db.query`, `console.log`, `=>`, `${…}` templates, JS `//` after code)
+    // that would never appear in valid SQL.
+    if (scriptingAvailable && looksLikeJavaScript(rawSql)) {
+      updateTab(tab.id, {
+        running: false,
+        error:
+          'This looks like JavaScript. Switch the "Lang" selector to JavaScript to run scripts (db.query, loops, console.log).',
+      });
+      setStatusMsg("Looks like JavaScript — switch Lang to JavaScript.");
+      setView("message");
+      return;
+    }
     const sql = attachLimit(rawSql, tab.limit);
     // Production / staging guard — type the connection name to confirm.
     const reason = destructiveReason(conn?.environment, sql);
@@ -219,7 +329,11 @@ export default function QueryTab({ tab }: { tab: Tab }) {
   const removeFilter = (id: string) => applyFilters(filters.filter((f) => f.id !== id));
   const clearFilters = () => applyFilters([]);
 
-  // React to menu-driven editor actions, but only on the active tab.
+  // React to menu-driven editor actions, but only on the active tab. Comment
+  // toggling is NOT handled here — it's bound to the ⌘/ keymap on the live
+  // editor view (see onCreateEditor), which acts directly on the EditorView.
+  // Keeping it out of this effect avoids reading the editor ref inside an
+  // effect (which the lint flow-analysis forbids).
   useEffect(() => {
     if (activeTabId !== tab.id || !editorAction) return;
     if (editorAction === "run" || editorAction === "run-all") run();
@@ -240,6 +354,13 @@ export default function QueryTab({ tab }: { tab: Tab }) {
   useEffect(() => {
     cmdsRef.current = { run, cancel, format, saveAsNamed };
   });
+  // Keep the current language's comment token in a ref the ⌘/ keymap can read
+  // without re-registering the keymap on every lang change. Updated in an
+  // effect (never during render) so it's lint-safe.
+  const commentTokenRef = useRef("--");
+  useEffect(() => {
+    commentTokenRef.current = isScript ? "//" : "--";
+  }, [isScript]);
 
   // Language extension: schema-aware completion for both modes. Script mode
   // gets JS + the db/console API + SQL completion inside db.query("…")
@@ -271,6 +392,13 @@ export default function QueryTab({ tab }: { tab: Tab }) {
   // INSIDE the editor's own DOM, so clicks on the wrapper padding /
   // the editor-wrap container were silently ignored.
   const editorViewRef = useRef<EditorView | null>(null);
+  // Console strip auto-scroll: keep the newest log line in view as output
+  // streams in (terminal behavior).
+  const consoleRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = consoleRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [tab.logs]);
   const focusEditorAt = (clientX: number, clientY: number) => {
     const view = editorViewRef.current;
     if (!view) return;
@@ -322,6 +450,24 @@ export default function QueryTab({ tab }: { tab: Tab }) {
           theme="dark"
           onCreateEditor={(view) => {
             editorViewRef.current = view;
+            // ⌘/Ctrl+Enter runs — captured on the editor's DOM in the CAPTURE
+            // phase so it fires before CodeMirror's own keydown handling, and
+            // preventDefault'd so it can never fall through to the default
+            // Enter → insert-newline. The Prec.highest keymap below wasn't
+            // reliably winning on macOS (⌘↵ still inserted a line), so this
+            // DOM capture is the definitive guard. Registered here (a callback)
+            // so reading cmdsRef stays lint-safe.
+            view.dom.addEventListener(
+              "keydown",
+              (e) => {
+                if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  cmdsRef.current.run();
+                }
+              },
+              true, // capture
+            );
             // Register the ⌘-shortcut keymap on the live view rather than via
             // the declarative `extensions` prop. The commands read cmdsRef to
             // reach the freshest run/format/save closures; doing this inside
@@ -330,9 +476,22 @@ export default function QueryTab({ tab }: { tab: Tab }) {
               effects: StateEffect.appendConfig.of(
                 Prec.highest(
                   keymap.of([
-                    { key: "Mod-Enter", run: () => { cmdsRef.current.run(); return true; } },
+                    // Returning true tells CodeMirror the key was handled, which
+                    // preventDefaults it — so ⌘↵ runs WITHOUT also inserting a
+                    // newline / moving the cursor. `preventDefault: true` makes
+                    // that explicit and robust across CM versions.
+                    { key: "Mod-Enter", preventDefault: true, run: () => { cmdsRef.current.run(); return true; } },
+                    { key: "Shift-Mod-Enter", preventDefault: true, run: () => { cmdsRef.current.run(); return true; } },
                     { key: "Mod-Shift-f", run: () => { cmdsRef.current.format(); return true; } },
                     { key: "Mod-i", run: () => { cmdsRef.current.format(); return true; } },
+                    // ⌘/ toggles a line comment using the token for THIS tab's
+                    // language (`--` for SQL, `//` for JavaScript) — the same
+                    // editor serves both, so the comment must follow the mode.
+                    {
+                      key: "Mod-/",
+                      preventDefault: true,
+                      run: (v) => { toggleLineComment(v, commentTokenRef.current); return true; },
+                    },
                     // ⌘S: save the query when focus is in the editor.
                     // Uses the same flow as File → Save Query — prompts
                     // for a name when the tab still has the default title.
@@ -469,12 +628,16 @@ export default function QueryTab({ tab }: { tab: Tab }) {
           <Star size={12} /> Save
         </button>
         {tab.running ? (
-          <button className="btn-pill danger" onClick={cancel}>
+          <button className="btn-pill danger btn-run" onClick={cancel}>
             <Square size={12} /> Cancel
           </button>
         ) : (
-          <button className="btn-pill primary" onClick={run} title="Run (⌘↵)">
-            <Play size={12} /> {isScript ? "Run Script" : "Run Current"} <span className="kbd">⌘↵</span>
+          <button
+            className="btn-pill primary btn-run"
+            onClick={run}
+            title={isScript ? "Run script (⌘↵)" : "Run current (⌘↵)"}
+          >
+            <Play size={12} /> {isScript ? "Run Script" : "Run Current"}
           </button>
         )}
       </div>
@@ -494,7 +657,11 @@ export default function QueryTab({ tab }: { tab: Tab }) {
         <div className="result-segments">
           <div className="segmented" role="tablist">
             <button className={view === "data" ? "active" : ""} onClick={() => setView("data")}>Data</button>
-            <button className={view === "message" ? "active" : ""} onClick={() => setView("message")}>Message</button>
+            {/* Scripts show their console in the always-visible strip below, so
+                the tabbed "Message" view is SQL-only. */}
+            {!isScript && (
+              <button className={view === "message" ? "active" : ""} onClick={() => setView("message")}>Message</button>
+            )}
             <button className={view === "chart" ? "active" : ""} onClick={() => setView("chart")}>Chart</button>
             <button className={view === "analysis" ? "active" : ""} onClick={() => setView("analysis")}>Analysis</button>
           </div>
@@ -513,27 +680,25 @@ export default function QueryTab({ tab }: { tab: Tab }) {
 
         <FilterBar filters={filters} onRemove={removeFilter} onClear={clearFilters} />
 
+        {/* The JS scripting engine runs in Rust and only exists in the desktop
+            app. In browser / sidecar dev there's nothing to execute scripts, so
+            make that explicit instead of letting a script silently do nothing. */}
+        {isScript && !api.isTauri && (
+          <div className="script-unavailable-banner">
+            JavaScript scripts run in the desktop app. In browser/sidecar dev
+            they can't execute — launch <code>yarn tauri dev</code> to run them.
+          </div>
+        )}
+
         <div className="result-body">
           {view === "data" && (tab.error
             ? <div className="message-pane err">{tab.error}</div>
             : <DataGrid tab={tab} />)}
-          {view === "message" && (
+          {/* SQL keeps the tabbed "Message" view; scripts show their console in
+              the always-visible strip below instead (rendered separately). */}
+          {view === "message" && !isScript && (
             <div className="message-pane">
-              {tab.error ? (
-                <span className="err">{tab.error}</span>
-              ) : isScript && (tab.logs?.length ?? 0) > 0 ? (
-                // Script console output: one line per console.* call, tinted by
-                // level. Monospace so aligned/tabular logs stay readable.
-                <div className="script-log">
-                  {tab.logs!.map((l, i) => (
-                    <div key={i} className={`log-line log-${l.level}`}>
-                      {l.text}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                statusMsg || "—"
-              )}
+              {tab.error ? <span className="err">{tab.error}</span> : statusMsg || "—"}
             </div>
           )}
           {view === "chart" && tab.columns && tab.rows && (
@@ -543,6 +708,37 @@ export default function QueryTab({ tab }: { tab: Tab }) {
             <AnalysisPane connId={tab.connId} sql={tab.sql ?? ""} />
           )}
         </div>
+
+        {/* Script console strip: sits below the data grid and is always
+            visible in script mode, so console.log output and the return-value
+            echo show alongside the result set (no tab-switching). */}
+        {isScript && (
+          <div className="script-console">
+            <div className="script-console-head">
+              <span className="muted">Console</span>
+              {(tab.logs?.length ?? 0) > 0 && (
+                <span className="script-console-count">
+                  {tab.logs!.length} line{tab.logs!.length === 1 ? "" : "s"}
+                </span>
+              )}
+            </div>
+            <div className="script-log" ref={consoleRef}>
+              {(tab.logs?.length ?? 0) > 0 ? (
+                tab.logs!.map((l, i) => (
+                  <div key={i} className={`log-line log-${l.level}`}>
+                    {l.text}
+                  </div>
+                ))
+              ) : (
+                <div className="log-line log-muted">
+                  {tab.running
+                    ? "Running…"
+                    : "No console output yet. Use console.log(...) in your script."}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
       )}
     </div>
