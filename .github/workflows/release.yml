@@ -35,11 +35,31 @@ concurrency:
 
 jobs:
   # ─────────────────────────────────────────────────────────────────
+  # Stage 0: verify the code before we tag, bump, or spend ~15 min building
+  # installers. Runs the fast gate from ci.yml (lint + typecheck + unit tests)
+  # so a red build can't ship a release. Rust is compiled by the build matrix
+  # itself, so a compile break there already blocks the release; this catches
+  # the frontend/JS side up front, cheaply. `prepare` depends on it.
+  # ─────────────────────────────────────────────────────────────────
+  verify:
+    name: Verify (lint, typecheck, unit tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - name: Lint (desktop)
+        run: yarn workspace @nembrix/desktop lint
+      - name: Typecheck (desktop)
+        run: yarn workspace @nembrix/desktop tsc -b --noEmit
+      - name: Unit tests (desktop)
+        run: yarn workspace @nembrix/desktop test:unit
+
   # Stage 1: prepare the draft release so each platform job can
   # upload to it. Reads the version from inputs or tauri.conf.json.
   # ─────────────────────────────────────────────────────────────────
   prepare:
     name: Prepare release
+    needs: verify
     runs-on: ubuntu-latest
     # Gate the whole release behind the "release" environment. Configure
     # its required reviewers in repo Settings → Environments → release so
