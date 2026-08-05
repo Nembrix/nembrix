@@ -22,7 +22,7 @@ interface PersistedSession {
 }
 
 interface Persisted {
-  tabs: Array<Pick<Tab, "id" | "connId" | "kind" | "title" | "sql"
+  tabs: Array<Pick<Tab, "id" | "connId" | "kind" | "lang" | "title" | "sql"
     | "sourceRelation" | "filters" | "hiddenColumns" | "limit" | "sort">>;
   activeTabId: string | null;
   selectedConnId: string | null;
@@ -128,6 +128,7 @@ export function startTabsPersistence() {
         id: t.id,
         connId: t.connId,
         kind: t.kind,
+        lang: t.lang, // SQL vs JavaScript scripting — must survive a refresh
         title: t.title,
         sql: t.sql,
         sourceRelation: t.sourceRelation,

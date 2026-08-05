@@ -28,6 +28,10 @@
   --fg: #e7e7ea;
   --fg-2: #b9bac1;
   --fg-3: #797a82;
+  /* Inactive tab/segment label: clearly dimmer than --fg so the active tab
+     (full --fg) reads as selected. Shared across the query tab bar and the
+     segmented controls (Items/Queries/History, Data/Structure/…). */
+  --tab-inactive-fg: #8b8c94;
   --accent: #3b82f6;          /* TablePlus uses a vivid blue accent */
   --accent-fg: #ffffff;
   /* The "selection ring" tone — every accent-coloured border around a
@@ -479,16 +483,28 @@ button, input, select, textarea { font: inherit; color: inherit; }
   flex: 1;
   background: transparent;
   border: 0;
-  color: var(--fg-2);
+  color: var(--tab-inactive-fg);
   padding: 4px 8px;
   border-radius: 4px;
   cursor: pointer;
   font-size: 12px;
+  /* Keep the icon and label on one line, centered — without this a narrow
+     button wraps the label under the icon, so some tabs read horizontal and
+     others stacked. nowrap + inline-flex makes every tab align uniformly. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
 }
+/* The inline SVG icons ship with a marginRight; keep them from shrinking so
+   the icon never collapses when space is tight. */
+.segmented button svg { flex: 0 0 auto; }
 .segmented button.active {
-  /* Shared active-surface token — same as the active main tab and the
-     view sub-tabs, so every "selected" control reads with one tone. */
-  background: var(--surface-active);
+  /* Softer active chip: the pure editor black (--bg-3) reads as a black hole
+     inside the lighter --bg-elev pill. Sit it just a step below the pill so
+     the selected option is clearly raised but easy on the eye — the shadow
+     and brighter text carry the emphasis. Matches the softened main tab bar. */
+  background: color-mix(in srgb, var(--bg-elev) 62%, #000);
   color: var(--fg);
   box-shadow: var(--shadow-1);
 }
@@ -873,7 +889,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
   padding: 0 12px;
   border-right: 1px solid var(--border-soft);
   cursor: pointer;
-  color: var(--fg-2);
+  /* Inactive tabs are clearly dimmed so the active tab (full --fg) stands
+     out. Blended toward the dim token — see --tab-inactive-fg. */
+  color: var(--tab-inactive-fg);
   font-size: 12px;
   position: relative;
   min-width: 130px;
@@ -898,12 +916,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .tab .close:hover { background: var(--bg-elev); color: var(--fg); }
 
 .tab.active {
-  /* Active tab shares the editor body's background so the tab and
-     the editor read as one continuous surface — "you are here" is
-     reinforced by the connection, not just the accent underline.
-     Uses the shared --surface-active token so it stays in lockstep
-     with every other active control. */
-  background: var(--surface-active);
+  /* Keep the active tab's background CLOSE to the inactive bar (--bg-2), just
+     a hair darker, so the tab strip reads soft and even rather than with one
+     harsh black tab. The distinction comes mainly from brighter text + the
+     accent underline (::after), not a heavy background contrast. */
+  background: color-mix(in srgb, var(--bg-2) 88%, #000);
   color: var(--fg);
 }
 .tab:hover:not(.active) {
@@ -948,7 +965,15 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .editor-split:hover, .editor-split:active { background: var(--accent-ring); }
 .cm-editor { height: 100% !important; background: var(--bg-3); }
-.cm-editor .cm-scroller { font-family: var(--mono); font-size: 13px; }
+/* The scroller must actually scroll when the script/SQL exceeds the editor
+   pane's height. CodeMirror defaults to overflow:auto, but we set it
+   explicitly so the editor never grows past its flex box (which would push
+   the toolbar/results off-screen and make the content unreachable). */
+.cm-editor .cm-scroller {
+  font-family: var(--mono);
+  font-size: 13px;
+  overflow: auto;
+}
 /* Gutter shares the editor body background AND drops the right
    border so the number lane is visually part of the editor surface
    — the line numbers float in the same field as the text. */
@@ -1110,6 +1135,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
   max-width: 100%;
 }
 .btn-pill:hover { background: var(--border); }
+/* The Run button swaps its label between "Run Current" / "Run Script" /
+   "Cancel"; a min-width keeps its box stable so the toolbar doesn't shift
+   as the text changes. `justify-content:center` keeps the icon+label
+   centered within that fixed box. */
+.btn-run {
+  min-width: 116px;
+  justify-content: center;
+}
 .btn-pill.primary {
   background: var(--accent);
   border-color: var(--accent);
@@ -1169,7 +1202,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   padding: 3px;
 }
 .result-segments .segmented button {
-  color: var(--fg-2);
+  color: var(--tab-inactive-fg);
   padding: 5px 12px;
 }
 .result-segments .segmented button:hover:not(.active) {
@@ -1193,6 +1226,13 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* Scroll container — header sticks via its own <table>, body scrolls. */
 .grid-scroll {
   height: 100%;
+  /* Fill the pane's width. Without an explicit width the scroll container
+     shrink-wraps to the (possibly narrow) table inside it, so clientWidth
+     reads narrow → stretchLastColumn/fillerW find no slack and the grid
+     leaves a dead band on the right. width:100% + min-width:0 make it span
+     the flex parent so the last column can stretch to the edge. */
+  width: 100%;
+  min-width: 0;
   overflow: auto;
   position: relative;
   background: var(--bg-3);
@@ -1373,6 +1413,51 @@ tr.grid-filler.row-even > td {
 .script-log .log-line { white-space: pre-wrap; }
 .script-log .log-warn { color: var(--warn, #e0a458); }
 .script-log .log-error { color: var(--danger); }
+.script-log .log-muted { color: var(--fg-2); font-style: italic; }
+/* Script console strip — fixed-height pane below the data grid, always
+   visible in script mode. Its own scroll so long output doesn't push the
+   grid; a header labels it and (when present) shows the line count. */
+.script-console {
+  flex: 0 0 auto;
+  height: 33%;
+  min-height: 96px;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border);
+  background: var(--bg-3);
+}
+.script-console-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--border);
+}
+.script-console-count { color: var(--fg-2); }
+.script-console .script-log {
+  flex: 1;
+  overflow: auto;
+  padding: 6px 10px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+/* Shown in JS mode when scripts can't execute (browser/sidecar dev). */
+.script-unavailable-banner {
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--warn, #e0a458);
+  background: color-mix(in srgb, var(--warn, #e0a458) 12%, transparent);
+  border-bottom: 1px solid var(--border);
+}
+.script-unavailable-banner code {
+  font-size: 11px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--bg-elev);
+}
 /* When the pane itself carries the .err modifier (a query failed),
    give it the full error treatment — bordered, tinted, scrollable so
    long stack traces don't blow out the result panel. */

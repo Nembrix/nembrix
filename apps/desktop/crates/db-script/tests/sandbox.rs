@@ -127,6 +127,79 @@ async fn falls_back_to_last_query_when_nothing_returned() {
 }
 
 #[tokio::test]
+async fn query_result_is_a_directly_iterable_array() {
+    // The ergonomic API the docs teach: `db.query` resolves to an array of row
+    // objects you can iterate directly, with `.length`, `.columns`, and a
+    // `.rows` self-reference for back-compat.
+    let db = Arc::new(FakeDb::default());
+    let script = r#"
+        const users = await db.query("SELECT id, name FROM users");
+        let n = 0;
+        for (const u of users) { console.log(u.name); n++; }
+        console.log("len", users.length, "cols", users.columns.join(","), "rowsIsSelf", users.rows === users);
+        return n;
+    "#;
+    let out = run(script, db, Limits::default()).await.expect("runs");
+    // 3 rows iterated → 3 name logs + 1 summary + 1 return echo.
+    assert_eq!(out.logs[0].text, "a");
+    assert_eq!(out.logs[1].text, "b");
+    assert_eq!(out.logs[2].text, "c");
+    assert_eq!(out.logs[3].text, "len 3 cols id,name rowsIsSelf true");
+    // Non-tabular return (a number) is echoed.
+    assert!(out.logs.iter().any(|l| l.text == "\u{2190} 3"));
+}
+
+#[tokio::test]
+async fn console_pretty_prints_objects() {
+    // console.log of an object/array should render as indented JSON, never
+    // "[object Object]". A bare string stays unquoted.
+    let db = Arc::new(FakeDb::default());
+    let script = r#"
+        console.log("plain");
+        console.log({ a: 1, b: [2, 3] });
+    "#;
+    let out = run(script, db, Limits::default()).await.expect("runs");
+    assert_eq!(out.logs[0].text, "plain");
+    assert!(
+        out.logs[1].text.contains("\"a\": 1"),
+        "pretty JSON: {}",
+        out.logs[1].text
+    );
+    assert!(
+        out.logs[1].text.contains('\n'),
+        "should be multi-line indented"
+    );
+}
+
+#[tokio::test]
+async fn echoes_non_tabular_return_value() {
+    // A script that returns a scalar/object (not a query result) should echo
+    // that value in the console REPL-style ("← <value>").
+    let db = Arc::new(FakeDb::default());
+    let out = run(r#"return 42;"#, db.clone(), Limits::default())
+        .await
+        .expect("runs");
+    assert!(
+        out.logs.iter().any(|l| l.text == "\u{2190} 42"),
+        "return value should be echoed: {:?}",
+        out.logs
+    );
+    // A tabular return is shown in the grid, NOT echoed as a giant JSON blob.
+    let out2 = run(
+        r#"return await db.query("SELECT id, name FROM users");"#,
+        db,
+        Limits::default(),
+    )
+    .await
+    .expect("runs");
+    assert!(out2.data.is_some(), "tabular result populates the grid");
+    assert!(
+        !out2.logs.iter().any(|l| l.text.starts_with('\u{2190}')),
+        "tabular return should not be echoed to the console"
+    );
+}
+
+#[tokio::test]
 async fn no_filesystem_or_network_globals() {
     // The sandbox must hand the script nothing but console + db. Node/Deno/
     // browser escape hatches simply do not exist here.
