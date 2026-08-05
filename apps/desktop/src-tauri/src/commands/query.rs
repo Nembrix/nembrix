@@ -225,10 +225,17 @@ pub async fn run_script(
     let runner: Arc<dyn QueryRunner> = {
         let g = state.conns.read().await;
         let live = g.get(&conn_id).ok_or("not connected")?;
-        // Scripting is RDBMS-only. Mongo/Redis have their own languages; a
-        // `db.query(sql)` facade would be meaningless there.
-        if live.db.lang() != db_core::QueryLang::Sql {
-            return Err("scripting mode is only available for SQL connections".into());
+        // Scripting works for SQL and Mongo. In both, `db.query(...)` takes the
+        // engine's own query text — SQL for RDBMS, a mongo-shell command
+        // (`db.coll.find({...})`) for Mongo — and streams it through the same
+        // driver seam. Other engines have no such facade.
+        match live.db.lang() {
+            db_core::QueryLang::Sql | db_core::QueryLang::MongoShell => {}
+            _ => {
+                return Err(
+                    "scripting mode is only available for SQL and MongoDB connections".into(),
+                )
+            }
         }
         Arc::new(ScriptRunner {
             db: live.db.clone(),

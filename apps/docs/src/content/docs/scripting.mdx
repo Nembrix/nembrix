@@ -9,13 +9,16 @@ the database with `await db.query(...)`, loops, branches, and logs —
 useful for per-row work, small migrations, and quick data munging that's
 awkward in a single statement.
 
-Scripting is **SQL-engine only** (PostgreSQL / MySQL / SQLite). The
-toggle is hidden for MongoDB and Redis.
+Scripting works on **SQL engines** (PostgreSQL / MySQL / SQLite) **and
+MongoDB**. On SQL, `db.query(...)` takes SQL; on MongoDB it takes a
+mongo-shell command string (`db.coll.find({…})`). The toggle is hidden for
+Redis.
 
 ![JavaScript scripting mode with a db.query loop](../../assets/media/scripting.png)
 
 Switch a tab to scripting with the **Lang** picker in the editor toolbar
-(SQL → JavaScript); the run button becomes **Run Script**.
+(SQL → JavaScript); the run button becomes **Run Script**. `console.log`
+output appears in the **Console** strip below the results grid.
 
 ## Writing a script
 
@@ -36,10 +39,29 @@ return users;
 
 - **`await db.query(sql, params?)`** runs a query and resolves to an array
   of row objects (`{ column: value, … }`).
-- **`console.log(...)`** output is captured and shown in the **Message**
-  tab.
+- **`console.log(...)`** output is captured and shown in the **Console**
+  strip below the grid, in execution order.
 - The **returned value** (or the last `db.query` result if you don't
   return one) renders in the **Data** grid, exactly like a normal query.
+
+## MongoDB
+
+On a MongoDB connection, `db.query(...)` takes a **mongo-shell command**
+instead of SQL — the same syntax the Query tab accepts (`find`, `aggregate`,
+`insertOne`, `updateMany`, …). The result is still an array of documents you
+can iterate:
+
+```js
+const active = await db.query('db.users.find({ active: true })');
+for (const u of active) {
+  console.log(u.name);
+}
+return active;
+```
+
+Parameters are baked into the command object itself (there is no `$1`
+placeholder binding for Mongo); build the filter/pipeline in the command
+string.
 
 ## Parameters — always use `db.query(sql, params)`
 
