@@ -7,29 +7,26 @@ import { useStore } from "@/store";
 import { ENV_COLOR, ENV_LABEL, ENVIRONMENTS, colorFor } from "./environment";
 import { validateConnectionName } from "./validateConnectionName";
 import { buildPostgresUri, parsePostgresUri } from "./postgresUri";
+import { buildMongoUri, parseMongoUri } from "./mongoUri";
+import { ENGINES, ENGINE_ORDER, engineSpec, registerUriAdapters } from "./engines";
 
-/** Engines we ship now vs. the ones on the roadmap. The form lists every
- *  engine — the unsupported ones are shown disabled with a "Coming soon"
- *  tag so the product roadmap is visible to the user without letting
- *  them try to connect with a driver that doesn't exist yet. */
-type EngineKey = "postgres" | "mysql" | "sqlite" | "mongo" | "redis";
-const ENGINES: { key: EngineKey; label: string; supported: boolean }[] = [
-  { key: "postgres", label: "PostgreSQL", supported: true },
-  { key: "mysql",    label: "MySQL",      supported: false },
-  { key: "sqlite",   label: "SQLite",     supported: false },
-  { key: "mongo",    label: "MongoDB",    supported: true },
-  { key: "redis",    label: "Redis",      supported: false },
-];
-
-/** The well-known default port per engine, applied when the user switches
- *  engines so they don't have to remember 27017 vs 5432. */
-const DEFAULT_PORT: Record<EngineKey, number> = {
-  postgres: 5432,
-  mysql: 3306,
-  sqlite: 0,
-  mongo: 27017,
-  redis: 6379,
-};
+// Attach the connection-URL adapters to the central engine registry. Kept here
+// (not in engines.ts) so that module stays free of a cyclic import on the URI
+// helpers. Runs once at module load.
+registerUriAdapters({
+  postgres: {
+    parse: parsePostgresUri,
+    build: buildPostgresUri,
+    placeholder: "postgresql://user:password@host:5432/dbname?sslmode=require",
+    example: "postgres://user:pass@host:port/db",
+  },
+  mongo: {
+    parse: parseMongoUri,
+    build: buildMongoUri,
+    placeholder: "mongodb://user:password@host:27017/dbname?tls=true",
+    example: "mongodb://user:pass@host:port/db",
+  },
+});
 
 const empty: ConnectionInput = {
   id: null,
@@ -37,14 +34,19 @@ const empty: ConnectionInput = {
   engine: "postgres",
   host: "127.0.0.1",
   port: 5432,
-  username: "postgres",
+  // User and database are left blank on a new connection — the inputs show
+  // engine-appropriate placeholders (see PLACEHOLDERS) rather than pre-filling
+  // Postgres-specific values that would be wrong for Mongo/Redis and look like
+  // real input the user typed.
+  username: "",
   password: "",
-  database: "postgres",
+  database: "",
   ssl_mode: "prefer",
   ssh: null,
   color: null,
   environment: "development",
 };
+
 
 function recordToInput(c: ConnectionRecord): ConnectionInput {
   return {
@@ -103,6 +105,9 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
   // Disable every action button while any single one is in flight so
   // the user can't double-click Save during a slow Test, etc.
   const [working, setWorking] = useState<null | "test" | "save" | "connect">(null);
+  // True only when a mousedown started on the backdrop itself, so a drag that
+  // ends there (e.g. text selection) doesn't count as a backdrop click.
+  const backdropMouseDown = useRef(false);
 
   // Re-prefill if the editing target changes while the modal is open.
   useEffect(() => {
@@ -115,12 +120,17 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
 
   const patch = (p: Partial<ConnectionInput>) => setV((s) => ({ ...s, ...p }));
 
+  // The current engine's URL adapter (undefined for engines without one).
+  const spec = engineSpec(v.engine);
+  const uriAdapter = spec?.uri;
+
   const onUriChange = (text: string) => {
     setUriText(text);
     if (!text.trim()) { setUriErr(null); return; }
-    const parsed = parsePostgresUri(text);
+    if (!uriAdapter) return;
+    const parsed = uriAdapter.parse(text);
     if (!parsed) {
-      setUriErr("Not a recognisable Postgres URI (expected postgres://user:pass@host:port/db).");
+      setUriErr(`Not a recognisable URL (expected ${uriAdapter.example}).`);
       return;
     }
     setUriErr(null);
@@ -128,7 +138,8 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
   };
 
   const switchToUri = () => {
-    setUriText(buildPostgresUri(v));
+    if (!uriAdapter) return;
+    setUriText(uriAdapter.build(v));
     setUriErr(null);
     setInputMode("url");
   };
@@ -281,13 +292,25 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+    // Close on a genuine backdrop click only: the mousedown AND the mouseup
+    // must both land on the backdrop itself. Using onClick alone closed the
+    // modal when a text selection (e.g. drag-selecting the Host field) ended
+    // on the backdrop — the drag's mouseup fires a click whose target is the
+    // backdrop even though it started inside an input.
+    <div
+      className="modal-backdrop"
+      onMouseDown={(e) => { backdropMouseDown.current = e.target === e.currentTarget; }}
+      onMouseUp={(e) => {
+        if (backdropMouseDown.current && e.target === e.currentTarget) onClose();
+        backdropMouseDown.current = false;
+      }}
+    >
+      <div className="modal">
         <div className="modal-header">
           <Database size={15} />
           <span>{editing
             ? `Edit ${editing.name}`
-            : `New ${ENGINES.find((e) => e.key === v.engine)?.label ?? "database"} connection`}</span>
+            : `New ${spec?.label ?? "database"} connection`}</span>
           <span style={{ flex: 1 }} />
           <button className="icon-btn" onClick={onClose} aria-label="Close">
             <X size={14} />
@@ -302,23 +325,30 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
               value={v.engine}
               onChange={(e) => {
                 const next = e.target.value as ConnectionInput["engine"];
-                const found = ENGINES.find((g) => g.key === next);
-                if (!found?.supported) return;
+                const nextSpec = engineSpec(next);
+                if (!nextSpec?.supported) return;
                 // Snap the port to the new engine's default, but only if the
                 // current port is still some engine's default (i.e. the user
                 // hasn't typed a custom one we'd be clobbering).
-                const portIsDefault = Object.values(DEFAULT_PORT).includes(v.port);
+                const allDefaults = ENGINE_ORDER.map((k) => ENGINES[k].defaultPort);
+                const portIsDefault = allDefaults.includes(v.port);
                 patch({
                   engine: next,
-                  ...(portIsDefault ? { port: DEFAULT_PORT[next as EngineKey] } : {}),
+                  ...(portIsDefault ? { port: nextSpec.defaultPort } : {}),
                 });
+                // A pasted URL belongs to the old engine's syntax; drop back to
+                // the fields view so it isn't mis-parsed against the new engine.
+                if (inputMode === "url") { setInputMode("form"); setUriText(""); setUriErr(null); }
               }}
             >
-              {ENGINES.map((e) => (
-                <option key={e.key} value={e.key} disabled={!e.supported}>
-                  {e.label}{e.supported ? "" : " — Coming soon"}
-                </option>
-              ))}
+              {ENGINE_ORDER.map((k) => {
+                const e = ENGINES[k];
+                return (
+                  <option key={e.key} value={e.key} disabled={!e.supported}>
+                    {e.label}{e.supported ? "" : " — Coming soon"}
+                  </option>
+                );
+              })}
             </select>
 
             <div className="section-title">General</div>
@@ -383,7 +413,7 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
               </div>
             </div>
 
-            {v.engine === "postgres" && (
+            {uriAdapter && (
               <>
                 <label>Input</label>
                 <div className="cf-mode-toggle">
@@ -401,7 +431,7 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
               </>
             )}
 
-            {inputMode === "url" && v.engine === "postgres" ? (
+            {inputMode === "url" && uriAdapter ? (
               <>
                 <label htmlFor="cf-uri">URL</label>
                 <div>
@@ -410,7 +440,7 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
                     className="cf-uri-input"
                     rows={2}
                     spellCheck={false}
-                    placeholder="postgresql://user:password@host:5432/dbname?sslmode=require"
+                    placeholder={uriAdapter.placeholder}
                     value={uriText}
                     onChange={(e) => onUriChange(e.target.value)}
                   />
@@ -419,7 +449,9 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
                     <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
                       Parsed → {v.username || "(no user)"}@{v.host}:{v.port}
                       {v.database ? `/${v.database}` : ""}
-                      {v.ssl_mode && v.ssl_mode !== "prefer" ? ` · sslmode=${v.ssl_mode}` : ""}
+                      {v.ssl_mode && v.ssl_mode !== "prefer" && v.ssl_mode !== "disable"
+                        ? ` · ${v.engine === "mongo" ? "tls" : `sslmode=${v.ssl_mode}`}`
+                        : ""}
                     </div>
                   )}
                 </div>
@@ -440,7 +472,9 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
                 <div className="form-row">
                   <div className="field">
                     <label htmlFor="cf-user">User</label>
-                    <input id="cf-user" type="text" value={v.username} onChange={(e) => patch({ username: e.target.value })} />
+                    <input id="cf-user" type="text" value={v.username}
+                      placeholder={spec?.fieldPlaceholders.user}
+                      onChange={(e) => patch({ username: e.target.value })} />
                   </div>
                   <div className="field">
                     <label htmlFor="cf-password">Password</label>
@@ -452,17 +486,24 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
                   <div className="field">
                     <label htmlFor="cf-database">Database</label>
                     <input id="cf-database" type="text" value={v.database ?? ""}
+                      placeholder={spec?.fieldPlaceholders.database}
                       onChange={(e) => patch({ database: e.target.value || null })} />
                   </div>
-                  <div className="field">
-                    <label htmlFor="cf-ssl">SSL</label>
-                    <select id="cf-ssl" value={v.ssl_mode}
-                      onChange={(e) => patch({ ssl_mode: e.target.value as never })}>
-                      <option value="disable">disable</option>
-                      <option value="prefer">prefer</option>
-                      <option value="require">require</option>
-                    </select>
-                  </div>
+                  {spec?.hasTls && (
+                    <div className="field">
+                      {/* Mongo's TLS is a simple on/off, so we show a TLS select
+                          with disable/require. SQL engines keep the libpq
+                          sslmode ladder (disable/prefer/require). Both reuse the
+                          ssl_mode field — the driver treats non-disable as TLS. */}
+                      <label htmlFor="cf-ssl">{v.engine === "mongo" ? "TLS" : "SSL"}</label>
+                      <select id="cf-ssl" value={v.ssl_mode}
+                        onChange={(e) => patch({ ssl_mode: e.target.value as never })}>
+                        <option value="disable">{v.engine === "mongo" ? "off" : "disable"}</option>
+                        {v.engine !== "mongo" && <option value="prefer">prefer</option>}
+                        <option value="require">{v.engine === "mongo" ? "on" : "require"}</option>
+                      </select>
+                    </div>
+                  )}
                 </div>
               </>
             )}

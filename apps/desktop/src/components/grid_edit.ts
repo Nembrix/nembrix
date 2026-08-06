@@ -86,6 +86,31 @@ export function buildUpdate(opts: {
   return `UPDATE ${qt} SET ${qi(opts.column)} = ${opts.newLiteral} WHERE ${where};`;
 }
 
+/**
+ * Build a single-row DELETE keyed by the table's primary key. Mirrors
+ * buildUpdate's WHERE construction: throws if the table has no PK or any PK
+ * component is NULL (a NULL WHERE couldn't safely target one row).
+ */
+export function buildDelete(opts: {
+  schema: string;
+  table: string;
+  pkColumns: string[];
+  pkValues: Record<string, CellValue>;
+}): string {
+  if (opts.pkColumns.length === 0) {
+    throw new Error("Cannot delete rows in a table without a primary key.");
+  }
+  const where = opts.pkColumns.map((col) => {
+    const v = opts.pkValues[col];
+    if (!v || v.kind === "null") {
+      throw new Error(`Primary key column "${col}" is null — refusing to DELETE.`);
+    }
+    return `${qi(col)} = ${pkLiteral(v)}`;
+  }).join(" AND ");
+  const qt = `${qi(opts.schema)}.${qi(opts.table)}`;
+  return `DELETE FROM ${qt} WHERE ${where};`;
+}
+
 /** Render a cell as plain text for clipboard / display. */
 export function cellToText(c: CellValue): string {
   switch (c.kind) {
