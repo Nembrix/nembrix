@@ -285,7 +285,10 @@ export default function TableDataTab({ tab }: { tab: Tab }) {
             Columns, Export, Refresh. The schema.table name lives in
             the tab title above; duplicating it here was just noise. */}
       <div className="data-view-toolbar">
-        <span className="muted">
+        {/* Row count + timer share one steady band. `tabular-nums` +
+            `data-view-meta` (transition + fixed baseline) keep the digits from
+            reflowing every refresh tick, which read as a flicker on the eye. */}
+        <span className="muted data-view-meta">
           {(() => {
             const loaded = tab.rows?.length ?? 0;
             const total = tab.rowsTotal;
@@ -297,13 +300,13 @@ export default function TableDataTab({ tab }: { tab: Tab }) {
             }
             return `${loaded}${totalSuffix} row${loaded === 1 ? "" : "s"}`;
           })()}
+          <RunningTimer
+            running={tab.running}
+            startedAt={tab.queryStartedAt}
+            elapsedMs={tab.elapsedMs}
+            prefix="· "
+          />
         </span>
-        <RunningTimer
-          running={tab.running}
-          startedAt={tab.queryStartedAt}
-          elapsedMs={tab.elapsedMs}
-          prefix="· "
-        />
 
         {/* +Row appends a draft row to the grid (no DB write yet).
             The user fills cells inline; Save All commits every draft
