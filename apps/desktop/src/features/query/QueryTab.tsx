@@ -140,8 +140,12 @@ export default function QueryTab({ tab }: { tab: Tab }) {
     const connectionId = session?.connectionId ?? tab.connId; // legacy tabs stored a conn id directly
     return st.connections.find((c) => c.id === connectionId);
   })();
-  const sqlEngines = new Set(["postgres", "mysql", "sqlite"]);
-  const scriptingAvailable = sqlEngines.has(conn?.engine ?? "");
+  // Engines that support JS scripting mode. SQL engines run SQL inside
+  // db.query(...); Mongo runs a mongo-shell command string (db.coll.find({…}))
+  // through the same seam. Redis/others have no db.query facade.
+  const scriptEngines = new Set(["postgres", "mysql", "sqlite", "mongo"]);
+  const scriptingAvailable = scriptEngines.has(conn?.engine ?? "");
+  const isMongo = conn?.engine === "mongo";
 
   /** Tack a LIMIT onto the SQL when the picker is set, the query
    *  looks like a SELECT, and the user didn't already type one. We
@@ -222,7 +226,10 @@ export default function QueryTab({ tab }: { tab: Tab }) {
     // the `const`/`await` opener, and match the scripting-only tokens
     // (`db.query`, `console.log`, `=>`, `${…}` templates, JS `//` after code)
     // that would never appear in valid SQL.
-    if (scriptingAvailable && looksLikeJavaScript(rawSql)) {
+    // Only for SQL engines: a mongo-shell command (db.coll.find({…})) shares
+    // tokens with JS, so this JS-detection would false-positive in Mongo's
+    // non-script mode. The "syntax error at or near const" mix-up is SQL-only.
+    if (scriptingAvailable && !isMongo && looksLikeJavaScript(rawSql)) {
       updateTab(tab.id, {
         running: false,
         error:
