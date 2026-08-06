@@ -57,7 +57,24 @@ pub async fn introspect(client: &Client, default_db: Option<&str>) -> DbResult<S
         }
     }
 
+    // Surface the pinned database FIRST. The frontend resolves the active
+    // database as `tree.databases[0]` (Mongo has no single "current" db), so
+    // without this the data view could open against whichever database Mongo
+    // happened to list first — not the one the connection specified.
+    pin_default_first(&mut databases, default_db);
+
     Ok(SchemaTree { databases })
+}
+
+/// Move the pinned `default_db` to the front of the list so `databases[0]`
+/// (what the frontend treats as the active database) is the one the connection
+/// specified. No-op when nothing is pinned or the pinned db isn't present.
+fn pin_default_first(databases: &mut [DatabaseNode], default_db: Option<&str>) {
+    if let Some(db) = default_db {
+        if let Some(pos) = databases.iter().position(|d| d.name == db) {
+            databases.swap(0, pos);
+        }
+    }
 }
 
 async fn introspect_database(client: &Client, db_name: &str) -> DbResult<DatabaseNode> {
@@ -229,5 +246,43 @@ fn bson_type_name(b: &Bson) -> &'static str {
         Bson::DbPointer(_) => "dbPointer",
         Bson::MaxKey => "maxKey",
         Bson::MinKey => "minKey",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn node(name: &str) -> DatabaseNode {
+        DatabaseNode {
+            name: name.to_string(),
+            schemas: vec![],
+        }
+    }
+    fn names(dbs: &[DatabaseNode]) -> Vec<String> {
+        dbs.iter().map(|d| d.name.clone()).collect()
+    }
+
+    #[test]
+    fn pins_the_connection_database_first() {
+        let mut dbs = vec![node("analytics"), node("myapp"), node("logs")];
+        pin_default_first(&mut dbs, Some("myapp"));
+        assert_eq!(names(&dbs), vec!["myapp", "analytics", "logs"]);
+    }
+
+    #[test]
+    fn already_first_is_unchanged() {
+        let mut dbs = vec![node("myapp"), node("analytics")];
+        pin_default_first(&mut dbs, Some("myapp"));
+        assert_eq!(names(&dbs), vec!["myapp", "analytics"]);
+    }
+
+    #[test]
+    fn no_pin_or_missing_pin_is_a_noop() {
+        let mut dbs = vec![node("a"), node("b")];
+        pin_default_first(&mut dbs, None);
+        assert_eq!(names(&dbs), vec!["a", "b"]);
+        pin_default_first(&mut dbs, Some("nope"));
+        assert_eq!(names(&dbs), vec!["a", "b"]);
     }
 }

@@ -107,8 +107,14 @@ export function registerAllMenuHandlers() {
     }
   });
   registerMenu(MENU.EDIT_CONNECTION, () => {
-    const id = s().selectedConnId;
-    if (id) s().openConnectionForm(id);
+    // selectedConnId is a SESSION id (the rail keys on sessions). Resolve it to
+    // the underlying saved-connection id, else openConnectionForm can't find a
+    // record and falls back to a blank "new connection" form.
+    const sel = s().selectedConnId;
+    if (!sel) return;
+    const sess = s().sessions.find((x) => x.id === sel);
+    const connId = sess?.connectionId ?? sel;
+    s().openConnectionForm(connId);
   });
   registerMenu(MENU.DUPLICATE_CONNECTION, async () => {
     const id = s().selectedConnId; if (!id) return;
