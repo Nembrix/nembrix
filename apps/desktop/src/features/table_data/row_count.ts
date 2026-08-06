@@ -22,6 +22,8 @@
 
 import * as api from "@/ipc/commands";
 import type { CellValue } from "@/ipc/types";
+import type { FilterChip } from "@/store";
+import { buildMongoCount } from "./buildTableQuery";
 
 /** Result of a single phase. `value` is null when the phase failed. */
 export interface CountPhase {
@@ -40,6 +42,27 @@ function asNumber(c: CellValue | undefined): number | null {
     return Number.isFinite(n) ? n : null;
   }
   return null;
+}
+
+/**
+ * Mongo exact count via `db.<coll>.countDocuments(<filterDoc>)`. There's no
+ * cheap planner estimate for Mongo (countDocuments already scans an index or
+ * the collection), so the table-data caller uses this single-phase count
+ * instead of the pg_class estimate + COUNT(*) pair. Returns null on error.
+ */
+export async function fetchMongoCount(
+  connId: string,
+  rel: { schema: string; table: string },
+  filters: FilterChip[],
+): Promise<number | null> {
+  const cmd = buildMongoCount(rel, filters);
+  return new Promise((resolve) => {
+    let val: number | null = null;
+    api.stream(connId, cmd, (b) => {
+      if (b.rows.length > 0) val = asNumber(b.rows[0][0]);
+      if (b.done) resolve(val);
+    }).catch(() => resolve(null));
+  });
 }
 
 /** First phase: instant estimate from pg_class.reltuples. */

@@ -30,6 +30,7 @@ import * as api from "@/ipc/commands";
 import Tooltip from "@/components/Tooltip";
 import RunningTimer from "@/components/RunningTimer";
 import { colorFor, ENV_LABEL } from "@/features/connections/environment";
+import { engineLabel } from "@/features/connections/engines";
 import { isTauri } from "@/ipc/commands";
 
 export default function StatusBar() {
@@ -103,6 +104,10 @@ export default function StatusBar() {
   const envLabel = conn.environment
     ? ENV_LABEL[conn.environment as keyof typeof ENV_LABEL]
     : "";
+  // Display name for the connection's engine (the pill was hardcoded to
+  // "PostgreSQL") — from the central engine registry so it stays in sync.
+  const engineName = engineLabel(conn.engine);
+  const isMongo = conn.engine === "mongo";
 
   const newQueryTab = () => {
     addTab({
@@ -321,14 +326,14 @@ export default function StatusBar() {
           )}
         </div>
 
-        <Tooltip label="New SQL query tab" shortcut="⌘T">
+        <Tooltip label={`New ${isMongo ? "query" : "SQL"} tab`} shortcut="⌘T">
           <button
             className="status-action status-sql"
             onClick={newQueryTab}
-            aria-label="New SQL query tab"
+            aria-label={`New ${isMongo ? "query" : "SQL"} tab`}
           >
             <FileCode2 size={12} />
-            <span>SQL</span>
+            <span>{isMongo ? "Query" : "SQL"}</span>
           </button>
         </Tooltip>
       </div>
@@ -338,7 +343,7 @@ export default function StatusBar() {
           <span className="pill-env">{envLabel.toUpperCase()}</span>
         )}
         <span className="pill-sep">·</span>
-        <span className="pill-engine">PostgreSQL</span>
+        <span className="pill-engine">{engineName}</span>
         {conn.database && (
           <>
             <span className="pill-sep">:</span>

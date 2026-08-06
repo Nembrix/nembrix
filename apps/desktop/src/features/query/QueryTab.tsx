@@ -3,6 +3,7 @@ import CodeMirror from "@uiw/react-codemirror";
 import { keymap, EditorView } from "@codemirror/view";
 import { EditorSelection, Prec, StateEffect } from "@codemirror/state";
 import { buildJsScriptExtension } from "@/editor/js-completion";
+import { buildMongoExtension } from "@/editor/mongo-completion";
 import { Play, Square, Sparkles, Star } from "lucide-react";
 import { buildSqlExtension } from "@/editor/sql-completion";
 import { useStore, type Tab, type FilterChip } from "@/store";
@@ -366,15 +367,20 @@ export default function QueryTab({ tab }: { tab: Tab }) {
   // effect (never during render) so it's lint-safe.
   const commentTokenRef = useRef("--");
   useEffect(() => {
-    commentTokenRef.current = isScript ? "//" : "--";
-  }, [isScript]);
+    // JS script and Mongo shell both use // comments; only SQL uses --.
+    commentTokenRef.current = isScript || isMongo ? "//" : "--";
+  }, [isScript, isMongo]);
 
-  // Language extension: schema-aware completion for both modes. Script mode
-  // gets JS + the db/console API + SQL completion inside db.query("…")
-  // strings; SQL mode gets the Postgres dialect + schema completion.
-  // Swapping this by `tab.lang` is what makes the same editor a JavaScript
-  // surface when the user flips the toggle.
-  const langExt = isScript ? buildJsScriptExtension(tree) : buildSqlExtension(tree);
+  // Language extension: schema-aware completion, picked by (lang, engine):
+  //  - script mode → JS + db/console API,
+  //  - Mongo non-script → mongo-shell completion (db.<coll>.<method>()),
+  //  - SQL engines non-script → Postgres dialect + schema completion.
+  // A Mongo tab must NOT get SQL keyword completion, and vice-versa.
+  const langExt = isScript
+    ? buildJsScriptExtension(tree)
+    : isMongo
+      ? buildMongoExtension(tree)
+      : buildSqlExtension(tree);
   const rowCount = tab.rows?.length ?? 0;
 
   // Editor height — user-draggable via the separator between the
@@ -584,9 +590,9 @@ export default function QueryTab({ tab }: { tab: Tab }) {
           {lineCount} {lineCount === 1 ? "line" : "lines"}, {selectedChars} characters
         </span>
         <div className="spacer" />
-        {/* Language toggle — only for SQL connections. Flips the tab between
-            plain SQL and JS scripting mode (db.query + loops). Mongo/Redis
-            connections have their own languages, so it's hidden there. */}
+        {/* Language toggle — flips the tab between the engine's native query
+            language and JS scripting mode (db.query + loops). The native option
+            is labelled per engine: "SQL" for RDBMS, "MongoDB" (shell) for Mongo. */}
         {scriptingAvailable && (
           <label className="limit-picker" title="Editor language for this tab">
             <span className="muted">Lang</span>
@@ -596,7 +602,7 @@ export default function QueryTab({ tab }: { tab: Tab }) {
                 updateTab(tab.id, { lang: e.target.value as "sql" | "script" })
               }
             >
-              <option value="sql">SQL</option>
+              <option value="sql">{isMongo ? "MongoDB" : "SQL"}</option>
               <option value="script">JavaScript</option>
             </select>
           </label>

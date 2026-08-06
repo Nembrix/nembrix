@@ -2233,6 +2233,31 @@ table.grid tr:hover .pin-btn { opacity: 1; }
   background: transparent;
   padding: 0 !important;
 }
+/* The "+" add-column affordance living in the header's filler cell. */
+.grid-header th.grid-add-col {
+  text-align: left;
+  padding: 0 !important;
+}
+.grid-add-col-btn {
+  width: 22px;
+  height: 22px;
+  margin: 2px 4px;
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-2);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.grid-add-col-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
 /* Same explicit rule on virtualized rows — each absolutely-positioned
    inner table renders in isolation so the cascade from `table.grid td`
    doesn't always reach it. */

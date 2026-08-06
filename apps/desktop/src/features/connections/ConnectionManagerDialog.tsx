@@ -393,8 +393,14 @@ export default function ConnectionManagerDialog({ onClose }: { onClose: () => vo
                     className="btn-pill"
                     onClick={() => connectNow(c)}
                     data-testid="cm-connect"
+                    title={liveCount > 0
+                      ? "Open an additional, independent session to this connection"
+                      : "Connect to this database"}
                   >
-                    <Play size={11} /> {liveCount > 0 ? "Connect again" : "Connect"}
+                    {/* "New session" (not "Connect again", which read like a
+                        retry) — it opens ANOTHER live session to the same
+                        connection so you can run queries in parallel. */}
+                    <Play size={11} /> {liveCount > 0 ? "New session" : "Connect"}
                   </button>
                   <button
                     className="icon-btn"
