@@ -363,7 +363,13 @@ pub async fn test_connection(input: ConnectionInput) -> Result<u64, String> {
         Some(5_000),
     )
     .await?;
-    db.ping().await.map_err(|e| e.to_string())?;
+    // Mongo (and other lazy drivers) don't actually reach the server during
+    // build_driver — the real failure surfaces here on ping. Condense it the
+    // same way so a paragraph-long "Server selection timeout … Topology { … }"
+    // dump becomes a one-line, human message instead of leaking raw.
+    db.ping()
+        .await
+        .map_err(|e| short_connect_error(&e.to_string()))?;
     Ok(started.elapsed().as_millis() as u64)
 }
 
@@ -434,6 +440,14 @@ mod tests {
             (
                 "failed to lookup address information: nodename nor servname provided",
                 "reachable",
+            ),
+            // The full mongodb driver dump — a paragraph that must condense to
+            // a one-liner, not leak the Topology { … } internals.
+            (
+                "Kind: Server selection timeout: No available servers. Topology: \
+                 { Type: Unknown, Servers: [ { Address: 127.0.0.1:27017, Type: \
+                 Unknown, Error: Kind: I/O error: Connection refused (os error 61) } ] }",
+                "refused",
             ),
         ] {
             let out = short_connect_error(raw);
