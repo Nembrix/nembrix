@@ -1979,6 +1979,34 @@ tr.grid-filler.row-even > td {
   overflow-y: hidden;
   scrollbar-width: thin;
 }
+/* Row count + elapsed-time band. The value flips on every load/refresh
+   (running → done, "0 of 0" → "47 of 47", ticking ms), and without help
+   that reads as a flicker: proportional digits change width so the text
+   reflows, and abrupt swaps catch the eye.
+     - tabular-nums: every digit is the same width, so counting up doesn't
+       jitter the layout.
+     - min-width: reserve a stable slot so "0 of 0 rows" → "47 of 47 rows"
+       doesn't shift the neighbouring controls.
+     - transition on opacity/color: soften the swap instead of a hard cut. */
+.data-view-meta {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+/* Slim status strip under the grid: row count + query time. Sits at the
+   bottom of the result pane, out of the busy top toolbar where the ticking
+   timer read as a flicker. */
+.data-view-footer {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  font-size: 11px;
+  border-top: 1px solid var(--border-soft);
+  background: var(--bg-1);
+}
 /* The spacer is what pushes the action cluster to the right when the
    bar fits. When the bar overflows, we DON'T want the spacer eating
    space — otherwise it sits between the row count and the actions

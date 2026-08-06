@@ -28,7 +28,6 @@ import { Lock, Unlock, Database, FileCode2, RefreshCcw, Table2, Eye, ChevronDown
 import { useStore } from "@/store";
 import * as api from "@/ipc/commands";
 import Tooltip from "@/components/Tooltip";
-import RunningTimer from "@/components/RunningTimer";
 import { colorFor, ENV_LABEL } from "@/features/connections/environment";
 import { engineLabel } from "@/features/connections/engines";
 import { isTauri } from "@/ipc/commands";
@@ -175,19 +174,6 @@ export default function StatusBar() {
       sourceRelation: { schema, table: name },
     });
   };
-
-  // Live row count + timing, surfaced for query tabs that have actually
-  // produced columns. Saves the user a glance down at the result panel
-  // for "how much did that just return?".
-  const queryMeta = (() => {
-    if (!activeTab || (activeTab.columns?.length ?? 0) === 0) return null;
-    if (activeTab.running) return "running…";
-    const loaded = activeTab.rows?.length ?? 0;
-    const total = activeTab.rowsTotal;
-    if (total == null) return `${loaded.toLocaleString()} row${loaded === 1 ? "" : "s"}`;
-    const suffix = activeTab.rowsTotalEstimated ? " (est.)" : "";
-    return `${loaded.toLocaleString()} of ${total.toLocaleString()}${suffix}`;
-  })();
 
   return (
     <div className="status-bar" style={{ ["--env-ring" as never]: envRing }}>
@@ -356,22 +342,10 @@ export default function StatusBar() {
             <span className="pill-tab">{activeTab.title}</span>
           </>
         )}
-        {queryMeta && (
-          <>
-            <span className="pill-sep">·</span>
-            <span className="pill-rows">{queryMeta}</span>
-          </>
-        )}
-        {activeTab && (activeTab.running || activeTab.elapsedMs != null) && (
-          <>
-            <span className="pill-sep">·</span>
-            <RunningTimer
-              running={activeTab.running}
-              startedAt={activeTab.queryStartedAt}
-              elapsedMs={activeTab.elapsedMs}
-            />
-          </>
-        )}
+        {/* Row count + elapsed time intentionally omitted here — the
+            record-level toolbar under the grid already shows "N of M rows"
+            and the running timer, so repeating them in the status pill was
+            redundant noise. */}
       </div>
 
       <Tooltip label={refreshing ? "Refreshing…" : "Refresh schema"} shortcut="⌘R">
