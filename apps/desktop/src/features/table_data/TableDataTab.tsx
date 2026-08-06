@@ -11,6 +11,7 @@ import FilterBuilder from "@/features/grid/FilterBuilder";
 import ChartPane from "@/features/grid/ChartPane";
 import { matches } from "@/features/grid/quick-search";
 import ColumnAlterDialog, { type AlterField } from "@/features/table_data/ColumnAlterDialog";
+import AddColumnDialog from "@/features/table_data/AddColumnDialog";
 import ExportDialog from "@/features/export/ExportDialog";
 import RunningTimer from "@/components/RunningTimer";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -40,6 +41,7 @@ export default function TableDataTab({ tab }: { tab: Tab }) {
   const [colMenuOpen, setColMenuOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [alterDialog, setAlterDialog] = useState<{ col: ColumnNode; field: AlterField } | null>(null);
+  const [addColOpen, setAddColOpen] = useState(false);
   const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
   const handleRef = useRef<string | null>(null);
@@ -400,7 +402,7 @@ export default function TableDataTab({ tab }: { tab: Tab }) {
             <ErrorBoundary label="Structure">
               <StructurePane
                 rel={relationMeta}
-                onAddColumn={() => addColumn(tab, rel)}
+                onAddColumn={() => setAddColOpen(true)}
                 onEdit={(col, field) => setAlterDialog({ col, field })}
                 connId={tab.connId}
                 schema={rel?.schema ?? ""}
@@ -445,6 +447,14 @@ export default function TableDataTab({ tab }: { tab: Tab }) {
           column={alterDialog.col}
           field={alterDialog.field}
           onClose={() => setAlterDialog(null)}
+        />
+      )}
+      {addColOpen && rel && (
+        <AddColumnDialog
+          connId={tab.connId}
+          schema={rel.schema}
+          table={rel.table}
+          onClose={() => setAddColOpen(false)}
         />
       )}
       {exportOpen && tab.columns && tab.rows && (
@@ -954,18 +964,6 @@ function InfoPane({
       )}
     </div>
   );
-}
-
-function addColumn(tab: Tab, rel?: { schema: string; table: string }) {
-  if (!rel) return;
-  const name = prompt(`New column name on ${rel.schema}.${rel.table}:`);
-  if (!name) return;
-  const type = prompt("Column type (e.g. text, integer, jsonb):", "text");
-  if (!type) return;
-  const sql = `ALTER TABLE "${rel.schema}"."${rel.table}" ADD COLUMN "${name}" ${type};`;
-  void api.execute(tab.connId, sql).then(() => api.introspect(tab.connId))
-    .then((t) => useStore.getState().setSchema(tab.connId, t))
-    .catch((e) => alert(`Failed: ${e}`));
 }
 
 function addIndex(tab: Tab, rel?: { schema: string; table: string }) {
