@@ -12,6 +12,7 @@ import ChartPane from "@/features/grid/ChartPane";
 import { matches } from "@/features/grid/quick-search";
 import ColumnAlterDialog, { type AlterField } from "@/features/table_data/ColumnAlterDialog";
 import AddColumnDialog from "@/features/table_data/AddColumnDialog";
+import AddIndexDialog from "@/features/table_data/AddIndexDialog";
 import ExportDialog from "@/features/export/ExportDialog";
 import RunningTimer from "@/components/RunningTimer";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -42,6 +43,7 @@ export default function TableDataTab({ tab }: { tab: Tab }) {
   const [exportOpen, setExportOpen] = useState(false);
   const [alterDialog, setAlterDialog] = useState<{ col: ColumnNode; field: AlterField } | null>(null);
   const [addColOpen, setAddColOpen] = useState(false);
+  const [addIdxOpen, setAddIdxOpen] = useState(false);
   const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
   const handleRef = useRef<string | null>(null);
@@ -397,7 +399,8 @@ export default function TableDataTab({ tab }: { tab: Tab }) {
         <div className="result-body">
           {view === "data" && (tab.error
             ? <div className="message-pane err">{tab.error}</div>
-            : <DataGrid tab={visible} engine={engine} />)}
+            : <DataGrid tab={visible} engine={engine}
+                onAddColumn={rel ? () => setAddColOpen(true) : undefined} />)}
           {view === "structure" && (
             <ErrorBoundary label="Structure">
               <StructurePane
@@ -419,7 +422,7 @@ export default function TableDataTab({ tab }: { tab: Tab }) {
                 schema={rel?.schema ?? ""}
                 table={rel?.table ?? ""}
                 engine={engine}
-                onAddIndex={() => addIndex(tab, rel)}
+                onAddIndex={() => setAddIdxOpen(true)}
               />
             </ErrorBoundary>
           )}
@@ -455,6 +458,14 @@ export default function TableDataTab({ tab }: { tab: Tab }) {
           schema={rel.schema}
           table={rel.table}
           onClose={() => setAddColOpen(false)}
+        />
+      )}
+      {addIdxOpen && rel && (
+        <AddIndexDialog
+          connId={tab.connId}
+          schema={rel.schema}
+          table={rel.table}
+          onClose={() => setAddIdxOpen(false)}
         />
       )}
       {exportOpen && tab.columns && tab.rows && (
@@ -964,18 +975,6 @@ function InfoPane({
       )}
     </div>
   );
-}
-
-function addIndex(tab: Tab, rel?: { schema: string; table: string }) {
-  if (!rel) return;
-  const cols = prompt(`Columns to index on ${rel.schema}.${rel.table} (comma-separated):`);
-  if (!cols) return;
-  const colList = cols.split(",").map((s) => `"${s.trim()}"`).join(", ");
-  const name = `${rel.table}_${cols.split(",").map((s) => s.trim()).join("_")}_idx`;
-  const sql = `CREATE INDEX "${name}" ON "${rel.schema}"."${rel.table}" (${colList});`;
-  void api.execute(tab.connId, sql).then(() => api.introspect(tab.connId))
-    .then((t) => useStore.getState().setSchema(tab.connId, t))
-    .catch((e) => alert(`Failed: ${e}`));
 }
 
 function SortPill({

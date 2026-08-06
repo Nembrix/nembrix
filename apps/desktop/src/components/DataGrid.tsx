@@ -55,7 +55,13 @@ function widthForColumn(
   return px;
 }
 
-export default function DataGrid({ tab, engine }: { tab: Tab; engine?: string }) {
+export default function DataGrid({ tab, engine, onAddColumn }: {
+  tab: Tab;
+  engine?: string;
+  /** Optional: opens the Add-column dialog from a "+" in the header's right
+   *  edge. Provided only for SQL engines (Mongo is schemaless). */
+  onAddColumn?: () => void;
+}) {
   const isMongo = engine === "mongo";
   const { schemas, updateTab, readOnly } = useStore();
   const isReadOnly = !!readOnly[tab.connId];
@@ -706,7 +712,21 @@ export default function DataGrid({ tab, engine }: { tab: Tab; engine?: string })
                 </th>
                 );
               })}
-              {fillerW > 0 && <th className="grid-filler-cell" aria-hidden="true" />}
+              {/* A "+" at the right edge to add a column, sitting in the filler
+                  band. SQL engines only (Mongo has no fixed schema). It reuses
+                  the filler cell so it doesn't add width; when there's no
+                  filler, it still renders as a compact trailing cell. */}
+              {onAddColumn && !isMongo ? (
+                <th className="grid-filler-cell grid-add-col" title="Add column">
+                  <button
+                    className="grid-add-col-btn"
+                    onClick={onAddColumn}
+                    aria-label="Add column"
+                  >+</button>
+                </th>
+              ) : (
+                fillerW > 0 && <th className="grid-filler-cell" aria-hidden="true" />
+              )}
             </tr>
           </thead>
         </table>
