@@ -146,6 +146,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .rail-entry:hover { background: var(--bg-elev); }
 .rail-entry.active { background: rgba(59,130,246,0.12); }
+/* Dim inactive rows so the selected connection clearly stands out. The active
+   row (and any row being hovered) returns to full strength. */
+.rail-entry { opacity: 0.55; transition: opacity .1s; }
+.rail-entry.active,
+.rail-entry:hover { opacity: 1; }
 
 .rail-avatar {
   width: 42px;

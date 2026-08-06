@@ -123,11 +123,18 @@ export default function ConnectionRail({ onNewConnection }: { onNewConnection: (
           <Tooltip key={sess.id} label={tip} side="bottom">
             <div
               className={`rail-entry ${active ? "active" : ""} ${isProd ? "is-prod" : ""}`}
-              // The rail only ever holds CONNECTED (or reconnecting) sessions, so
-              // a click just switches to that connection's view — no connect /
-              // disconnect. Closing a connection is done via right-click →
-              // "Close connection", which tears the session down and drops it.
-              onClick={() => selectConn(sess.id)}
+              // Click selects/switches to this connection's view AND silently
+              // reconnects it if the session has dropped — the rail is meant to
+              // be "always connected", so switching back to a stale session
+              // should recover it, not surface "not connected". Already-live
+              // sessions just select. Tearing a session down is an explicit
+              // right-click → "Close connection".
+              onClick={() => {
+                selectConn(sess.id);
+                if (st !== "connected" && st !== "connecting") {
+                  void connectSessionAndIntrospect(sess.id);
+                }
+              }}
               onContextMenu={(e) => onSessionContextMenu(e, sess.id, sess.connectionId)}
               style={{ ["--env-ring" as never]: ring }}
             >
