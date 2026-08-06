@@ -1225,11 +1225,21 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .result-segments .meta { color: var(--fg-2); font-size: 12px; margin-left: 8px; }
 .result-segments .spacer { flex: 1; }
 
-.result-body { flex: 1; overflow: auto; }
+/* The grid inside owns its own scrolling (.grid-scroll). This wrapper just
+   needs to fill the pane and give the grid a definite box to measure against:
+   `min-width: 0` stops it shrink-wrapping to a narrow table (which starved
+   stretchLastColumn of slack → a dead band on the right for few-column tables
+   like an empty Mongo collection), and `overflow: hidden` keeps the single
+   scroll container on .grid-scroll. */
+.result-body { flex: 1; min-width: 0; overflow: hidden; display: flex; flex-direction: column; }
 
 /* Grid */
 /* Scroll container — header sticks via its own <table>, body scrolls. */
 .grid-scroll {
+  /* Fills the flex-column .result-body: flex:1 for height, width:100% below
+     for width. min-height:0 lets it shrink so the inner table scrolls. */
+  flex: 1;
+  min-height: 0;
   height: 100%;
   /* Fill the pane's width. Without an explicit width the scroll container
      shrink-wraps to the (possibly narrow) table inside it, so clientWidth
