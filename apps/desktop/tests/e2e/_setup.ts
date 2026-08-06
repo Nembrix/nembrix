@@ -73,18 +73,22 @@ export async function seedConnectedSession(
   // interacting.
   const avatar = page.locator(".rail-avatar").first();
   await expect(avatar).toBeVisible();
-  await avatar.click();
   if (connect) {
-    const connectBtn = page.locator("[data-testid='connect-btn']");
+    // The rail row is now the connect affordance — clicking it selects the
+    // session AND connects it if it's dropped (there's no separate connect
+    // button anymore). Click the row and wait for it to reach "connected".
+    const connectBtn = page.locator("[data-testid='connect-btn']").first();
     await expect(connectBtn).toBeVisible();
     await connectBtn.click();
     // Wait for the session to actually reach "connected" — the connect +
     // introspect round-trip is async, and tests that immediately click a
     // table need the schema loaded first. Without this the table click
     // (and the grid that follows) races the introspect and intermittently
-    // finds an empty schema → "grid never rendered". The connect button
-    // carries the live status in data-state.
+    // finds an empty schema → "grid never rendered". The row carries the live
+    // status in data-state.
     await expect(connectBtn).toHaveAttribute("data-state", "connected", { timeout: 10_000 });
+  } else {
+    await avatar.click();
   }
 }
 
