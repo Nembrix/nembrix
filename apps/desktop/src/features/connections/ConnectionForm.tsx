@@ -7,6 +7,7 @@ import { useStore } from "@/store";
 import { ENV_COLOR, ENV_LABEL, ENVIRONMENTS, colorFor } from "./environment";
 import { validateConnectionName } from "./validateConnectionName";
 import { buildPostgresUri, parsePostgresUri } from "./postgresUri";
+import { buildMongoUri, parseMongoUri } from "./mongoUri";
 
 /** Engines we ship now vs. the ones on the roadmap. The form lists every
  *  engine — the unsupported ones are shown disabled with a "Coming soon"
@@ -20,6 +21,42 @@ const ENGINES: { key: EngineKey; label: string; supported: boolean }[] = [
   { key: "mongo",    label: "MongoDB",    supported: true },
   { key: "redis",    label: "Redis",      supported: false },
 ];
+
+/** Per-engine connection-URL adapter. Engines that support a paste-a-URL flow
+ *  register a parse/build pair + example here; the form looks the engine up
+ *  instead of branching, so adding MySQL/etc. is one entry, not another
+ *  `if/else`. Engines with no entry simply don't show the URL toggle. */
+type UriAdapter = {
+  parse: (raw: string) => Partial<ConnectionInput> | null;
+  build: (v: ConnectionInput) => string;
+  placeholder: string;
+  /** Shown in the "not recognisable" error. */
+  example: string;
+};
+const URI_ADAPTERS: Partial<Record<EngineKey, UriAdapter>> = {
+  postgres: {
+    parse: parsePostgresUri,
+    build: buildPostgresUri,
+    placeholder: "postgresql://user:password@host:5432/dbname?sslmode=require",
+    example: "postgres://user:pass@host:port/db",
+  },
+  mongo: {
+    parse: parseMongoUri,
+    build: buildMongoUri,
+    placeholder: "mongodb://user:password@host:27017/dbname?tls=true",
+    example: "mongodb://user:pass@host:port/db",
+  },
+};
+
+/** Per-engine placeholder hints for the User / Database fields, so an empty
+ *  field shows a sensible example rather than a filled-in Postgres value. */
+const FIELD_PLACEHOLDERS: Partial<Record<EngineKey, { user: string; database: string }>> = {
+  postgres: { user: "postgres", database: "postgres" },
+  mysql: { user: "root", database: "mysql" },
+  sqlite: { user: "", database: "path/to/file.db" },
+  mongo: { user: "(optional)", database: "test" },
+  redis: { user: "(optional)", database: "0" },
+};
 
 /** The well-known default port per engine, applied when the user switches
  *  engines so they don't have to remember 27017 vs 5432. */
@@ -37,14 +74,19 @@ const empty: ConnectionInput = {
   engine: "postgres",
   host: "127.0.0.1",
   port: 5432,
-  username: "postgres",
+  // User and database are left blank on a new connection — the inputs show
+  // engine-appropriate placeholders (see PLACEHOLDERS) rather than pre-filling
+  // Postgres-specific values that would be wrong for Mongo/Redis and look like
+  // real input the user typed.
+  username: "",
   password: "",
-  database: "postgres",
+  database: "",
   ssl_mode: "prefer",
   ssh: null,
   color: null,
   environment: "development",
 };
+
 
 function recordToInput(c: ConnectionRecord): ConnectionInput {
   return {
@@ -115,12 +157,16 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
 
   const patch = (p: Partial<ConnectionInput>) => setV((s) => ({ ...s, ...p }));
 
+  // The current engine's URL adapter (undefined for engines without one).
+  const uriAdapter = URI_ADAPTERS[v.engine as EngineKey];
+
   const onUriChange = (text: string) => {
     setUriText(text);
     if (!text.trim()) { setUriErr(null); return; }
-    const parsed = parsePostgresUri(text);
+    if (!uriAdapter) return;
+    const parsed = uriAdapter.parse(text);
     if (!parsed) {
-      setUriErr("Not a recognisable Postgres URI (expected postgres://user:pass@host:port/db).");
+      setUriErr(`Not a recognisable URL (expected ${uriAdapter.example}).`);
       return;
     }
     setUriErr(null);
@@ -128,7 +174,8 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
   };
 
   const switchToUri = () => {
-    setUriText(buildPostgresUri(v));
+    if (!uriAdapter) return;
+    setUriText(uriAdapter.build(v));
     setUriErr(null);
     setInputMode("url");
   };
@@ -312,6 +359,9 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
                   engine: next,
                   ...(portIsDefault ? { port: DEFAULT_PORT[next as EngineKey] } : {}),
                 });
+                // A pasted URL belongs to the old engine's syntax; drop back to
+                // the fields view so it isn't mis-parsed against the new engine.
+                if (inputMode === "url") { setInputMode("form"); setUriText(""); setUriErr(null); }
               }}
             >
               {ENGINES.map((e) => (
@@ -383,7 +433,7 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
               </div>
             </div>
 
-            {v.engine === "postgres" && (
+            {uriAdapter && (
               <>
                 <label>Input</label>
                 <div className="cf-mode-toggle">
@@ -401,7 +451,7 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
               </>
             )}
 
-            {inputMode === "url" && v.engine === "postgres" ? (
+            {inputMode === "url" && uriAdapter ? (
               <>
                 <label htmlFor="cf-uri">URL</label>
                 <div>
@@ -410,7 +460,7 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
                     className="cf-uri-input"
                     rows={2}
                     spellCheck={false}
-                    placeholder="postgresql://user:password@host:5432/dbname?sslmode=require"
+                    placeholder={uriAdapter.placeholder}
                     value={uriText}
                     onChange={(e) => onUriChange(e.target.value)}
                   />
@@ -419,7 +469,9 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
                     <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
                       Parsed → {v.username || "(no user)"}@{v.host}:{v.port}
                       {v.database ? `/${v.database}` : ""}
-                      {v.ssl_mode && v.ssl_mode !== "prefer" ? ` · sslmode=${v.ssl_mode}` : ""}
+                      {v.ssl_mode && v.ssl_mode !== "prefer" && v.ssl_mode !== "disable"
+                        ? ` · ${v.engine === "mongo" ? "tls" : `sslmode=${v.ssl_mode}`}`
+                        : ""}
                     </div>
                   )}
                 </div>
@@ -440,7 +492,9 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
                 <div className="form-row">
                   <div className="field">
                     <label htmlFor="cf-user">User</label>
-                    <input id="cf-user" type="text" value={v.username} onChange={(e) => patch({ username: e.target.value })} />
+                    <input id="cf-user" type="text" value={v.username}
+                      placeholder={FIELD_PLACEHOLDERS[v.engine as EngineKey]?.user}
+                      onChange={(e) => patch({ username: e.target.value })} />
                   </div>
                   <div className="field">
                     <label htmlFor="cf-password">Password</label>
@@ -452,6 +506,7 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
                   <div className="field">
                     <label htmlFor="cf-database">Database</label>
                     <input id="cf-database" type="text" value={v.database ?? ""}
+                      placeholder={FIELD_PLACEHOLDERS[v.engine as EngineKey]?.database}
                       onChange={(e) => patch({ database: e.target.value || null })} />
                   </div>
                   <div className="field">
