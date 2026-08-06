@@ -285,57 +285,10 @@ export default function TableDataTab({ tab }: { tab: Tab }) {
             Columns, Export, Refresh. The schema.table name lives in
             the tab title above; duplicating it here was just noise. */}
       <div className="data-view-toolbar">
-        {/* Row count + timer share one steady band. `tabular-nums` +
-            `data-view-meta` (transition + fixed baseline) keep the digits from
-            reflowing every refresh tick, which read as a flicker on the eye. */}
-        <span className="muted data-view-meta">
-          {(() => {
-            const loaded = tab.rows?.length ?? 0;
-            const total = tab.rowsTotal;
-            const totalSuffix = total != null
-              ? ` of ${total.toLocaleString()}${tab.rowsTotalEstimated ? " (est.)" : ""}`
-              : "";
-            if (search.trim() && tab.rows) {
-              return `${matches(search.trim(), tab.rows).length} / ${loaded}${totalSuffix} rows`;
-            }
-            return `${loaded}${totalSuffix} row${loaded === 1 ? "" : "s"}`;
-          })()}
-          <RunningTimer
-            running={tab.running}
-            startedAt={tab.queryStartedAt}
-            elapsedMs={tab.elapsedMs}
-            prefix="· "
-          />
-        </span>
-
-        {/* +Row appends a draft row to the grid (no DB write yet).
-            The user fills cells inline; Save All commits every draft
-            row alongside any pending cell edits in one transaction.
-            That way tables with NOT NULL columns and no defaults
-            don't error on insertion — the user can supply the
-            required values before saving. */}
-        {(() => {
-          const ro = !!useStore.getState().readOnly[tab.connId];
-          return (
-            <button
-              className="btn-pill"
-              onClick={() => {
-                if (!rel) return;
-                const drafts = tab.pendingInserts ?? [];
-                updateTab(tab.id, { pendingInserts: [...drafts, {}] });
-              }}
-              title={ro
-                ? "Connection is read-only — unlock it in the status bar"
-                : "Append a draft row — fill cells, then Save All to commit"}
-              disabled={!rel || ro}
-            >
-              <Plus size={12} /> Row
-            </button>
-          );
-        })()}
-
-        <div className="spacer" />
-
+        {/* Search leads the toolbar — it's the control the eye goes to first.
+            The row count, +Row, Export and Refresh cluster sits on the right
+            (after the spacer) so the left edge stays a stable search + query
+            controls lane. */}
         <div className="grid-quick-search">
           <Search size={12} />
           <input
@@ -388,6 +341,60 @@ export default function TableDataTab({ tab }: { tab: Tab }) {
             </div>
           )}
         </div>
+
+        <div className="spacer" />
+
+        {/* Right cluster: row count + timer, then the row/export/refresh
+            actions. Kept together on the right so the count reads alongside
+            the actions that change it. */}
+        {/* Row count + timer share one steady band. `tabular-nums` +
+            `data-view-meta` (transition + fixed baseline) keep the digits from
+            reflowing every refresh tick, which read as a flicker on the eye. */}
+        <span className="muted data-view-meta">
+          {(() => {
+            const loaded = tab.rows?.length ?? 0;
+            const total = tab.rowsTotal;
+            const totalSuffix = total != null
+              ? ` of ${total.toLocaleString()}${tab.rowsTotalEstimated ? " (est.)" : ""}`
+              : "";
+            if (search.trim() && tab.rows) {
+              return `${matches(search.trim(), tab.rows).length} / ${loaded}${totalSuffix} rows`;
+            }
+            return `${loaded}${totalSuffix} row${loaded === 1 ? "" : "s"}`;
+          })()}
+          <RunningTimer
+            running={tab.running}
+            startedAt={tab.queryStartedAt}
+            elapsedMs={tab.elapsedMs}
+            prefix="· "
+          />
+        </span>
+
+        {/* +Row appends a draft row to the grid (no DB write yet).
+            The user fills cells inline; Save All commits every draft
+            row alongside any pending cell edits in one transaction.
+            That way tables with NOT NULL columns and no defaults
+            don't error on insertion — the user can supply the
+            required values before saving. */}
+        {(() => {
+          const ro = !!useStore.getState().readOnly[tab.connId];
+          return (
+            <button
+              className="btn-pill"
+              onClick={() => {
+                if (!rel) return;
+                const drafts = tab.pendingInserts ?? [];
+                updateTab(tab.id, { pendingInserts: [...drafts, {}] });
+              }}
+              title={ro
+                ? "Connection is read-only — unlock it in the status bar"
+                : "Append a draft row — fill cells, then Save All to commit"}
+              disabled={!rel || ro}
+            >
+              <Plus size={12} /> Row
+            </button>
+          );
+        })()}
 
         <button className="btn-pill" onClick={() => setExportOpen(true)} title="Export…">
           <Download size={12} /> Export
