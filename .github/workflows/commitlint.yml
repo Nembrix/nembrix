@@ -62,4 +62,14 @@ jobs:
           requireScope: false
           subjectPattern: ^(?![A-Z]).+$
           subjectPatternError: |
-            The subject "{subject}" must start with a lowercase letter.
+            The PR title subject "{subject}" must start with a lowercase letter.
+
+            Conventional-commit subjects complete the sentence "if applied, this
+            PR will …", so lead with a lowercase verb and put any proper noun
+            (JavaScript, MongoDB, GitHub, …) after it.
+
+              ✗ feat(scripting): JavaScript scripting on MongoDB
+              ✓ feat(scripting): add MongoDB support to JavaScript scripting
+
+            Format: <type>(<optional scope>): <lowercase subject>
+            Edit the PR title (not the branch) — this check re-runs on save.
