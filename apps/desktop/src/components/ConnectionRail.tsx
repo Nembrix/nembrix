@@ -43,23 +43,40 @@ export default function ConnectionRail({ onNewConnection }: { onNewConnection: (
   const onSessionContextMenu = (e: React.MouseEvent, sessionId: string, connectionId: string) => {
     e.preventDefault();
     selectConn(sessionId);
-    const st = status[sessionId] ?? "disconnected";
+    const otherCount = useStore.getState().sessions.filter((s) => s.id !== sessionId).length;
     const items: ContextItem[] = [
-      st === "connected"
-        ? { label: "Disconnect", onClick: () => dispatchMenu(MENU.DISCONNECT) }
-        : { label: "Connect",    onClick: () => void connectSessionAndIntrospect(sessionId) },
       { label: "Refresh schema", onClick: () => dispatchMenu(MENU.REFRESH_SCHEMA) },
-      { separator: true },
       { label: "Open another session",
         onClick: () => {
           const newId = useStore.getState().openSession(connectionId);
           void connectSessionAndIntrospect(newId);
         } },
-      { label: "Edit connection…",    onClick: () => dispatchMenu(MENU.EDIT_CONNECTION) },
+      { label: "Edit connection…", onClick: () => dispatchMenu(MENU.EDIT_CONNECTION) },
       { separator: true },
-      { label: "Close session", danger: true, onClick: () => closeSession(sessionId) },
+      // Rail rows are always-connected sessions (like tabs). "Close" tears the
+      // session down — disconnect the backend pool, then drop it from the rail.
+      { label: "Close connection", danger: true, onClick: () => void closeSessionFully(sessionId) },
+      ...(otherCount > 0
+        ? [{ label: "Close other connections", danger: true, onClick: () => void closeOtherSessions(sessionId) }]
+        : []),
     ];
     setCtx({ x: e.clientX, y: e.clientY, items });
+  };
+
+  /** Fully close a session: disconnect the backend pool, then remove it from
+   *  the rail. `closeSession` alone only cleared the store, leaking the pool. */
+  const closeSessionFully = async (sessionId: string) => {
+    try { await api.disconnect(sessionId); } catch { /* best-effort */ }
+    closeSession(sessionId);
+  };
+
+  /** Close every session except the given one. */
+  const closeOtherSessions = async (keepId: string) => {
+    const others = useStore.getState().sessions.filter((s) => s.id !== keepId).map((s) => s.id);
+    await Promise.all(others.map(async (id) => {
+      try { await api.disconnect(id); } catch { /* best-effort */ }
+      closeSession(id);
+    }));
   };
 
   return (
@@ -103,34 +120,25 @@ export default function ConnectionRail({ onNewConnection }: { onNewConnection: (
           : `${displayName}${envLabel ? ` · ${envLabel}` : ""} — ${summary}`;
         const isProd = c.environment === "production";
         return (
-          <Tooltip key={sess.id} label={tip} shortcut={st === "connected" ? undefined : "Double-click to connect"} side="bottom">
+          <Tooltip key={sess.id} label={tip} side="bottom">
             <div
               className={`rail-entry ${active ? "active" : ""} ${isProd ? "is-prod" : ""}`}
+              // The rail only ever holds CONNECTED (or reconnecting) sessions, so
+              // a click just switches to that connection's view — no connect /
+              // disconnect. Closing a connection is done via right-click →
+              // "Close connection", which tears the session down and drops it.
               onClick={() => selectConn(sess.id)}
-              onDoubleClick={() => { selectConn(sess.id); void connectSessionAndIntrospect(sess.id); }}
               onContextMenu={(e) => onSessionContextMenu(e, sess.id, sess.connectionId)}
               style={{ ["--env-ring" as never]: ring }}
             >
               <div className={`rail-avatar ${st}`}>
                 <Database size={18} strokeWidth={1.75} />
                 <span className="badge" />
-                {/* Quick connect/disconnect hit target. Click selects
-                    AND connects in one go — the rail's session row
-                    only selects on click, double-click connects, but
-                    tooling (and tests) want a single canonical
-                    "connect" button. */}
-                <button
-                  className="rail-connect"
-                  data-testid={active ? "connect-btn" : undefined}
-                  data-state={st}
-                  aria-label={st === "connected" ? "Disconnect" : "Connect"}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    selectConn(sess.id);
-                    if (st === "connected") void dispatchMenu(MENU.DISCONNECT);
-                    else void connectSessionAndIntrospect(sess.id);
-                  }}
-                />
+                {/* The avatar covers the whole tile. A plain click just
+                    selects/switches (handled by the row's onClick, which this
+                    doesn't stopPropagation). The status dot shows connection
+                    health; closing a connection is done via right-click →
+                    "Close connection" so it isn't a one-pixel-off accident. */}
               </div>
               <span className="rail-name">{displayName}</span>
               <span className="rail-db">{db}</span>
