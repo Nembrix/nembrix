@@ -15,7 +15,7 @@ import ExportDialog from "@/features/export/ExportDialog";
 import RunningTimer from "@/components/RunningTimer";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { enumValuesFor } from "@/features/table_data/enum_values";
-import { fetchEstimate, fetchExact } from "@/features/table_data/row_count";
+import { fetchEstimate, fetchExact, fetchMongoCount } from "@/features/table_data/row_count";
 import { formatBytes, useTableStats } from "@/features/table_data/useTableStats";
 import type { ColumnNode, RelationNode } from "@/ipc/types";
 
@@ -81,12 +81,17 @@ export default function TableDataTab({ tab }: { tab: Tab }) {
 
   // Resolve the connection's engine (session → connectionId → connection) so
   // the query is built in the right dialect — SQL vs Mongo's shell command.
+  // Subscribe to sessions/connections (not a one-shot getState) so the engine
+  // resolves once they hydrate — a table tab can mount before the connection
+  // list is populated, and a stale `undefined` here would wrongly build SQL
+  // for a Mongo connection.
+  const sessions = useStore((s) => s.sessions);
+  const conns = useStore((s) => s.connections);
   const engine = useMemo(() => {
-    const st = useStore.getState();
-    const session = st.sessions.find((s) => s.id === tab.connId);
+    const session = sessions.find((s) => s.id === tab.connId);
     const connectionId = session?.connectionId ?? tab.connId;
-    return st.connections.find((c) => c.id === connectionId)?.engine;
-  }, [tab.connId]);
+    return conns.find((c) => c.id === connectionId)?.engine;
+  }, [tab.connId, sessions, conns]);
   const sql = useMemo(
     () =>
       !rel
@@ -164,11 +169,23 @@ export default function TableDataTab({ tab }: { tab: Tab }) {
   useEffect(() => {
     if (!rel || tab.running || (tab.columns?.length ?? 0) === 0) return;
     const seq = ++countSeqRef.current;
-    const whereClause = buildWhereClause(filters);
     let cancelled = false;
 
     // Reset to "loading"; the estimate query lands within ~5ms typically.
     updateTab(tab.id, { rowsTotal: undefined, rowsTotalEstimated: undefined });
+
+    // Mongo has no pg_class estimate + COUNT(*) pair — use a single
+    // countDocuments(<filterDoc>) that matches the visible rows exactly.
+    if (engine === "mongo") {
+      void (async () => {
+        const n = await fetchMongoCount(tab.connId, rel, filters);
+        if (cancelled || countSeqRef.current !== seq) return;
+        if (n != null) updateTab(tab.id, { rowsTotal: n, rowsTotalEstimated: false });
+      })();
+      return () => { cancelled = true; };
+    }
+
+    const whereClause = buildWhereClause(filters);
 
     void (async () => {
       // Phase 1 — fast estimate. Skip when filters are active because
@@ -378,7 +395,7 @@ export default function TableDataTab({ tab }: { tab: Tab }) {
         <div className="result-body">
           {view === "data" && (tab.error
             ? <div className="message-pane err">{tab.error}</div>
-            : <DataGrid tab={visible} />)}
+            : <DataGrid tab={visible} engine={engine} />)}
           {view === "structure" && (
             <ErrorBoundary label="Structure">
               <StructurePane
@@ -388,6 +405,7 @@ export default function TableDataTab({ tab }: { tab: Tab }) {
                 connId={tab.connId}
                 schema={rel?.schema ?? ""}
                 table={rel?.table ?? ""}
+                engine={engine}
               />
             </ErrorBoundary>
           )}
@@ -398,6 +416,7 @@ export default function TableDataTab({ tab }: { tab: Tab }) {
                 connId={tab.connId}
                 schema={rel?.schema ?? ""}
                 table={rel?.table ?? ""}
+                engine={engine}
                 onAddIndex={() => addIndex(tab, rel)}
               />
             </ErrorBoundary>
@@ -409,6 +428,7 @@ export default function TableDataTab({ tab }: { tab: Tab }) {
                 connId={tab.connId}
                 schema={rel?.schema ?? ""}
                 table={rel?.table ?? ""}
+                engine={engine}
               />
             </ErrorBoundary>
           )}
@@ -456,7 +476,7 @@ const COMMON_PG_TYPES = [
 ];
 
 function StructurePane({
-  rel, onAddColumn, onEdit, connId, schema, table,
+  rel, onAddColumn, onEdit, connId, schema, table, engine,
 }: {
   rel?: RelationNode;
   onAddColumn: () => void;
@@ -465,11 +485,49 @@ function StructurePane({
   connId: string;
   schema: string;
   table: string;
+  engine?: string;
 }) {
   const [errByCol, setErrByCol] = useState<Record<string, string>>({});
   const [pending, setPending] = useState<string | null>(null);
+  // Mongo has no ALTER/DDL and a fluid, per-document schema. The columns here
+  // are inferred from a sample; showing SQL type/nullable/default editors (or
+  // Add column) would send pg DDL the Mongo driver rejects. Render a
+  // read-only, inferred-schema view instead.
+  const isMongo = engine === "mongo";
 
   if (!rel) return <div className="placeholder muted">No structure metadata yet — reconnect to refresh.</div>;
+
+  if (isMongo) {
+    return (
+      <div className="pane">
+        <div className="pane-toolbar">
+          <strong>Fields</strong>
+          <span className="muted">{rel.columns.length}</span>
+        </div>
+        <p className="muted" style={{ margin: "0 0 6px", fontSize: 11 }}>
+          Inferred from a sample of documents — MongoDB collections have no
+          fixed schema, so fields and types can vary per document. Editing the
+          structure here isn't available; change documents directly in the
+          Data view.
+        </p>
+        <table className="meta-table">
+          <thead><tr>
+            <th>Field</th><th>Type</th><th>Nullable</th><th>Key</th>
+          </tr></thead>
+          <tbody>
+            {rel.columns.map((c) => (
+              <tr key={c.name}>
+                <td>{c.name}</td>
+                <td className="mono">{c.type_name.toUpperCase()}</td>
+                <td>{c.nullable ? "YES" : "NOT NULL"}</td>
+                <td>{rel.primary_key.includes(c.name) ? <span className="kbd">PK</span> : ""}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
 
   const refresh = async () => {
     try {
@@ -754,15 +812,20 @@ function FragmentRow({
 }
 
 function IndexesPane({
-  rel, connId, schema, table, onAddIndex,
+  rel, connId, schema, table, engine, onAddIndex,
 }: {
   rel?: RelationNode;
   connId: string;
   schema: string;
   table: string;
+  engine?: string;
   onAddIndex: () => void;
 }) {
-  const { indexes: stats } = useTableStats(connId, schema, table);
+  const isMongo = engine === "mongo";
+  // Size/scan stats come from pg_stat_user_indexes — pass empty schema for
+  // Mongo so useTableStats skips the catalog query (which the Mongo driver
+  // would reject). Index metadata itself still comes from introspection.
+  const { indexes: stats } = useTableStats(connId, isMongo ? "" : schema, table);
   const statByName = useMemo(() => {
     const m = new Map<string, { bytes: number; scans: number }>();
     for (const s of stats) m.set(s.name, s);
@@ -776,7 +839,8 @@ function IndexesPane({
         <strong>Indexes</strong>
         <span className="muted">{rel.indexes.length}</span>
         <div className="spacer" />
-        <button className="btn-pill" onClick={onAddIndex}>+ Add index</button>
+        {/* Add index emits pg CREATE INDEX DDL — hide it on Mongo. */}
+        {!isMongo && <button className="btn-pill" onClick={onAddIndex}>+ Add index</button>}
       </div>
       {rel.indexes.length === 0 ? (
         <div className="placeholder muted">No indexes on this table.</div>
@@ -809,14 +873,19 @@ function IndexesPane({
 }
 
 function InfoPane({
-  rel, connId, schema, table,
+  rel, connId, schema, table, engine,
 }: {
   rel?: RelationNode;
   connId: string;
   schema: string;
   table: string;
+  engine?: string;
 }) {
-  const { stats, loading, err } = useTableStats(connId, schema, table);
+  const isMongo = engine === "mongo";
+  // Storage/activity numbers come from pg_class + pg_stat_user_tables. Pass an
+  // empty schema for Mongo so useTableStats skips the catalog query entirely
+  // (it would otherwise be sent to the Mongo driver and error).
+  const { stats, loading, err } = useTableStats(connId, isMongo ? "" : schema, table);
   if (!rel) return <div className="placeholder muted">No metadata yet.</div>;
   return (
     <div className="pane">
@@ -832,6 +901,12 @@ function InfoPane({
       </table>
 
       <div className="pane-toolbar"><strong>Storage &amp; activity</strong></div>
+      {isMongo ? (
+        <div className="placeholder muted" style={{ padding: 8 }}>
+          Not available for MongoDB.
+        </div>
+      ) : (
+        <>
       {err && <div className="message-pane err" style={{ margin: 8 }}>{err}</div>}
       {loading && !stats ? (
         <div className="placeholder muted">Loading stats…</div>
@@ -857,6 +932,8 @@ function InfoPane({
           </tbody>
         </table>
       ) : null}
+        </>
+      )}
 
       {rel.foreign_keys.length > 0 && (
         <>

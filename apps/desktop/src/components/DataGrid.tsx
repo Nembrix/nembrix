@@ -9,7 +9,8 @@ import ForeignKeyPanel from "@/features/grid/ForeignKeyPanel";
 import { rewriteSqlWithFilters } from "@/features/grid/filter-sql";
 import { scopeKey, getWidth, setWidth, stretchLastColumn } from "@/components/grid-column-widths";
 import ContextMenu, { type ContextItem } from "@/components/ContextMenu";
-import { buildUpdate, cellToText, pkValuesFor, valueLiteral } from "@/components/grid_edit";
+import { buildUpdate, buildDelete, cellToText, pkValuesFor, valueLiteral } from "@/components/grid_edit";
+import { buildMongoUpdate, buildMongoInsert, buildMongoDelete } from "@/features/table_data/buildTableQuery";
 import ExportDialog from "@/features/export/ExportDialog";
 import * as api from "@/ipc/commands";
 
@@ -54,7 +55,8 @@ function widthForColumn(
   return px;
 }
 
-export default function DataGrid({ tab }: { tab: Tab }) {
+export default function DataGrid({ tab, engine }: { tab: Tab; engine?: string }) {
+  const isMongo = engine === "mongo";
   const { schemas, updateTab, readOnly } = useStore();
   const isReadOnly = !!readOnly[tab.connId];
   // Wrap the `?? []` fallbacks in useMemo so they keep a stable reference
@@ -399,6 +401,52 @@ export default function DataGrid({ tab }: { tab: Tab }) {
     }
     setSavingEdits(true);
     setSaveErr(null);
+
+    // Mongo path: no multi-statement transaction. Each edit/insert is its
+    // own db.<coll>.updateOne / insertOne command, issued via api.execute
+    // (the same dispatch SQL uses; the driver routes by engine). The PK is
+    // always `_id`; pkValuesFor gives us its CellValue for the filter.
+    if (isMongo) {
+      const collection = tab.sourceRelation.table;
+      try {
+        for (const [key, raw] of Object.entries(pendingEdits)) {
+          const [rStr, cStr] = key.split(":");
+          const rowIdx = Number(rStr);
+          const colIdx = Number(cStr);
+          const col = cols[colIdx];
+          if (!col) continue;
+          const pkVals = pkValuesFor(cols, rows[rowIdx], pk);
+          if (!pkVals || !pkVals._id) {
+            throw new Error(`Row ${rowIdx}: _id missing from result — cannot update.`);
+          }
+          await api.execute(tab.connId, buildMongoUpdate({
+            collection,
+            id: pkVals._id,
+            column: col.name,
+            newValue: raw,
+          }));
+        }
+        for (const draft of pendingInserts) {
+          const fields = Object.keys(draft)
+            .map((k) => Number(k))
+            .filter((k) => Number.isFinite(k) && cols[k])
+            .map((k) => ({ column: cols[k].name, value: draft[k] }));
+          await api.execute(tab.connId, buildMongoInsert({ collection, fields }));
+        }
+        updateTab(tab.id, {
+          pendingEdits: {},
+          pendingInserts: [],
+          refreshTick: (tab.refreshTick ?? 0) + 1,
+        });
+        setFocusedRow(null);
+      } catch (e) {
+        setSaveErr(String(e));
+      } finally {
+        setSavingEdits(false);
+      }
+      return;
+    }
+
     const stmts: string[] = ["BEGIN;"];
     try {
       for (const [key, raw] of Object.entries(pendingEdits)) {
@@ -469,6 +517,36 @@ export default function DataGrid({ tab }: { tab: Tab }) {
   // current saveAllEdits closure. Cheap to do on every render.
   saveAllEditsRef.current = saveAllEdits;
 
+  /** Delete one row immediately (no staging). SQL: a PK-keyed DELETE; Mongo:
+   *  db.<coll>.deleteOne({ _id: … }). Refreshes the grid on success. */
+  const deleteRow = async (rowIdx: number) => {
+    if (!editable || !tab.sourceRelation) return;
+    const pkVals = pkValuesFor(cols, rows[rowIdx], pk);
+    if (!pkVals) {
+      setSaveErr(`Row ${rowIdx}: primary key missing from result — cannot delete.`);
+      return;
+    }
+    try {
+      if (isMongo) {
+        if (!pkVals._id) throw new Error("_id missing — cannot delete.");
+        await api.execute(tab.connId, buildMongoDelete({
+          collection: tab.sourceRelation.table,
+          id: pkVals._id,
+        }));
+      } else {
+        await api.execute(tab.connId, buildDelete({
+          schema: tab.sourceRelation.schema,
+          table: tab.sourceRelation.table,
+          pkColumns: pk,
+          pkValues: pkVals,
+        }));
+      }
+      updateTab(tab.id, { refreshTick: (tab.refreshTick ?? 0) + 1 });
+    } catch (e) {
+      setSaveErr(String(e));
+    }
+  };
+
   /** Right-click on a cell → context menu. */
   const onCellContextMenu = (e: React.MouseEvent, rowIdx: number, colIdx: number) => {
     e.preventDefault();
@@ -496,6 +574,12 @@ export default function DataGrid({ tab }: { tab: Tab }) {
         ? { label: "Set NULL", onClick: () => setPending(rowIdx, colIdx, "__NULL__") }
         : { label: "Set NULL (no PK on table)", onClick: () => {} },
     ];
+    if (editable) {
+      items.push(
+        { separator: true },
+        { label: "Delete row", onClick: () => void deleteRow(rowIdx) },
+      );
+    }
     setCellCtx({ x: e.clientX, y: e.clientY, items });
   };
 

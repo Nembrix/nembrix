@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildUpdate, cellToText, pkLiteral, pkValuesFor, valueLiteral } from "./grid_edit";
+import { buildUpdate, buildDelete, cellToText, pkLiteral, pkValuesFor, valueLiteral } from "./grid_edit";
 import type { CellValue, ColMeta } from "@/ipc/types";
 
 const intCell = (n: number): CellValue => ({ kind: "int", value: n });
@@ -78,6 +78,37 @@ describe("buildUpdate", () => {
     expect(() => buildUpdate({
       schema: "s", table: "t", column: "c",
       newLiteral: "1", pkColumns: ["id"], pkValues: { id: nullCell },
+    })).toThrow(/null/i);
+  });
+});
+
+describe("buildDelete", () => {
+  it("emits a single-row DELETE keyed by one PK column", () => {
+    const sql = buildDelete({
+      schema: "public",
+      table: "users",
+      pkColumns: ["id"],
+      pkValues: { id: intCell(7) },
+    });
+    expect(sql).toBe(`DELETE FROM "public"."users" WHERE "id" = 7;`);
+  });
+  it("supports composite primary keys", () => {
+    const sql = buildDelete({
+      schema: "s",
+      table: "t",
+      pkColumns: ["a", "b"],
+      pkValues: { a: textCell("x"), b: intCell(2) },
+    });
+    expect(sql).toBe(`DELETE FROM "s"."t" WHERE "a" = 'x' AND "b" = 2;`);
+  });
+  it("throws when the table has no PK", () => {
+    expect(() => buildDelete({
+      schema: "s", table: "t", pkColumns: [], pkValues: {},
+    })).toThrow(/primary key/i);
+  });
+  it("throws when a PK component is null", () => {
+    expect(() => buildDelete({
+      schema: "s", table: "t", pkColumns: ["id"], pkValues: { id: nullCell },
     })).toThrow(/null/i);
   });
 });
