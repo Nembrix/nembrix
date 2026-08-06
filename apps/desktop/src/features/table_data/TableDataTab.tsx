@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { useStore, type Tab, type FilterChip } from "@/store";
 import * as api from "@/ipc/commands";
+import { buildMongoFind } from "./buildTableQuery";
 import DataGrid from "@/components/DataGrid";
 import FilterBuilder from "@/features/grid/FilterBuilder";
 import ChartPane from "@/features/grid/ChartPane";
@@ -78,7 +79,23 @@ export default function TableDataTab({ tab }: { tab: Tab }) {
         ?? sc?.views.find((v) => v.name === rel.table);
   }, [schemas, tab.connId, rel]);
 
-  const sql = useMemo(() => buildSql(rel, filters, tab.sort, limit), [rel, filters, tab.sort, limit]);
+  // Resolve the connection's engine (session → connectionId → connection) so
+  // the query is built in the right dialect — SQL vs Mongo's shell command.
+  const engine = useMemo(() => {
+    const st = useStore.getState();
+    const session = st.sessions.find((s) => s.id === tab.connId);
+    const connectionId = session?.connectionId ?? tab.connId;
+    return st.connections.find((c) => c.id === connectionId)?.engine;
+  }, [tab.connId]);
+  const sql = useMemo(
+    () =>
+      !rel
+        ? ""
+        : engine === "mongo"
+          ? buildMongoFind(rel, filters, tab.sort, limit)
+          : buildSql(rel, filters, tab.sort, limit),
+    [engine, rel, filters, tab.sort, limit],
+  );
 
   const run = async () => {
     if (!rel) return;

@@ -174,6 +174,18 @@ fn short_connect_error(raw: &str) -> String {
     if low.contains("server does not support tls") {
         return "Server has no TLS — set SSL to \"prefer\" or \"disable\".".into();
     }
+    // Mongo TLS mismatches: the client sent a TLS handshake to a plaintext
+    // server, or vice-versa. Both surface as a garbled handshake / TLS error.
+    if low.contains("tls")
+        && (low.contains("handshake")
+            || low.contains("alert")
+            || low.contains("not enabled")
+            || low.contains("required")
+            || low.contains("wrong version")
+            || low.contains("record overflow"))
+    {
+        return "TLS mismatch — toggle SSL to match the server (on vs off).".into();
+    }
     if low.contains("password authentication failed") || low.contains("invalid_password") {
         return "Authentication failed — check the user and password.".into();
     }
