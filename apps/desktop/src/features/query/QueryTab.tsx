@@ -679,13 +679,9 @@ export default function QueryTab({ tab }: { tab: Tab }) {
             <button className={view === "analysis" ? "active" : ""} onClick={() => setView("analysis")}>Analysis</button>
           </div>
           <span className="meta">
-            <RunningTimer
-              running={tab.running}
-              startedAt={tab.queryStartedAt}
-              elapsedMs={tab.elapsedMs}
-            />
-            {rowCount > 0 && ` · ${rowCount} ${rowCount === 1 ? "row" : "rows"}`}
-            {filters.length > 0 && ` · ${filters.length} filter${filters.length === 1 ? "" : "s"}`}
+            {/* Row count + timer moved to the footer below the grid (calmer
+                than a ticking timer in the header). Filter count stays here. */}
+            {filters.length > 0 && `${filters.length} filter${filters.length === 1 ? "" : "s"}`}
           </span>
           <div className="spacer" />
           <span className="muted">{statusMsg}</span>
@@ -721,6 +717,25 @@ export default function QueryTab({ tab }: { tab: Tab }) {
             <AnalysisPane connId={tab.connId} sql={tab.sql ?? ""} />
           )}
         </div>
+
+        {/* Slim status footer under the grid — row count + query time, same as
+            the table-data view. Kept out of the header so the 10Hz-ticking
+            timer doesn't flicker in the busy control lane. Data view only. */}
+        {view === "data" && (
+          <div className="data-view-footer">
+            <span className="muted data-view-meta">
+              {rowCount > 0
+                ? `${rowCount.toLocaleString()} row${rowCount === 1 ? "" : "s"}`
+                : tab.running ? "" : "0 rows"}
+              <RunningTimer
+                running={tab.running}
+                startedAt={tab.queryStartedAt}
+                elapsedMs={tab.elapsedMs}
+                prefix="· "
+              />
+            </span>
+          </div>
+        )}
 
         {/* Script console strip: sits below the data grid and is always
             visible in script mode, so console.log output and the return-value
