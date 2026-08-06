@@ -123,6 +123,12 @@ export default function ConnectionRail({ onNewConnection }: { onNewConnection: (
           <Tooltip key={sess.id} label={tip} side="bottom">
             <div
               className={`rail-entry ${active ? "active" : ""} ${isProd ? "is-prod" : ""}`}
+              // The rail row IS the connect affordance now (clicking it connects
+              // a dropped session). These carry the live status so tests can wait
+              // deterministically for "connected" — same contract the old
+              // separate connect button exposed.
+              data-testid="connect-btn"
+              data-state={st}
               // Click selects/switches to this connection's view AND silently
               // reconnects it if the session has dropped — the rail is meant to
               // be "always connected", so switching back to a stale session
