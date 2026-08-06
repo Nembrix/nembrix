@@ -34,4 +34,13 @@ describe("engine registry", () => {
     expect(ENGINES.mysql.defaultPort).toBe(3306);
     expect(ENGINES.redis.defaultPort).toBe(6379);
   });
+
+  it("defaults Mongo to TLS-off so a plain local Mongo connects", () => {
+    // The Mongo driver reads `tls: ssl_mode != "disable"`. A "prefer" default
+    // would flip TLS on and fail the handshake against a non-TLS Mongo.
+    expect(ENGINES.mongo.sslDefault).toBe("disable");
+    // SQL engines keep the TLS-preferring default.
+    expect(ENGINES.postgres.sslDefault).toBe("prefer");
+    expect(ENGINES.mysql.sslDefault).toBe("prefer");
+  });
 });
