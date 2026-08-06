@@ -332,9 +332,16 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
                 // hasn't typed a custom one we'd be clobbering).
                 const allDefaults = ENGINE_ORDER.map((k) => ENGINES[k].defaultPort);
                 const portIsDefault = allDefaults.includes(v.port);
+                // Same idea for SSL: snap to the new engine's default (Mongo is
+                // TLS-off) unless the user picked a non-default mode we'd clobber.
+                // Without this, a new Mongo connection inherits "prefer" → the
+                // driver flips TLS on → the handshake fails against a plain Mongo.
+                const sslDefaults = ENGINE_ORDER.map((k) => ENGINES[k].sslDefault);
+                const sslIsDefault = sslDefaults.includes(v.ssl_mode);
                 patch({
                   engine: next,
                   ...(portIsDefault ? { port: nextSpec.defaultPort } : {}),
+                  ...(sslIsDefault ? { ssl_mode: nextSpec.sslDefault } : {}),
                 });
                 // A pasted URL belongs to the old engine's syntax; drop back to
                 // the fields view so it isn't mis-parsed against the new engine.
