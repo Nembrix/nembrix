@@ -28,7 +28,7 @@ import { startMenuBridge } from "@/menu/dispatch";
 import { installAccelerators } from "@/menu/accelerators";
 import { registerAllMenuHandlers } from "@/menu/handlers";
 import { startMenuStateSync } from "@/menu/sync";
-import { hydrateTabsFromStorage, startTabsPersistence } from "@/store/persist";
+import { startTabsPersistence } from "@/store/persist";
 import { isTauri, registerSessionResolver } from "@/ipc/commands";
 
 export default function App() {
@@ -58,7 +58,8 @@ export default function App() {
       const sess = useStore.getState().sessions.find((s) => s.id === id);
       return sess?.connectionId ?? id;
     });
-    hydrateTabsFromStorage();
+    // Tab/session state is now hydrated in main.tsx BEFORE first render (so the
+    // initial paint shows the restored tabs, not a flash of the empty state).
     registerAllMenuHandlers();
     void startMenuBridge();
     installAccelerators();
