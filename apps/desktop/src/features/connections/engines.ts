@@ -30,6 +30,11 @@ export type EngineSpec = {
   uri?: UriAdapter;
   /** Whether this engine speaks TLS/SSL (the form shows an SSL select). */
   hasTls: boolean;
+  /** Default ssl_mode for a NEW connection of this engine. The Mongo driver
+   *  reads `tls: ssl_mode != "disable"`, so a non-disable default would flip
+   *  TLS on for a plain local Mongo and fail the handshake. Mongo therefore
+   *  defaults to "disable"; TLS-first SQL engines keep "prefer". */
+  sslDefault: ConnectionInput["ssl_mode"];
   /** Whether JS scripting mode (db.query) is offered for this engine. */
   scripting: boolean;
 };
@@ -41,27 +46,29 @@ export const ENGINES: Record<EngineKey, EngineSpec> = {
   postgres: {
     key: "postgres", label: "PostgreSQL", supported: true, defaultPort: 5432,
     fieldPlaceholders: { user: "postgres", database: "postgres" },
-    hasTls: true, scripting: true,
+    hasTls: true, sslDefault: "prefer", scripting: true,
   },
   mysql: {
     key: "mysql", label: "MySQL", supported: false, defaultPort: 3306,
     fieldPlaceholders: { user: "root", database: "mysql" },
-    hasTls: true, scripting: true,
+    hasTls: true, sslDefault: "prefer", scripting: true,
   },
   sqlite: {
     key: "sqlite", label: "SQLite", supported: false, defaultPort: 0,
     fieldPlaceholders: { user: "", database: "path/to/file.db" },
-    hasTls: false, scripting: true,
+    hasTls: false, sslDefault: "disable", scripting: true,
   },
   mongo: {
+    // TLS off by default: a plain local Mongo has no TLS, and the driver reads
+    // `tls: ssl_mode != "disable"`. Users with a TLS Mongo flip SSL on.
     key: "mongo", label: "MongoDB", supported: true, defaultPort: 27017,
     fieldPlaceholders: { user: "(optional)", database: "test" },
-    hasTls: true, scripting: true,
+    hasTls: true, sslDefault: "disable", scripting: true,
   },
   redis: {
     key: "redis", label: "Redis", supported: false, defaultPort: 6379,
     fieldPlaceholders: { user: "(optional)", database: "0" },
-    hasTls: true, scripting: false,
+    hasTls: true, sslDefault: "disable", scripting: false,
   },
 };
 
