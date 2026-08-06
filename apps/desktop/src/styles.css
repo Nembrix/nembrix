@@ -1982,9 +1982,20 @@ tr.grid-filler.row-even > td {
   display: inline-flex;
   align-items: baseline;
   gap: 6px;
-  min-width: 11ch;
   font-variant-numeric: tabular-nums;
-  transition: opacity 0.15s ease, color 0.15s ease;
+}
+/* Slim status strip under the grid: row count + query time. Sits at the
+   bottom of the result pane, out of the busy top toolbar where the ticking
+   timer read as a flicker. */
+.data-view-footer {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  font-size: 11px;
+  border-top: 1px solid var(--border-soft);
+  background: var(--bg-1);
 }
 /* The spacer is what pushes the action cluster to the right when the
    bar fits. When the bar overflows, we DON'T want the spacer eating

@@ -344,31 +344,8 @@ export default function TableDataTab({ tab }: { tab: Tab }) {
 
         <div className="spacer" />
 
-        {/* Right cluster: row count + timer, then the row/export/refresh
-            actions. Kept together on the right so the count reads alongside
-            the actions that change it. */}
-        {/* Row count + timer share one steady band. `tabular-nums` +
-            `data-view-meta` (transition + fixed baseline) keep the digits from
-            reflowing every refresh tick, which read as a flicker on the eye. */}
-        <span className="muted data-view-meta">
-          {(() => {
-            const loaded = tab.rows?.length ?? 0;
-            const total = tab.rowsTotal;
-            const totalSuffix = total != null
-              ? ` of ${total.toLocaleString()}${tab.rowsTotalEstimated ? " (est.)" : ""}`
-              : "";
-            if (search.trim() && tab.rows) {
-              return `${matches(search.trim(), tab.rows).length} / ${loaded}${totalSuffix} rows`;
-            }
-            return `${loaded}${totalSuffix} row${loaded === 1 ? "" : "s"}`;
-          })()}
-          <RunningTimer
-            running={tab.running}
-            startedAt={tab.queryStartedAt}
-            elapsedMs={tab.elapsedMs}
-            prefix="· "
-          />
-        </span>
+        {/* Row count + timer live in a slim footer BELOW the grid now — up
+            here in the busy toolbar the ticking timer read as a flicker. */}
 
         {/* +Row appends a draft row to the grid (no DB write yet).
             The user fills cells inline; Save All commits every draft
@@ -451,6 +428,35 @@ export default function TableDataTab({ tab }: { tab: Tab }) {
             <ChartPane columns={visible.columns} rows={visible.rows} />
           )}
         </div>
+
+        {/* Slim status footer under the grid — row count + query time. It
+            lived in the top toolbar before, where the 10Hz-ticking timer read
+            as a flicker in a busy control lane; a quiet strip at the bottom of
+            the result pane is calmer and is the conventional spot for it. Data
+            view only (the other panes have their own footers/none). */}
+        {view === "data" && (
+          <div className="data-view-footer">
+            <span className="muted data-view-meta">
+              {(() => {
+                const loaded = tab.rows?.length ?? 0;
+                const total = tab.rowsTotal;
+                const totalSuffix = total != null
+                  ? ` of ${total.toLocaleString()}${tab.rowsTotalEstimated ? " (est.)" : ""}`
+                  : "";
+                if (search.trim() && tab.rows) {
+                  return `${matches(search.trim(), tab.rows).length} / ${loaded}${totalSuffix} rows`;
+                }
+                return `${loaded}${totalSuffix} row${loaded === 1 ? "" : "s"}`;
+              })()}
+              <RunningTimer
+                running={tab.running}
+                startedAt={tab.queryStartedAt}
+                elapsedMs={tab.elapsedMs}
+                prefix="· "
+              />
+            </span>
+          </div>
+        )}
       </div>
       {alterDialog && rel && (
         <ColumnAlterDialog
