@@ -1140,6 +1140,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "db-core",
+ "db-mongo",
  "db-postgres",
  "rquickjs",
  "serde",
