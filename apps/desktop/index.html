@@ -4,6 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Nembrix</title>
+    <!-- Paint the window dark from the very first frame, before styles.css and
+         the React bundle load. Without this the WebView's default white shows
+         for a beat on launch, then snaps to the dark theme — a jarring blink on
+         every startup. Kept in sync with --bg-0 (#1c1c20) in styles.css. -->
+    <style>
+      html, body, #root { background: #1c1c20; margin: 0; height: 100%; }
+      html { color-scheme: dark; }
+    </style>
   </head>
   <body>
     <div id="root"></div>
