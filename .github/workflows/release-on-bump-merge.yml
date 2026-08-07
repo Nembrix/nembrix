@@ -1,0 +1,53 @@
+name: Release on bump merge
+
+# Chains the release after a version bump lands. When a "chore(release): vX.Y.Z"
+# PR (opened by the Bump Version workflow) is MERGED to main, this triggers the
+# draft Release workflow — so the flow is: run Bump Version -> review + merge the
+# PR -> the draft release fires itself. The merge is the single human gate;
+# branch protection stays meaningful.
+#
+# Only fires on a genuine merge of a bump branch, never on a closed-without-merge
+# PR or any other PR.
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  actions: write   # to dispatch the Release workflow
+  contents: read
+
+concurrency:
+  group: release-on-bump-merge-${{ github.event.pull_request.head.ref }}
+  cancel-in-progress: false
+
+jobs:
+  trigger-release:
+    name: Trigger draft release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Gate: the PR was actually MERGED (not just closed) AND it's a bump branch.
+    # head.ref is the source branch the Bump workflow creates: chore/release-vX.Y.Z.
+    if: >-
+      github.event.pull_request.merged == true &&
+      startsWith(github.event.pull_request.head.ref, 'chore/release-v')
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Dispatch the Release workflow (draft, not pre-release)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -e
+          echo "Bump PR '${{ github.event.pull_request.title }}' merged (branch ${{ github.event.pull_request.head.ref }})."
+          echo "Triggering the draft Release workflow on main…"
+          # Release reads the version from the (now-merged) code and verifies it
+          # is ahead of the latest release, so it's safe to fire unconditionally
+          # here — a stale/duplicate version would stop itself.
+          gh workflow run release.yml \
+            --ref main \
+            -f publish=false \
+            -f prerelease=false
+          echo "::notice::Draft Release workflow dispatched. Review + publish the draft when the build finishes."

@@ -84,11 +84,15 @@ jobs:
         shell: bash
         run: |
           set -e
-          # Keep Cargo.lock's own package entry in step so the PR is complete and
-          # the release build doesn't have to mutate the lock. Offline, no network.
-          cargo update -p nembrix --precise "${{ github.event.inputs.version }}" \
-            --manifest-path apps/desktop/src-tauri/Cargo.toml --offline || \
-          echo "::warning::cargo update couldn't pin Cargo.lock offline; the release build will refresh it."
+          # After bump-version rewrote Cargo.toml, update the lockfile's own
+          # workspace-package entry so the PR is complete (Cargo.lock in step
+          # with the manifests). NOTE: no `--precise` — that flag resolves a
+          # REGISTRY version and no-ops for the local `nembrix` package, which is
+          # the bug that left Cargo.lock stale at the old version. A plain
+          # `cargo update -p nembrix` re-reads the bumped Cargo.toml and rewrites
+          # the lock entry (offline; nothing to fetch).
+          cargo update -p nembrix --offline \
+            --manifest-path apps/desktop/src-tauri/Cargo.toml
 
       - name: Open the bump PR
         uses: peter-evans/create-pull-request@271a8d0340265f705b14b6d32b9829c1cb33d45e # v7.0.8
