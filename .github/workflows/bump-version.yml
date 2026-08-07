@@ -40,6 +40,11 @@ jobs:
           # Full history + tags so the strictly-incremental guard below can
           # compare against the last v* tag.
           fetch-depth: 0
+          # Don't leave the checkout's auth in git config. Otherwise both it and
+          # create-pull-request's token set an Authorization header, git sends
+          # two, and the push is rejected: `remote: Duplicate header:
+          # "Authorization"` → HTTP 400. create-pull-request supplies its own.
+          persist-credentials: false
 
       - uses: ./.github/actions/setup
 

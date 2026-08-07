@@ -8,11 +8,11 @@ name: Release
 
 on:
   workflow_dispatch:
+    # No version input by design. The version is the single source of truth in
+    # apps/desktop/src-tauri/tauri.conf.json. To release a new version, bump it
+    # first via the Bump Version workflow (which opens a PR); this workflow then
+    # builds whatever is on disk and verifies it's ahead of the latest release.
     inputs:
-      version:
-        description: "Version (no leading 'v'). Read from apps/desktop/src-tauri/tauri.conf.json if blank."
-        required: false
-        type: string
       publish:
         description: "Publish the release immediately (otherwise leave as draft)"
         required: false
@@ -27,10 +27,11 @@ on:
 permissions:
   contents: write
 
-# Cancel an older Release run for the same version if a new one starts —
-# avoids two concurrent runs racing each other when re-clicking the button.
+# One release run per ref at a time — avoids two concurrent runs racing each
+# other when re-clicking the button. Doesn't cancel in progress (a half-built
+# release shouldn't be interrupted).
 concurrency:
-  group: release-${{ github.event.inputs.version || github.ref }}
+  group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -83,50 +84,50 @@ jobs:
           # git-cliff needs the full history + tags to compute the range.
           fetch-depth: 0
 
+      # The version is read from the code — the single source of truth — never
+      # from a workflow input. To ship a new version you bump it first (Bump
+      # Version workflow → PR → merge); this workflow releases whatever is on
+      # disk.
       - id: resolve
-        name: Resolve version
+        name: Resolve version from code
         shell: bash
         run: |
-          if [[ -n "${{ github.event.inputs.version }}" ]]; then
-            VERSION="${{ github.event.inputs.version }}"
-          else
-            VERSION=$(jq -r .version apps/desktop/src-tauri/tauri.conf.json)
-          fi
+          VERSION=$(jq -r .version apps/desktop/src-tauri/tauri.conf.json)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION"    >> "$GITHUB_OUTPUT"
+          echo "On-disk version: $VERSION"
 
-      # Refuse to (re)release a tag that already exists. `bump-version` also
-      # guards against non-incremental versions, but this is a fast, explicit
-      # gate that also covers the "no version input, current already tagged"
-      # case (someone re-running Release without bumping).
-      - name: Guard against re-releasing an existing tag
+      # Verify the on-disk version is a NEW release ahead of the latest one. If
+      # it isn't (the tag already exists / it's not greater than the last
+      # release), the bump hasn't happened — stop and point at Bump Version,
+      # rather than re-releasing the same version or overwriting a tag.
+      - name: Verify version is ahead of the latest release
         shell: bash
         run: |
+          set -e
+          VERSION="${{ steps.resolve.outputs.version }}"
           TAG="${{ steps.resolve.outputs.tag }}"
-          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
-            echo "::error::Tag $TAG already exists — releases must be incremental. Bump the version first."
-            exit 1
-          fi
-          echo "$TAG is new — ok to release."
 
-      # The version bump lives in a SEPARATE workflow now (bump-version.yml),
-      # which opens a "chore(release): vX.Y.Z" PR — main is protected, so the
-      # bump has to go through a PR, not a direct push from here. This workflow
-      # only BUILDS the on-disk version. So if a `version` input is given, it
-      # must already match what's on disk (i.e. the bump PR was merged); if it
-      # doesn't, stop early and point at the Bump Version workflow rather than
-      # silently shipping binaries labelled with the wrong version.
-      - name: Ensure the on-disk version matches the requested one
-        if: ${{ github.event.inputs.version != '' }}
-        shell: bash
-        run: |
-          CURRENT=$(jq -r .version apps/desktop/src-tauri/tauri.conf.json)
-          TARGET="${{ github.event.inputs.version }}"
-          if [[ "$CURRENT" != "$TARGET" ]]; then
-            echo "::error::On-disk version is $CURRENT but you requested $TARGET. Run the 'Bump Version' workflow with version=$TARGET, merge the PR it opens, then re-run Release (blank version is fine)."
+          # Fast, explicit gate: the target tag must not already exist.
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "::error::$TAG already exists — the code version wasn't bumped. Run the Bump Version workflow, merge its PR, then re-run Release."
             exit 1
           fi
-          echo "On-disk version is $CURRENT — matches the requested $TARGET. Proceeding."
+
+          # Compare against the highest existing v* tag: the on-disk version must
+          # be strictly greater. `sort -V` gives semver-ish ordering; if VERSION
+          # sorts <= the latest tag, it's not a forward release.
+          LATEST=$(git tag -l 'v*' | sed 's/^v//' | sort -V | tail -1)
+          if [[ -z "$LATEST" ]]; then
+            echo "No prior v* tag — first release of $VERSION. OK."
+            exit 0
+          fi
+          HIGHEST=$(printf '%s\n%s\n' "$LATEST" "$VERSION" | sort -V | tail -1)
+          if [[ "$VERSION" == "$LATEST" || "$HIGHEST" != "$VERSION" ]]; then
+            echo "::error::On-disk version $VERSION is not ahead of the latest release v$LATEST. Bump the version first (Bump Version workflow → merge PR), then re-run Release."
+            exit 1
+          fi
+          echo "$VERSION is ahead of the latest release v$LATEST — ok to release."
 
       # Point the docs landing pages' direct download links (EN + FR) at the
       # release being cut. Runs on EVERY release — driven by the resolved
