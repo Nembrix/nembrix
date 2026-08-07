@@ -177,7 +177,19 @@ jobs:
             echo "No docs changes to commit."
           else
             git commit -m "docs: point download links at v$TARGET"
-            git push origin HEAD:main
+            # main is protected (changes must go through a PR) and the release
+            # bot's GITHUB_TOKEN isn't in the ruleset bypass list, so a direct
+            # push is declined (GH013). The docs-link sync is cosmetic and must
+            # NEVER block the actual release build — so treat a declined push as
+            # a warning, not a failure. Follow up with a normal docs PR to move
+            # the download links (the next release will also re-sync them).
+            if git push origin HEAD:main; then
+              echo "Pushed docs download-link update to main."
+            else
+              echo "::warning::Could not push docs link update to protected main \
+          (branch protection / missing bypass). Release continues; update the \
+          docs download links via a PR. Links: v$OLD → v$TARGET."
+            fi
           fi
 
       # Build the changelog body from Conventional Commits. cliff.toml filters
