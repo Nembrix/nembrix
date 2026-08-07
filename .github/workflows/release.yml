@@ -26,6 +26,9 @@ on:
 
 permissions:
   contents: write
+  # Needed so the prepare job can OPEN a version-bump PR (main is protected —
+  # the workflow can't push the bump directly, so it proposes it as a PR).
+  pull-requests: write
 
 # Cancel an older Release run for the same version if a new one starts —
 # avoids two concurrent runs racing each other when re-clicking the button.
@@ -109,14 +112,17 @@ jobs:
           fi
           echo "$TAG is new — ok to release."
 
-      # When a version was entered in the Run-workflow form, bump the app
-      # manifests (tauri.conf.json + Cargo.toml) to it and commit back to
-      # main, so the shipped app + source record the released version
-      # without a separate manual `yarn bump-version` step. `bump-version`
-      # enforces a strictly-incremental bump against the last v* tag (the
-      # first release, with no tags yet, keeps the current version). When
-      # the input is blank we release the current on-disk version unchanged.
-      - name: Bump version (when provided) and commit
+      # When a version was entered in the Run-workflow form AND it differs from
+      # the on-disk version, we can't commit the bump to main directly — main is
+      # protected (changes must go through a PR) and this token isn't in the
+      # ruleset bypass list. So bump the manifests and OPEN A PR instead, then
+      # stop the release: the user merges the bump PR, then re-runs Release with
+      # a BLANK version to build the (now bumped) on-disk version.
+      #
+      # When the input is blank, or already matches on-disk (the bump PR was
+      # merged), this step is a no-op and the release proceeds to build.
+      - id: needbump
+        name: Decide whether a bump PR is needed
         if: ${{ github.event.inputs.version != '' }}
         shell: bash
         run: |
@@ -124,19 +130,54 @@ jobs:
           CURRENT=$(jq -r .version apps/desktop/src-tauri/tauri.conf.json)
           TARGET="${{ github.event.inputs.version }}"
           if [[ "$CURRENT" == "$TARGET" ]]; then
-            echo "On-disk version already $TARGET — nothing to bump."
-            exit 0
+            echo "On-disk version already $TARGET — no bump PR needed; proceeding to build."
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "On-disk $CURRENT != target $TARGET — will open a bump PR and stop."
+            echo "needed=true" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Bump manifests for the PR
+        if: ${{ steps.needbump.outputs.needed == 'true' }}
+        shell: bash
+        run: |
+          set -e
           corepack enable || true
           # bump-version runs `tsx …`, a dev dependency — install first, or it
           # fails with exit 127 (tsx not found) on a fresh checkout.
           yarn install --frozen-lockfile
-          yarn --cwd apps/desktop bump-version "$TARGET"
-          git config user.name  "Nembrix release bot"
-          git config user.email "release-bot@users.noreply.github.com"
-          git add apps/desktop/src-tauri/tauri.conf.json apps/desktop/src-tauri/Cargo.toml
-          git commit -m "chore(release): v$TARGET"
-          git push origin HEAD:main
+          yarn --cwd apps/desktop bump-version "${{ github.event.inputs.version }}"
+
+      - name: Open version-bump PR
+        id: bumppr
+        if: ${{ steps.needbump.outputs.needed == 'true' }}
+        uses: peter-evans/create-pull-request@271a8d0340265f705b14b6d32b9829c1cb33d45e # v7.0.8
+        with:
+          branch: chore/release-v${{ github.event.inputs.version }}
+          base: main
+          commit-message: "chore(release): v${{ github.event.inputs.version }}"
+          title: "chore(release): v${{ github.event.inputs.version }}"
+          body: |
+            Automated version bump for the **v${{ github.event.inputs.version }}** release
+            (opened by the Release workflow, since `main` is protected and can't be
+            pushed to directly).
+
+            **Next steps:**
+            1. Review + merge this PR.
+            2. Re-run the **Release** workflow with a **blank** `version` input — it
+               builds the now-bumped on-disk version without needing to push to `main`.
+          add-paths: |
+            apps/desktop/src-tauri/tauri.conf.json
+            apps/desktop/src-tauri/Cargo.toml
+            apps/desktop/Cargo.lock
+
+      - name: Stop — merge the bump PR, then re-run with a blank version
+        if: ${{ steps.needbump.outputs.needed == 'true' }}
+        shell: bash
+        run: |
+          echo "::notice::Opened bump PR ${{ steps.bumppr.outputs.pull-request-url }} for v${{ github.event.inputs.version }}. Merge it, then re-run Release with a BLANK version input to build."
+          echo "::error::Release stopped: version bump needs to be merged via PR first (main is protected). See the bump PR above, merge it, then re-run Release with a blank version."
+          exit 1
 
       # Point the docs landing pages' direct download links (EN + FR) at the
       # release being cut. Runs on EVERY release — driven by the resolved
