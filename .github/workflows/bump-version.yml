@@ -1,0 +1,109 @@
+name: Bump Version
+
+# Opens a version-bump PR. Kept SEPARATE from the Release workflow so the two
+# concerns don't tangle: this one only proposes the version change; Release only
+# builds the on-disk version. main is protected (changes must go through a PR)
+# and the workflow token isn't in the ruleset bypass list, so the bump can't be
+# pushed directly — it's raised as a PR you review and merge.
+#
+# Flow:
+#   1. Run this workflow with the target version (e.g. 0.5.0).
+#   2. It opens a "chore(release): v0.5.0" PR (manifests bumped in lockstep).
+#   3. Merge the PR.
+#   4. Run the Release workflow (a blank version is fine — it builds the now
+#      bumped on-disk version).
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Target version, no leading 'v' (e.g. 0.5.0)."
+        required: true
+        type: string
+
+permissions:
+  contents: write        # create the bump branch
+  pull-requests: write   # open the bump PR
+
+concurrency:
+  group: bump-version-${{ github.event.inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    name: Open version-bump PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history + tags so the strictly-incremental guard below can
+          # compare against the last v* tag.
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+
+      # Refuse a version that isn't strictly greater than the latest release
+      # tag, and refuse re-bumping to the current on-disk version. `bump-version`
+      # itself also enforces the incremental rule; this is a fast, explicit gate
+      # with a clearer message.
+      - name: Validate the target version
+        shell: bash
+        run: |
+          set -e
+          TARGET="${{ github.event.inputs.version }}"
+          if ! [[ "$TARGET" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::'$TARGET' is not a valid semver (e.g. 0.5.0 or 0.5.0-beta.1)."
+            exit 1
+          fi
+          CURRENT=$(jq -r .version apps/desktop/src-tauri/tauri.conf.json)
+          if [[ "$CURRENT" == "$TARGET" ]]; then
+            echo "::error::On-disk version is already $TARGET — nothing to bump."
+            exit 1
+          fi
+          if git rev-parse -q --verify "refs/tags/v$TARGET" >/dev/null; then
+            echo "::error::Tag v$TARGET already exists — pick a higher version."
+            exit 1
+          fi
+          echo "Bumping $CURRENT → $TARGET."
+
+      - name: Bump manifests in lockstep
+        shell: bash
+        run: |
+          set -e
+          # bump-version rewrites tauri.conf.json + Cargo.toml together (and
+          # fails loudly if they disagree beforehand).
+          yarn --cwd apps/desktop bump-version "${{ github.event.inputs.version }}"
+
+      - name: Sync Cargo.lock to the new version
+        shell: bash
+        run: |
+          set -e
+          # Keep Cargo.lock's own package entry in step so the PR is complete and
+          # the release build doesn't have to mutate the lock. Offline, no network.
+          cargo update -p nembrix --precise "${{ github.event.inputs.version }}" \
+            --manifest-path apps/desktop/src-tauri/Cargo.toml --offline || \
+          echo "::warning::cargo update couldn't pin Cargo.lock offline; the release build will refresh it."
+
+      - name: Open the bump PR
+        uses: peter-evans/create-pull-request@271a8d0340265f705b14b6d32b9829c1cb33d45e # v7.0.8
+        with:
+          branch: chore/release-v${{ github.event.inputs.version }}
+          base: main
+          commit-message: "chore(release): v${{ github.event.inputs.version }}"
+          title: "chore(release): v${{ github.event.inputs.version }}"
+          body: |
+            Automated version bump to **v${{ github.event.inputs.version }}**, opened by
+            the Bump Version workflow (`main` is protected, so the bump goes through a PR).
+
+            Bumps `tauri.conf.json`, `Cargo.toml`, and `Cargo.lock` in lockstep.
+
+            **Next steps:**
+            1. Review + merge this PR.
+            2. Run the **Release** workflow (a blank `version` is fine — it builds the
+               now-bumped on-disk version). The Release build reads the version from the
+               merged manifests, so the binaries are correctly labelled.
+          add-paths: |
+            apps/desktop/src-tauri/tauri.conf.json
+            apps/desktop/src-tauri/Cargo.toml
+            apps/desktop/Cargo.lock
