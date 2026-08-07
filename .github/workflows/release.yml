@@ -44,6 +44,7 @@ jobs:
   verify:
     name: Verify (lint, typecheck, unit tests)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
@@ -61,6 +62,7 @@ jobs:
     name: Prepare release
     needs: verify
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # Gate the whole release behind the "release" environment. Configure
     # its required reviewers in repo Settings → Environments → release so
     # the run pauses for approval before any release is created — only
@@ -296,6 +298,10 @@ jobs:
             rust_targets: x86_64-unknown-linux-gnu
             args: ""
     runs-on: ${{ matrix.os }}
+    # Cross-platform Tauri build with cold Rust compiles (Windows/macOS are the
+    # slowest); 60 min gives ample headroom while still failing a wedged runner
+    # instead of letting it hang for the 6-hour default.
+    timeout-minutes: 60
     # Exposed job-wide so the Windows signing steps can gate on it in a
     # single place (`if: ... && env.SIGNPATH_API_TOKEN != ''`). When the
     # SignPath OSS token isn't set yet, every signing step is skipped and
@@ -578,6 +584,7 @@ jobs:
     name: Attach checksums + manifest
     needs: [prepare, build]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -789,6 +796,7 @@ jobs:
     name: Update Homebrew tap
     needs: [prepare, build]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: ${{ github.event.inputs.prerelease != 'true' }}
     # HOMEBREW_TAP_TOKEN is a PAT with write access to the tap repo — scope
     # it to the `release` environment (restricted to `main`) so it's never
@@ -882,6 +890,7 @@ jobs:
     needs: [prepare, build, manifest]
     if: github.event.inputs.publish == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # Same gate on the draft→public flip, so the moment a release goes
     # live also requires an approver from the "release" environment.
     environment: release
