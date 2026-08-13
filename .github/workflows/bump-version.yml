@@ -83,16 +83,25 @@ jobs:
       - name: Sync Cargo.lock to the new version
         shell: bash
         run: |
-          set -e
           # After bump-version rewrote Cargo.toml, update the lockfile's own
           # workspace-package entry so the PR is complete (Cargo.lock in step
-          # with the manifests). NOTE: no `--precise` — that flag resolves a
-          # REGISTRY version and no-ops for the local `nembrix` package, which is
-          # the bug that left Cargo.lock stale at the old version. A plain
-          # `cargo update -p nembrix` re-reads the bumped Cargo.toml and rewrites
-          # the lock entry (offline; nothing to fetch).
-          cargo update -p nembrix --offline \
-            --manifest-path apps/desktop/src-tauri/Cargo.toml
+          # with the manifests). NOTES:
+          #   - No `--precise`: it resolves a REGISTRY version and no-ops for the
+          #     local `nembrix` package (the bug that left Cargo.lock stale). A
+          #     plain `cargo update -p nembrix` re-reads the bumped Cargo.toml.
+          #   - No `--offline`: cargo validates the whole dependency graph and
+          #     needs registry metadata (e.g. `anyhow`) that a fresh runner hasn't
+          #     cached — offline fails with "no matching package named ...". The
+          #     runner has network, so let cargo fetch what it needs.
+          #   - Non-fatal: the manifests (tauri.conf + Cargo.toml) are the part
+          #     that matters and are already bumped. If the lock sync hiccups,
+          #     warn and still open the PR — the release build regenerates the
+          #     lock's version entry anyway.
+          if cargo update -p nembrix --manifest-path apps/desktop/src-tauri/Cargo.toml; then
+            echo "Cargo.lock synced to the new version."
+          else
+            echo "::warning::Cargo.lock sync failed; opening the PR with the manifest bump only. The release build will refresh the lock."
+          fi
 
       - name: Open the bump PR
         uses: peter-evans/create-pull-request@271a8d0340265f705b14b6d32b9829c1cb33d45e # v7.0.8
