@@ -81,6 +81,22 @@ pub fn run() {
             app.set_menu(m)?;
 
             builder.mount_events(app);
+
+            // The main window is created hidden (`visible: false`) so the
+            // frontend can reveal it only after its first paint — no "empty
+            // shell pops into the populated app" blink. The frontend calls
+            // `getCurrentWindow().show()` once mounted. This is a SAFETY NET:
+            // if the webview never loads (JS crash, blank bundle), show the
+            // window anyway after a short delay so a broken frontend can't
+            // leave an invisible, un-closable window.
+            if let Some(win) = app_handle.get_webview_window("main") {
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(3000));
+                    if let Ok(false) = win.is_visible() {
+                        let _ = win.show();
+                    }
+                });
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
