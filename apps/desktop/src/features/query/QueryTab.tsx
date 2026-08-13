@@ -6,6 +6,7 @@ import { buildJsScriptExtension } from "@/editor/js-completion";
 import { buildMongoExtension } from "@/editor/mongo-completion";
 import { Play, Square, Sparkles, Star } from "lucide-react";
 import { buildSqlExtension } from "@/editor/sql-completion";
+import { completionTabKeymap } from "@/editor/completion-tab";
 import { useStore, type Tab, type FilterChip } from "@/store";
 import * as api from "@/ipc/commands";
 import DataGrid from "@/components/DataGrid";
@@ -515,6 +516,10 @@ export default function QueryTab({ tab }: { tab: Tab }) {
             });
           }}
           extensions={[
+            // Tab accepts the open completion (instead of indenting the text).
+            // Must come before langExt so it takes precedence over the SQL/JS
+            // indent keymap when the popup is showing.
+            completionTabKeymap,
             langExt,
             // Click anywhere in the editor body (including the empty
             // area below the last line) places the cursor at the end
