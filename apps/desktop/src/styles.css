@@ -302,7 +302,15 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .cf-uri-input {
   width: 100%;
-  resize: vertical;
+  /* No drag handle — the field sizes itself to its content via
+     autosizeUri() in ConnectionForm, so a manual grip would only fight
+     the next keystroke's recalculation. */
+  resize: none;
+  /* Start at a single line and grow from there; the JS sets an explicit
+     height, and this cap stops a long URL from pushing the dialog's
+     buttons off-screen — past ~6 lines it scrolls internally. */
+  max-height: 9em;
+  overflow-y: auto;
   background: var(--bg-elev);
   border: 1px solid var(--border-soft);
   border-radius: var(--r-2);
