@@ -229,6 +229,37 @@ pub mod anyhow_compat {
     }
 }
 
+/// Render an error together with every `source()` behind it, joined by `: `.
+///
+/// Driver errors are onion-shaped and the outer layers are the useless ones.
+/// A refused Postgres connection through deadpool prints, via plain
+/// `to_string()`, as:
+///
+/// ```text
+/// Error occurred while creating a new object: error connecting to server
+/// ```
+///
+/// — neither layer names the actual failure. The reason (`Connection refused
+/// (os error 61)`, `nodename nor servname provided`, `password authentication
+/// failed`, …) is always one or two `source()` hops further down. Callers that
+/// classify errors by keyword (the UI's `short_connect_error`) need the whole
+/// chain or they match on nothing and fall back to echoing driver internals.
+///
+/// Duplicate adjacent segments are skipped — some drivers already embed their
+/// source's text in the parent's `Display`, which would otherwise stutter.
+pub fn error_chain(e: &(dyn std::error::Error + 'static)) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    let mut cur: Option<&(dyn std::error::Error + 'static)> = Some(e);
+    while let Some(err) = cur {
+        let text = err.to_string();
+        if !text.is_empty() && parts.last().map(|p: &String| p != &text).unwrap_or(true) {
+            parts.push(text);
+        }
+        cur = err.source();
+    }
+    parts.join(": ")
+}
+
 pub type DbResult<T> = Result<T, DbError>;
 
 /// Sink for streamed result batches. Implemented as an mpsc sender so the
@@ -297,5 +328,48 @@ mod cell_tests {
             CellValue::Raw(s) => assert_eq!(s, "-9223372036854775808"),
             other => panic!("expected Raw, got {other:?}"),
         }
+    }
+
+    #[derive(Debug)]
+    struct Layer(&'static str, Option<Box<Layer>>);
+    impl std::fmt::Display for Layer {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str(self.0)
+        }
+    }
+    impl std::error::Error for Layer {
+        fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+            self.1
+                .as_deref()
+                .map(|l| l as &(dyn std::error::Error + 'static))
+        }
+    }
+
+    #[test]
+    fn error_chain_walks_every_source() {
+        // Shaped like the real deadpool → tokio-postgres → io::Error onion.
+        let e = Layer(
+            "Error occurred while creating a new object",
+            Some(Box::new(Layer(
+                "error connecting to server",
+                Some(Box::new(Layer("Connection refused (os error 61)", None))),
+            ))),
+        );
+        assert_eq!(
+            error_chain(&e),
+            "Error occurred while creating a new object: error connecting to server: \
+             Connection refused (os error 61)"
+        );
+    }
+
+    #[test]
+    fn error_chain_skips_repeated_adjacent_layers() {
+        let e = Layer("same text", Some(Box::new(Layer("same text", None))));
+        assert_eq!(error_chain(&e), "same text");
+    }
+
+    #[test]
+    fn error_chain_of_a_lone_error_is_just_its_display() {
+        assert_eq!(error_chain(&Layer("only", None)), "only");
     }
 }

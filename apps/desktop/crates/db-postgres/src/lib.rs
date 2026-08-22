@@ -25,8 +25,8 @@
 use async_trait::async_trait;
 use dashmap::DashMap;
 use db_core::{
-    CellValue, ColMeta, DbConnection, DbError, DbResult, ExecSummary, Params, QueryHandle,
-    QueryLang, RowBatch, RowSink, SchemaTree,
+    error_chain, CellValue, ColMeta, DbConnection, DbError, DbResult, ExecSummary, Params,
+    QueryHandle, QueryLang, RowBatch, RowSink, SchemaTree,
 };
 use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod};
 use futures::TryStreamExt;
@@ -207,7 +207,7 @@ impl PgConn {
         let pool = Pool::builder(mgr)
             .max_size(POOL_SIZE)
             .build()
-            .map_err(|e| DbError::Connect(e.to_string()))?;
+            .map_err(|e| DbError::Connect(error_chain(&e)))?;
 
         // deadpool is lazy: building the pool does not open a connection, so
         // auth / host errors wouldn't surface until the first query. Force one
@@ -223,14 +223,16 @@ impl PgConn {
             .map(|ms| Duration::from_millis(ms as u64))
             .unwrap_or(DEFAULT_CONNECT_TIMEOUT);
         let force_connect = async {
+            // `error_chain`, not `to_string()`: deadpool/tokio-postgres bury the
+            // real reason (refused, DNS, auth) under two useless outer layers.
             let client = pool
                 .get()
                 .await
-                .map_err(|e| DbError::Connect(e.to_string()))?;
+                .map_err(|e| DbError::Connect(error_chain(&e)))?;
             client
                 .simple_query("SELECT 1")
                 .await
-                .map_err(|e| DbError::Connect(e.to_string()))?;
+                .map_err(|e| DbError::Connect(error_chain(&e)))?;
             drop(client);
             Ok::<(), DbError>(())
         };
@@ -413,11 +415,13 @@ impl DbConnection for PgConn {
 }
 
 fn pool_err(e: deadpool_postgres::PoolError) -> DbError {
-    DbError::Driver(e.to_string())
+    DbError::Driver(error_chain(&e))
 }
 
 fn driver_err(e: tokio_postgres::Error) -> DbError {
-    DbError::Driver(e.to_string())
+    // The outer layer is a generic "error connecting to server" / "db error";
+    // the DbError the user reads needs the source chain underneath it.
+    DbError::Driver(error_chain(&e))
 }
 
 /// Inline driver [`Params`] into `$1, $2, …` placeholders as safely-quoted SQL

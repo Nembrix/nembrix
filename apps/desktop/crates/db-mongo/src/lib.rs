@@ -127,14 +127,15 @@ impl MongoConn {
     pub async fn connect(cfg: MongoConfig) -> DbResult<Arc<Self>> {
         let mut opts = ClientOptions::parse(cfg.connection_uri())
             .await
-            .map_err(|e| DbError::Connect(e.to_string()))?;
+            .map_err(|e| DbError::Connect(db_core::error_chain(&e)))?;
         opts.app_name = Some(cfg.app_name.clone().unwrap_or_else(|| "nembrix".into()));
         if let Some(ms) = cfg.connect_timeout_ms {
             let d = std::time::Duration::from_millis(ms);
             opts.server_selection_timeout = Some(d);
             opts.connect_timeout = Some(d);
         }
-        let client = Client::with_options(opts).map_err(|e| DbError::Connect(e.to_string()))?;
+        let client =
+            Client::with_options(opts).map_err(|e| DbError::Connect(db_core::error_chain(&e)))?;
         Ok(Arc::new(Self {
             client,
             default_db: cfg.database,

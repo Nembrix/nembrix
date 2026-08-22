@@ -207,16 +207,66 @@ fn short_connect_error(raw: &str) -> String {
         || low.contains("name or service not known")
         || low.contains("failed to lookup")
         || low.contains("nodename nor servname")
+        || low.contains("temporary failure in name resolution")
     {
         return "Host not reachable — check the host name.".into();
     }
-    // Fallback: first line, trimmed to a sensible length for the small area.
-    let first = raw.lines().next().unwrap_or(raw).trim();
-    if first.chars().count() > 120 {
-        format!("{}…", first.chars().take(119).collect::<String>())
+    if low.contains("role") && low.contains("does not exist") {
+        return "User not found — check the username.".into();
+    }
+    if low.contains("no encryption") || low.contains("ssl is not enabled") {
+        return "Server requires SSL — set SSL to \"require\".".into();
+    }
+    if low.contains("connection reset") || low.contains("broken pipe") {
+        return "Server closed the connection — check SSL mode and the port.".into();
+    }
+    // Postgres' own phrasing only ("permission denied for database …"). A bare
+    // "permission denied" is too broad — it's also how an OS-level file or
+    // socket error reads, where advice about database rights would misdirect.
+    if low.contains("permission denied for") {
+        return "Permission denied — check the user's access rights.".into();
+    }
+    if low.contains("network is unreachable") {
+        return "Network unreachable — check your internet connection.".into();
+    }
+
+    // Fallback. We only get here when nothing above matched, which in practice
+    // means a driver-internal string the user can do nothing with — so lead
+    // with something actionable rather than echoing plumbing like
+    // "Error occurred while creating a new object: error connecting to server".
+    let first = raw
+        .lines()
+        .next()
+        .unwrap_or(raw)
+        .trim()
+        // Wrapper layers that carry no information for a user.
+        .trim_start_matches("Error occurred while creating a new object:")
+        .trim_start_matches("error connecting to server:")
+        .trim();
+    if first.is_empty() || is_driver_noise(first) {
+        return "Could not connect — check the host, port, and credentials.".into();
+    }
+    let detail = if first.chars().count() > 100 {
+        format!("{}…", first.chars().take(99).collect::<String>())
     } else {
         first.to_string()
-    }
+    };
+    format!("Could not connect — {detail}")
+}
+
+/// True when a leftover fallback string is pure driver plumbing: it names no
+/// cause, so pairing it with the generic advice would just add noise.
+fn is_driver_noise(s: &str) -> bool {
+    let low = s.to_lowercase();
+    matches!(
+        low.trim_end_matches('.'),
+        "error connecting to server"
+            | "error occurred while creating a new object"
+            | "connection error"
+            | "db error"
+            | "io error"
+            | "error"
+    ) || low.starts_with("kind: ")
 }
 
 /// Construct a live driver for an engine. Shared by `connect` (long-lived,
@@ -473,7 +523,66 @@ mod tests {
         let raw = "some totally unrecognized multi-line error\nsecond line ignored";
         assert_eq!(
             short_connect_error(raw),
-            "some totally unrecognized multi-line error"
+            "Could not connect — some totally unrecognized multi-line error"
+        );
+    }
+
+    /// The bug this guards: deadpool + tokio-postgres wrap the real cause in
+    /// two layers that name nothing. Flattened via `db_core::error_chain`, the
+    /// cause is present and must drive the message.
+    #[test]
+    fn deadpool_wrapped_errors_classify_on_the_inner_cause() {
+        for (raw, needle) in [
+            (
+                "Error occurred while creating a new object: error connecting to server: \
+                 Connection refused (os error 61)",
+                "refused",
+            ),
+            (
+                "Error occurred while creating a new object: error connecting to server: \
+                 failed to lookup address information: nodename nor servname provided",
+                "reachable",
+            ),
+            (
+                "Error occurred while creating a new object: db error: FATAL: password \
+                 authentication failed for user \"x\"",
+                "Authentication",
+            ),
+        ] {
+            let out = short_connect_error(raw);
+            assert!(out.contains(needle), "{raw:?} -> {out:?} (want {needle})");
+            assert!(!out.contains("creating a new object"), "leaked: {out}");
+        }
+    }
+
+    /// If the chain really is content-free, say something useful rather than
+    /// echoing the plumbing verbatim — the exact case in the bug report.
+    #[test]
+    fn bare_driver_noise_becomes_generic_advice() {
+        for raw in [
+            "Error occurred while creating a new object: error connecting to server",
+            "error connecting to server",
+            "Error occurred while creating a new object:",
+        ] {
+            let out = short_connect_error(raw);
+            assert_eq!(
+                out,
+                "Could not connect — check the host, port, and credentials."
+            );
+        }
+    }
+
+    #[test]
+    fn every_message_fits_the_status_area() {
+        let long = format!(
+            "Error occurred while creating a new object: {}",
+            "x".repeat(500)
+        );
+        let out = short_connect_error(&long);
+        assert!(
+            out.chars().count() <= 120,
+            "too long ({}): {out}",
+            out.chars().count()
         );
     }
 }

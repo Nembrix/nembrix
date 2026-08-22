@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Database, FileKey, X } from "lucide-react";
 import * as api from "@/ipc/commands";
 import { isTauri } from "@/ipc/commands";
@@ -27,6 +27,20 @@ registerUriAdapters({
     example: "mongodb://user:pass@host:port/db",
   },
 });
+
+/**
+ * Turn a rejected IPC value into the sentence we show the user.
+ *
+ * The Rust side rejects with an already-condensed, user-facing string (see
+ * `short_connect_error`), so the common path is to pass it through untouched.
+ * Interpolating instead (`${e}`) would prefix a real `Error` with "Error: ",
+ * and anything unexpected gets a plain fallback rather than "[object Object]".
+ */
+function connectErrorText(e: unknown): string {
+  if (typeof e === "string" && e.trim()) return e;
+  if (e instanceof Error && e.message.trim()) return e.message;
+  return "Could not connect — check the host, port, and credentials.";
+}
 
 const empty: ConnectionInput = {
   id: null,
@@ -108,6 +122,22 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
   // True only when a mousedown started on the backdrop itself, so a drag that
   // ends there (e.g. text selection) doesn't count as a backdrop click.
   const backdropMouseDown = useRef(false);
+  const uriRef = useRef<HTMLTextAreaElement>(null);
+
+  /**
+   * Grow the URL textarea to fit its content. The height must be reset to
+   * "auto" first — scrollHeight only ever reports the *content* height when
+   * the box isn't already taller than it, so without the reset the field
+   * could grow but never shrink back after deleting text.
+   *
+   * The CSS max-height still caps it; past that the textarea scrolls.
+   */
+  const autosizeUri = () => {
+    const el = uriRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  };
 
   // Re-prefill if the editing target changes while the modal is open.
   useEffect(() => {
@@ -124,7 +154,12 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
   const spec = engineSpec(v.engine);
   const uriAdapter = spec?.uri;
 
-  const onUriChange = (text: string) => {
+  const onUriChange = (raw: string) => {
+    // Blocking Enter in onKeyDown doesn't cover a *paste* — copying a URL out
+    // of a terminal or docs commonly brings a trailing newline (or wrapped
+    // line breaks) with it, which would break the parse. Strip them here so
+    // both entry paths agree the value is single-line.
+    const text = raw.replace(/[\r\n]+/g, "");
     setUriText(text);
     if (!text.trim()) { setUriErr(null); return; }
     if (!uriAdapter) return;
@@ -143,6 +178,14 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
     setUriErr(null);
     setInputMode("url");
   };
+
+  // Size the field on mount too. Switching into URL mode fills it with a
+  // built URL that can already wrap, and onChange hasn't run yet — without
+  // this the box would render one row tall and clip. useLayoutEffect so the
+  // correct height is set before paint, avoiding a visible jump.
+  useLayoutEffect(() => {
+    if (inputMode === "url") autosizeUri();
+  }, [inputMode, uriText]);
   const patchSsh = (p: Partial<NonNullable<ConnectionInput["ssh"]>>) =>
     setV((s) => ({
       ...s,
@@ -177,7 +220,10 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
       setTestMsg(`OK · ${ms} ms`);
       setTestResult("ok");
     } catch (e) {
-      setTestMsg(`Failed: ${e}`);
+      // The backend already returns a short, user-facing sentence (see
+      // short_connect_error) and this renders in a red "fail" area — a
+      // "Failed:" prefix would just stutter in front of it.
+      setTestMsg(connectErrorText(e));
       setTestResult("fail");
     } finally {
       setWorking(null);
@@ -238,7 +284,7 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
       // we've confirmed the new one is valid.
       await api.testConnection(input);
     } catch (e) {
-      setTestMsg(`Connect failed: ${e}`);
+      setTestMsg(connectErrorText(e));
       setTestResult("fail");
       setWorking(null);
       return;
@@ -271,7 +317,7 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
           /* best effort */
         }
       }
-      setTestMsg(`Connect failed: ${e}`);
+      setTestMsg(connectErrorText(e));
       setTestResult("fail");
       setWorking(null);
       return;
@@ -444,12 +490,24 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
                 <div>
                   <textarea
                     id="cf-uri"
+                    ref={uriRef}
                     className="cf-uri-input"
-                    rows={2}
+                    // One row is just the floor — autosizeUri grows it to
+                    // fit the content as soon as there is any.
+                    rows={1}
                     spellCheck={false}
                     placeholder={uriAdapter.placeholder}
                     value={uriText}
                     onChange={(e) => onUriChange(e.target.value)}
+                    // A URL is a single value — a newline is never part of
+                    // one. It only breaks the parse and grows the box, so
+                    // swallow Enter here. (Plain Enter only; leave modified
+                    // combos alone so a future submit shortcut still works.)
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+                        e.preventDefault();
+                      }
+                    }}
                   />
                   {uriErr && <div className="cf-uri-err">{uriErr}</div>}
                   {!uriErr && uriText && (
