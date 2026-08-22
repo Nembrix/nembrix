@@ -67,6 +67,35 @@ export default function App() {
     startTabsPersistence();
   }, []);
 
+  // "Install on Quit": if an update was downloaded and deferred, apply it as
+  // the window closes. We intercept the close, run the install, then close
+  // for real — Tauri's updater applies packages from the frontend, so this
+  // is the last moment we can reach it.
+  useEffect(() => {
+    if (!isTauri) return;
+    let unlisten: (() => void) | undefined;
+    let closing = false;
+    void (async () => {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      const win = getCurrentWindow();
+      unlisten = await win.onCloseRequested(async (e) => {
+        // Our own re-close must fall through, or we'd loop forever.
+        if (closing) return;
+        const { getPendingInstall, runPendingInstall } = await import(
+          "@/features/updater/pendingInstall"
+        );
+        if (!getPendingInstall()) return;
+        e.preventDefault();
+        closing = true;
+        // Best-effort: runPendingInstall swallows failures so a broken
+        // install can never trap the user in an app they're closing.
+        await runPendingInstall();
+        await win.destroy();
+      });
+    })();
+    return () => unlisten?.();
+  }, []);
+
   // Inspector width is user-resizable via the drag handle on its
   // right edge. Persisted to localStorage so the layout survives
   // reloads. Clamped 200..600 — narrower and the column tree wraps
