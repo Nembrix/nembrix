@@ -320,14 +320,14 @@ jobs:
           node-version: "22"
           cache: "yarn"
 
-      - uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c # stable
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # stable
         with:
           # Required when pinning by SHA — the action can't read the
           # toolchain from the ref name like it does with @stable.
           toolchain: stable
           targets: ${{ matrix.rust_targets }}
 
-      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: apps/desktop -> apps/desktop/target
           key: ${{ matrix.target }}
@@ -486,7 +486,7 @@ jobs:
 
       - name: Sign Windows installers (SignPath)
         if: startsWith(matrix.os, 'windows') && env.SIGNPATH_API_TOKEN != ''
-        uses: signpath/github-action-submit-signing-request@b9d91eadd323de506c0c81cf0c7fe7438f3360fd # v2.2
+        uses: signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2.3
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
