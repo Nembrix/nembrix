@@ -20,7 +20,7 @@
  * __APP_VERSION__ from it. package.json is kept in sync, not consulted.
  */
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
@@ -35,6 +35,13 @@ const TAURI_CONF = join(APP_ROOT, "src-tauri", "tauri.conf.json");
 const CARGO_TOML = join(APP_ROOT, "src-tauri", "Cargo.toml");
 const APP_PKG = join(APP_ROOT, "package.json");
 const ROOT_PKG = join(REPO_ROOT, "package.json");
+const BUMP_WORKFLOW = join(REPO_ROOT, ".github", "workflows", "bump-version.yml");
+const README = join(REPO_ROOT, "README.md");
+// Landing pages pin the current release in their download links (EN + FR).
+const DOC_PAGES = [
+  join(REPO_ROOT, "apps", "docs", "src", "content", "docs", "index.mdx"),
+  join(REPO_ROOT, "apps", "docs", "src", "content", "docs", "fr", "index.mdx"),
+];
 
 const next = process.argv[2];
 if (!next || !/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(next)) {
@@ -126,6 +133,96 @@ function bumpPackageJson(path: string, version: string): void {
 
 bumpPackageJson(APP_PKG, next);
 bumpPackageJson(ROOT_PKG, next);
+
+/**
+ * Repoint the docs' download links at the new release.
+ *
+ * The pages hardcode the version twice per URL — once as the git tag
+ * (`/download/v0.4.0/`) and once inside each artifact filename
+ * (`Nembrix_0.4.0_macOS_Intel.dmg`, and the rpm's `Nembrix-0.4.0-1.x86_64`),
+ * plus a "Latest release: **v0.4.0**" line. A source comment in index.mdx
+ * says "bump these on each release" — a manual step that was missed, leaving
+ * the site advertising artifacts two releases stale.
+ *
+ * Anchors on the version the page ACTUALLY carries (read from the first
+ * release-download URL) rather than on the manifests' previous value. Those
+ * two drifted apart — the docs sat at v0.4.0 while the app shipped 0.4.4,
+ * because the bump was manual and got skipped — so keying off `tauriBefore`
+ * would silently match nothing and leave the links stale forever. Reading the
+ * page's own version makes the rewrite self-healing from any starting point.
+ *
+ * Replaces that literal specifically, rather than any semver, so a version
+ * mentioned in prose (a changelog entry, a compatibility note) isn't rewritten
+ * by accident.
+ */
+function docsCurrentVersion(text: string): string | null {
+  // The download URLs are the authoritative marker: /download/v<version>/
+  const m = text.match(/\/releases\/download\/v(\d+\.\d+\.\d+(?:-[\w.]+)?)\//);
+  return m?.[1] ?? null;
+}
+
+function bumpDocsLinks(path: string, to: string): number {
+  if (!existsSync(path)) return 0;
+  const text = readFileSync(path, "utf8");
+  const from = docsCurrentVersion(text);
+  if (from === null) {
+    console.warn(`note: no release-download link found in ${path} — left untouched`);
+    return 0;
+  }
+  if (from === to) return 0;
+  // Escape dots so "0.4.0" can't match "0X4X0".
+  const esc = from.replace(/\./g, "\\.");
+  // Both spellings: `v0.4.0` (tag + "Latest release") and bare `0.4.0`
+  // (artifact filenames, including the rpm's `Nembrix-0.4.0-1.x86_64`).
+  const re = new RegExp(`(?<![\\d.])v?${esc}(?![\\d.])`, "g");
+  const count = (text.match(re) ?? []).length;
+  writeFileSync(path, text.replace(re, (m) => (m.startsWith("v") ? `v${to}` : to)));
+  return count;
+}
+
+/**
+ * Keep the workflow's dispatch hint suggesting a plausible next version rather
+ * than a frozen example. Purely cosmetic — the input is free text and every
+ * real guard lives in the validate step — but a stale "e.g. 0.5.0" next to a
+ * 0.9.x app is a small, repeated papercut.
+ */
+function bumpWorkflowExample(path: string, to: string): boolean {
+  if (!existsSync(path)) return false;
+  const text = readFileSync(path, "utf8");
+  const out = text.replace(
+    /^(\s*description:\s*"Target version, no leading 'v' \(e\.g\. )[\d.]+(\)\.")/m,
+    `$1${to}$2`,
+  );
+  if (out === text) return false;
+  writeFileSync(path, out);
+  return true;
+}
+
+// Download links deliberately track the last PUBLISHED release, not `next`.
+//
+// A bump runs BEFORE the Release workflow builds and publishes, so at this
+// moment `v<next>` has no assets — often only a draft release, whose asset
+// URLs 404. Pointing the docs at it would break every download button on the
+// site until someone publishes the draft: strictly worse than a link that is
+// one version behind but works. The release-on-bump-merge workflow refreshes
+// these once the build actually ships (see LINKS_TRACK_PUBLISHED below).
+//
+// `bumpDocsLinks` keys off the release-download URLs, which the docs pages
+// and the README share, so one helper covers all three.
+const publishedTarget = lastReleasedVersion() ?? next;
+for (const page of [...DOC_PAGES, README]) {
+  const n = bumpDocsLinks(page, publishedTarget);
+  if (n > 0) console.log(`updated ${page} → v${publishedTarget} (${n} references)`);
+}
+if (publishedTarget !== next) {
+  console.log(
+    `note: download links point at the last released v${publishedTarget}, not v${next} — ` +
+    `v${next} has no published assets yet.`,
+  );
+}
+if (bumpWorkflowExample(BUMP_WORKFLOW, next)) {
+  console.log(`updated ${BUMP_WORKFLOW} (dispatch example)`);
+}
 
 console.log(`updated ${TAURI_CONF}`);
 console.log(`updated ${CARGO_TOML}`);

@@ -75,6 +75,24 @@ Full guide: [JavaScript scripting docs](apps/docs/src/content/docs/scripting.mdx
 > notice between minor versions. Don't use it as the only client
 > against production data.
 
+### Download v0.4.4
+
+Direct installer links — these download the file, no Releases page detour.
+<!-- Kept current by `yarn bump-version`; see apps/desktop/scripts/bump-version.ts. -->
+
+| Platform | Download |
+| --- | --- |
+| macOS (Apple Silicon) | [`.dmg`](https://github.com/nembrix/nembrix/releases/download/v0.4.4/Nembrix_0.4.4_macOS_Apple_Silicon.dmg) |
+| macOS (Intel) | [`.dmg`](https://github.com/nembrix/nembrix/releases/download/v0.4.4/Nembrix_0.4.4_macOS_Intel.dmg) |
+| Windows (x64) | [`.msi`](https://github.com/nembrix/nembrix/releases/download/v0.4.4/Nembrix_0.4.4_x64_en-US.msi) · [`.exe`](https://github.com/nembrix/nembrix/releases/download/v0.4.4/Nembrix_0.4.4_x64-setup.exe) |
+| Windows (ARM64) | [`.msi`](https://github.com/nembrix/nembrix/releases/download/v0.4.4/Nembrix_0.4.4_arm64_en-US.msi) · [`.exe`](https://github.com/nembrix/nembrix/releases/download/v0.4.4/Nembrix_0.4.4_arm64-setup.exe) |
+| Linux (Debian/Ubuntu) | [`.deb`](https://github.com/nembrix/nembrix/releases/download/v0.4.4/Nembrix_0.4.4_amd64.deb) |
+| Linux (Fedora/RHEL) | [`.rpm`](https://github.com/nembrix/nembrix/releases/download/v0.4.4/Nembrix-0.4.4-1.x86_64.rpm) |
+| Linux (universal) | [`.AppImage`](https://github.com/nembrix/nembrix/releases/download/v0.4.4/Nembrix_0.4.4_amd64.AppImage) |
+
+Every other build, plus checksums and signatures, is on the
+[Releases](https://github.com/nembrix/nembrix/releases) page.
+
 ### macOS
 
 ```sh
@@ -82,9 +100,7 @@ brew tap nembrix/nembrix
 brew install --cask nembrix
 ```
 
-Or download the `.dmg` for your Mac from the
-[Releases](https://github.com/nembrix/nembrix/releases) page —
-**Apple Silicon** (`_macOS_Apple_Silicon.dmg`) or **Intel** (`_macOS_Intel.dmg`).
+Or grab the `.dmg` from the table above — **Apple Silicon** or **Intel**.
 
 Builds are signed and **notarized**, so they open with a normal
 double-click. (If you grabbed an older, pre-notarization build,
@@ -93,8 +109,7 @@ the warning.)
 
 ### Windows
 
-Download the `.msi` installer or portable `.exe` from
-[Releases](https://github.com/nembrix/nembrix/releases).
+Download the `.msi` installer or portable `.exe` from the table above.
 
 The installer is not yet **Authenticode-signed**, so Windows
 SmartScreen will show a "Microsoft Defender SmartScreen prevented an
