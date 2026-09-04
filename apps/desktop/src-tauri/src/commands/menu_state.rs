@@ -15,16 +15,26 @@ use tauri::{AppHandle, Runtime, Wry};
 
 #[tauri::command]
 #[specta::specta]
-pub fn update_menu_state(app: AppHandle<Wry>, disabled_ids: Vec<String>) -> Result<(), String> {
+pub fn update_menu_state(
+    app: AppHandle<Wry>,
+    disabled_ids: Vec<String>,
+    checked_ids: Vec<String>,
+) -> Result<(), String> {
     let menu = app.menu().ok_or("no menu installed")?;
     let disabled: HashSet<String> = disabled_ids.into_iter().collect();
-    walk_and_apply(&menu.items().map_err(|e| e.to_string())?, &disabled)?;
+    let checked: HashSet<String> = checked_ids.into_iter().collect();
+    walk_and_apply(
+        &menu.items().map_err(|e| e.to_string())?,
+        &disabled,
+        &checked,
+    )?;
     Ok(())
 }
 
 fn walk_and_apply<R: Runtime>(
     items: &[MenuItemKind<R>],
     disabled: &HashSet<String>,
+    checked: &HashSet<String>,
 ) -> Result<(), String> {
     for item in items {
         match item {
@@ -36,9 +46,20 @@ fn walk_and_apply<R: Runtime>(
                     let _ = mi.set_enabled(!disabled.contains(&id));
                 }
             }
+            // The panel toggles are CheckMenuItems. They need the same
+            // enable/disable treatment AND their tick synced from the store —
+            // without this arm they'd fall through to `_ => {}` and silently
+            // keep whatever state they were built with.
+            MenuItemKind::Check(ci) => {
+                let id = ci.id().0.clone();
+                if id.contains('.') {
+                    let _ = ci.set_enabled(!disabled.contains(&id));
+                    let _ = ci.set_checked(checked.contains(&id));
+                }
+            }
             MenuItemKind::Submenu(sm) => {
                 if let Ok(children) = sm.items() {
-                    walk_and_apply(&children, disabled)?;
+                    walk_and_apply(&children, disabled, checked)?;
                 }
             }
             _ => {}

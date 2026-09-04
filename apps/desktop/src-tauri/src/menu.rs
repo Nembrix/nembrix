@@ -8,8 +8,8 @@
 //! identically in `npm run dev` (mock) and `cargo tauri dev` (native).
 
 use tauri::menu::{
-    AboutMetadataBuilder, Menu, MenuBuilder, MenuItemBuilder, PredefinedMenuItem, Submenu,
-    SubmenuBuilder,
+    AboutMetadataBuilder, CheckMenuItemBuilder, Menu, MenuBuilder, MenuItemBuilder,
+    PredefinedMenuItem, Submenu, SubmenuBuilder,
 };
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 
@@ -123,19 +123,28 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
                 .build(app)?,
         )
         .separator()
+        // Checkable so the menu shows whether each pane is currently visible.
+        // Without this, "Toggle Results Pane" read identically whether the
+        // pane was showing or hidden, and an accidental ⌘2 looked like the
+        // panel had disappeared for good. Initial `checked(true)` matches the
+        // store's default PanelState; the frontend pushes the real values on
+        // boot through `update_menu_state`.
         .item(
-            &MenuItemBuilder::with_id("view.toggle_rail", "Toggle Connection Rail")
+            &CheckMenuItemBuilder::with_id("view.toggle_rail", "Toggle Connection Rail")
                 .accelerator("CmdOrCtrl+0")
+                .checked(true)
                 .build(app)?,
         )
         .item(
-            &MenuItemBuilder::with_id("view.toggle_inspector", "Toggle Inspector")
+            &CheckMenuItemBuilder::with_id("view.toggle_inspector", "Toggle Inspector")
                 .accelerator("CmdOrCtrl+1")
+                .checked(true)
                 .build(app)?,
         )
         .item(
-            &MenuItemBuilder::with_id("view.toggle_results", "Toggle Results Pane")
+            &CheckMenuItemBuilder::with_id("view.toggle_results", "Toggle Results Pane")
                 .accelerator("CmdOrCtrl+2")
+                .checked(true)
                 .build(app)?,
         )
         .separator()
