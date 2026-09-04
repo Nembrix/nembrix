@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Target version, no leading 'v' (e.g. 0.5.0)."
+        description: "Target version, no leading 'v' (e.g. 0.4.5)."
         required: true
         type: string
 
