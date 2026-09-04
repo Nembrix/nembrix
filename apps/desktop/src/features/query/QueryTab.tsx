@@ -4,7 +4,7 @@ import { keymap, EditorView } from "@codemirror/view";
 import { EditorSelection, Prec, StateEffect } from "@codemirror/state";
 import { buildJsScriptExtension } from "@/editor/js-completion";
 import { buildMongoExtension } from "@/editor/mongo-completion";
-import { Play, Square, Sparkles, Star } from "lucide-react";
+import { Play, Square, Sparkles, Star, PanelBottom } from "lucide-react";
 import { buildSqlExtension } from "@/editor/sql-completion";
 import { completionTabKeymap } from "@/editor/completion-tab";
 import { useStore, type Tab, type FilterChip } from "@/store";
@@ -119,7 +119,7 @@ function toCell(v: unknown): import("@/ipc/types").CellValue {
 }
 
 export default function QueryTab({ tab }: { tab: Tab }) {
-  const { schemas, updateTab, appendBatch, activeTabId, editorTick, editorAction, panels } = useStore();
+  const { schemas, updateTab, appendBatch, activeTabId, editorTick, editorAction, panels, togglePanel } = useStore();
   const tree = schemas[tab.connId];
   const handleRef = useRef<string | null>(null);
   const [statusMsg, setStatusMsg] = useState<string>("");
@@ -399,7 +399,21 @@ export default function QueryTab({ tab }: { tab: Tab }) {
   useEffect(() => {
     try { localStorage.setItem("nembrix.editor.pct", String(editorPct)); } catch { /* ignore: best-effort */ }
   }, [editorPct]);
+  // Console height — same model as the editor split above: a percentage of
+  // the results shell, user-draggable and persisted, so a script with lots of
+  // console.log output can be given room without the grid disappearing.
+  const [consolePct, setConsolePct] = useState<number>(() => {
+    try {
+      const v = parseFloat(localStorage.getItem("nembrix.console.pct") ?? "");
+      if (Number.isFinite(v) && v >= 10 && v <= 90) return v;
+    } catch { /* localStorage off */ }
+    return 33;
+  });
+  useEffect(() => {
+    try { localStorage.setItem("nembrix.console.pct", String(consolePct)); } catch { /* ignore: best-effort */ }
+  }, [consolePct]);
   const shellRef = useRef<HTMLDivElement>(null);
+  const resultShellRef = useRef<HTMLDivElement>(null);
   // Ref to the CodeMirror EditorView so the wrapper's click handler
   // can dispatch a selection + focus on the live editor — the
   // domEventHandlers extension only fires for events that originate
@@ -423,6 +437,25 @@ export default function QueryTab({ tab }: { tab: Tab }) {
       scrollIntoView: true,
     });
     view.focus();
+  };
+  // Drag the console taller/shorter. Measured from the shell's BOTTOM edge
+  // because the console is the bottom pane — dragging up grows it.
+  const onConsoleDrag = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const shell = resultShellRef.current;
+    if (!shell) return;
+    const rect = shell.getBoundingClientRect();
+    const onMove = (ev: MouseEvent) => {
+      const fromBottom = rect.bottom - ev.clientY;
+      const pct = Math.max(10, Math.min(90, (fromBottom / rect.height) * 100));
+      setConsolePct(pct);
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
   };
   const onSplitDrag = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -645,6 +678,20 @@ export default function QueryTab({ tab }: { tab: Tab }) {
         <button className="btn-pill" onClick={saveAsNamed} title="Save query…">
           <Star size={12} /> Save
         </button>
+        {/* Only rendered while the results pane is hidden. Toggling it off
+            (⌘2, easy to hit by accident next to ⌘1) unmounts the grid, the
+            console AND the drag handle, so without this button the pane is
+            unreachable unless you already know the shortcut. */}
+        {!panels.results && (
+          <button
+            className="btn-pill"
+            onClick={() => togglePanel("results")}
+            title="Show the results pane (⌘2)"
+            data-testid="show-results"
+          >
+            <PanelBottom size={12} /> Show Results <span className="kbd">⌘2</span>
+          </button>
+        )}
         {tab.running ? (
           <button className="btn-pill danger btn-run" onClick={cancel}>
             <Square size={12} /> Cancel
@@ -662,7 +709,7 @@ export default function QueryTab({ tab }: { tab: Tab }) {
 
       {panels.results && (
         <div
-          className="editor-split"
+          className="pane-split is-horizontal"
           onMouseDown={onSplitDrag}
           onDoubleClick={() => setEditorPct(50)}
           title="Drag to resize · double-click to reset"
@@ -671,7 +718,7 @@ export default function QueryTab({ tab }: { tab: Tab }) {
         />
       )}
       {panels.results && (
-      <div className="result-shell" style={{ flex: `1 1 ${100 - editorPct}%` }}>
+      <div className="result-shell" ref={resultShellRef} style={{ flex: `1 1 ${100 - editorPct}%` }}>
         <div className="result-segments">
           <div className="segmented" role="tablist">
             <button className={view === "data" ? "active" : ""} onClick={() => setView("data")}>Data</button>
@@ -746,7 +793,18 @@ export default function QueryTab({ tab }: { tab: Tab }) {
             visible in script mode, so console.log output and the return-value
             echo show alongside the result set (no tab-switching). */}
         {isScript && (
-          <div className="script-console">
+          <div
+            className="pane-split is-horizontal"
+            data-testid="console-split"
+            onMouseDown={onConsoleDrag}
+            onDoubleClick={() => setConsolePct(33)}
+            title="Drag to resize · double-click to reset"
+            role="separator"
+            aria-orientation="horizontal"
+          />
+        )}
+        {isScript && (
+          <div className="script-console" style={{ flexBasis: `${consolePct}%` }}>
             <div className="script-console-head">
               <span className="muted">Console</span>
               {(tab.logs?.length ?? 0) > 0 && (

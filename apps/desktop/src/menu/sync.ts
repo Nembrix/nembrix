@@ -9,6 +9,7 @@
 import { isTauri, updateMenuState } from "@/ipc/commands";
 import { useStore } from "@/store";
 import { disabledIds } from "./availability";
+import { checkedIds } from "./checked";
 
 let lastSerialized = "";
 let installed = false;
@@ -18,12 +19,17 @@ export function startMenuStateSync() {
   installed = true;
 
   const push = () => {
-    const ids = disabledIds(useStore.getState());
-    const serialized = ids.join(",");
+    const st = useStore.getState();
+    const ids = disabledIds(st);
+    const checked = checkedIds(st);
+    // Serialize BOTH sets — keying the dedupe on the disabled set alone would
+    // swallow a pure panel toggle (which changes only `checked`) and leave the
+    // native tick stale.
+    const serialized = `${ids.join(",")}|${checked.join(",")}`;
     if (serialized === lastSerialized) return;
     lastSerialized = serialized;
     // Fire-and-forget; the menu is non-critical.
-    updateMenuState(ids).catch((e) =>
+    updateMenuState(ids, checked).catch((e) =>
       console.warn("[menu] update_menu_state failed:", e),
     );
   };

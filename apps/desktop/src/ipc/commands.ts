@@ -691,8 +691,8 @@ export const formatSql = (sql: string) =>
 export const introspect = (connId: string) =>
   invoke<SchemaTree>("introspect", { connId: resolveConnId(connId) });
 
-export const updateMenuState = (disabledIds: string[]) =>
-  invoke<void>("update_menu_state", { disabledIds });
+export const updateMenuState = (disabledIds: string[], checkedIds: string[]) =>
+  invoke<void>("update_menu_state", { disabledIds, checkedIds });
 
 /* ─────────────────── history + saved queries ─────────────────── */
 

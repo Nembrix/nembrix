@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { MENU, MENUS, type MenuId } from "@/menu/ids";
 import { dispatchMenu } from "@/menu/dispatch";
 import { isEnabled } from "@/menu/availability";
+import { isCheckable, isChecked } from "@/menu/checked";
 import { isTauri } from "@/ipc/commands";
 import { useStore } from "@/store";
 import { loadRecent } from "@/features/connections/recent";
@@ -70,16 +71,29 @@ export default function MenuBar() {
                   ];
                 }
                 const enabled = it.id ? isEnabled(it.id as MenuId, state) : true;
+                // Toggle rows (panels) render a checkmark reflecting the live
+                // state, so "Toggle Results Pane" reads differently when the
+                // pane is hidden — otherwise an accidental ⌘2 looks like the
+                // panel vanished rather than got hidden.
+                const checkable = it.id ? isCheckable(it.id as MenuId) : false;
+                const checked = checkable && isChecked(it.id as MenuId, state);
                 return [(
                   <div
                     key={it.id}
                     className={`menu-item ${enabled ? "" : "disabled"}`}
+                    role={checkable ? "menuitemcheckbox" : undefined}
+                    aria-checked={checkable ? checked : undefined}
                     onClick={async () => {
                       if (!enabled) return;
                       setOpen(null);
                       if (it.id) await dispatchMenu(it.id);
                     }}
                   >
+                    {checkable && (
+                      <span className="menu-check" aria-hidden="true">
+                        {checked ? "✓" : ""}
+                      </span>
+                    )}
                     <span>{it.label}</span>
                     {it.accel && <span className="menu-accel">{it.accel}</span>}
                   </div>

@@ -199,14 +199,16 @@ fn install_console(ctx: &rquickjs::Ctx<'_>, bridge: Arc<Bridge>) -> Result<(), S
 
 /// Install `db.query(sql, params?)` as an async host function returning a JS
 /// object `{ columns, rows, rowCount }`.
-fn install_db(ctx: &rquickjs::Ctx<'_>, bridge: Arc<Bridge>) -> Result<(), ScriptError> {
+fn install_db<'js>(ctx: &rquickjs::Ctx<'js>, bridge: Arc<Bridge>) -> Result<(), ScriptError> {
     let db = Object::new(ctx.clone()).map_err(engine)?;
 
     let b = bridge.clone();
     let query = Function::new(
         ctx.clone(),
         Async(
-            move |sql: String, params: rquickjs::function::Opt<rquickjs::Value<'_>>| {
+            move |ctx: rquickjs::Ctx<'js>,
+                  sql: String,
+                  params: rquickjs::function::Opt<rquickjs::Value<'js>>| {
                 let b = b.clone();
                 // Convert JS params to JSON *synchronously* (we still hold ctx),
                 // then move only owned data into the async block.
@@ -231,16 +233,23 @@ fn install_db(ctx: &rquickjs::Ctx<'_>, bridge: Arc<Bridge>) -> Result<(), Script
                     // Enforce the query-count guard before issuing.
                     let n = b.query_count.fetch_add(1, Ordering::Relaxed) + 1;
                     if n > b.limits.max_queries {
-                        return Err(rquickjs::Error::new_from_js_message(
-                            "db.query",
-                            "limit",
+                        return Err(rquickjs::Exception::throw_message(
+                            &ctx,
                             "max query count exceeded",
                         ));
                     }
 
-                    let result = b.runner.query(&sql, params_vec).await.map_err(|msg| {
-                        rquickjs::Error::new_from_js_message("db", "query", leak_msg(msg))
-                    })?;
+                    // A driver failure is a real error, not a type-conversion
+                    // failure: `new_from_js_message` would render it as
+                    // "Error converting from js 'db' into type 'query': …",
+                    // burying the actual server message behind a cast that
+                    // never happened. Throw a plain JS Error so the script sees
+                    // the driver's own words in `e.message`.
+                    let result = b
+                        .runner
+                        .query(&sql, params_vec)
+                        .await
+                        .map_err(|msg| rquickjs::Exception::throw_message(&ctx, &msg))?;
 
                     // Row-cap guard.
                     let running = b
@@ -248,9 +257,8 @@ fn install_db(ctx: &rquickjs::Ctx<'_>, bridge: Arc<Bridge>) -> Result<(), Script
                         .fetch_add(result.row_count() as u32, Ordering::Relaxed)
                         + result.row_count() as u32;
                     if running as usize > b.limits.max_total_rows {
-                        return Err(rquickjs::Error::new_from_js_message(
-                            "db.query",
-                            "limit",
+                        return Err(rquickjs::Exception::throw_message(
+                            &ctx,
                             "max total rows exceeded",
                         ));
                     }
@@ -408,13 +416,6 @@ fn stringify(v: &rquickjs::Value<'_>) -> String {
         Some(j) => j.to_string(),
         None => "[unserializable]".into(),
     }
-}
-
-/// rquickjs error messages want `&'static str`; script-run driver errors are
-/// owned. Leak them — a script run is short-lived and low-frequency, and this
-/// only happens on the error path. (Revisit in P5 if it shows up in profiles.)
-fn leak_msg(s: String) -> &'static str {
-    Box::leak(s.into_boxed_str())
 }
 
 fn engine<E: std::fmt::Display>(e: E) -> ScriptError {

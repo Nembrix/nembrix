@@ -10,7 +10,7 @@
  */
 
 import * as api from "@/ipc/commands";
-import { useStore, type Tab } from "@/store";
+import { useStore, type PanelState, type Tab } from "@/store";
 
 const KEY = "nembrix.tabs.v1";
 
@@ -27,6 +27,27 @@ interface Persisted {
   activeTabId: string | null;
   selectedConnId: string | null;
   sessions?: PersistedSession[];
+  /** Which chrome panels are visible. Optional so pre-existing localStorage
+   *  (written before panels were persisted) still hydrates. */
+  panels?: Partial<PanelState>;
+}
+
+/**
+ * Read persisted panel visibility, defaulting each flag to visible.
+ *
+ * Deliberately per-key rather than a blanket `?? DEFAULT`: a truncated or
+ * hand-edited entry ({"results": false} with no other keys) should restore
+ * that one flag and show the rest, not fall back to all-visible and silently
+ * discard the user's layout. Non-boolean values are ignored the same way, so
+ * corrupt state can never leave a pane stuck hidden.
+ */
+function readPanels(p: Partial<PanelState> | undefined): PanelState {
+  const pick = (v: unknown) => (typeof v === "boolean" ? v : true);
+  return {
+    rail: pick(p?.rail),
+    inspector: pick(p?.inspector),
+    results: pick(p?.results),
+  };
 }
 
 export function hydrateTabsFromStorage() {
@@ -60,6 +81,7 @@ export function hydrateTabsFromStorage() {
         ? p.selectedConnId
         : null,
       sessions,
+      panels: readPanels(p.panels),
     });
     // Kick off background reconnects so the rail's avatars flip from
     // grey → connecting → connected without the user having to click.
@@ -139,6 +161,7 @@ export function startTabsPersistence() {
       })),
       activeTabId: s.activeTabId,
       selectedConnId: s.selectedConnId,
+      panels: s.panels,
       sessions: s.sessions.map((sess) => ({
         id: sess.id,
         connectionId: sess.connectionId,

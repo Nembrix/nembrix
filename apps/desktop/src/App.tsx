@@ -143,11 +143,11 @@ export default function App() {
       {panels.inspector && (
         <div className="inspector-wrap">
           <Inspector />
-          {/* Drag handle on the right edge — 4px wide, transparent
-              until hovered. Click-drag to resize, double-click to
-              snap back to the 268px default. */}
+          {/* Drag handle on the right edge. Appearance + hit area come from
+              the shared .pane-split treatment. Click-drag to resize,
+              double-click to snap back to the 268px default. */}
           <div
-            className="inspector-resize"
+            className="pane-split is-vertical inspector-resize"
             onMouseDown={onInspectorResizeStart}
             onDoubleClick={() => setInspectorW(268)}
             title="Drag to resize · double-click to reset"
