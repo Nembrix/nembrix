@@ -26,6 +26,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write   # open the docs-link PR when the direct push is declined
 
 # One release run per ref at a time — avoids two concurrent runs racing each
 # other when re-clicking the button. Doesn't cancel in progress (a half-built
@@ -153,33 +154,56 @@ jobs:
             echo "Docs already point at v$TARGET — nothing to sync."
             exit 0
           fi
-          echo "Syncing docs download links: v$OLD → v$TARGET"
-          for f in apps/docs/src/content/docs/index.mdx apps/docs/src/content/docs/fr/index.mdx; do
+          echo "Syncing download links: v$OLD → v$TARGET"
+          # README carries the same direct-download table as the docs pages and
+          # drifts the same way, so it's synced here too. Its heading reads
+          # "### Download vX.Y.Z" rather than the docs' "**vX.Y.Z**" marker, so
+          # it gets its own substitution.
+          for f in apps/docs/src/content/docs/index.mdx apps/docs/src/content/docs/fr/index.mdx README.md; do
             sed -i \
               -e "s#/download/v${OLD}/Nembrix_${OLD}_#/download/v${TARGET}/Nembrix_${TARGET}_#g" \
               -e "s#/download/v${OLD}/Nembrix-${OLD}-#/download/v${TARGET}/Nembrix-${TARGET}-#g" \
               -e "s#\*\*v${OLD}\*\*#**v${TARGET}**#g" \
+              -e "s|^### Download v${OLD}\$|### Download v${TARGET}|g" \
               "$f"
           done
           git config user.name  "Nembrix release bot"
           git config user.email "release-bot@users.noreply.github.com"
-          git add apps/docs/src/content/docs/index.mdx apps/docs/src/content/docs/fr/index.mdx
+          git add apps/docs/src/content/docs/index.mdx apps/docs/src/content/docs/fr/index.mdx README.md
           if git diff --cached --quiet; then
             echo "No docs changes to commit."
           else
             git commit -m "docs: point download links at v$TARGET"
             # main is protected (changes must go through a PR) and the release
             # bot's GITHUB_TOKEN isn't in the ruleset bypass list, so a direct
-            # push is declined (GH013). The docs-link sync is cosmetic and must
-            # NEVER block the actual release build — so treat a declined push as
-            # a warning, not a failure. Follow up with a normal docs PR to move
-            # the download links (the next release will also re-sync them).
+            # push is declined (GH013). This sync must NEVER block the release
+            # build, so a failure here is never fatal — but it also must not be
+            # silently discarded, which is what used to happen: the commit was
+            # made, the push declined, the runner thrown away, and the docs sat
+            # on v0.4.0 through four releases. Fall back to opening a PR so the
+            # work survives as something a human can merge.
             if git push origin HEAD:main; then
-              echo "Pushed docs download-link update to main."
+              echo "Pushed download-link update to main."
             else
-              echo "::warning::Could not push docs link update to protected main \
-          (branch protection / missing bypass). Release continues; update the \
-          docs download links via a PR. Links: v$OLD → v$TARGET."
+              BRANCH="docs/download-links-v$TARGET"
+              # printf, not an inline multi-line string: YAML block scalars keep
+              # the step's indentation, which would render as code blocks in the
+              # PR body.
+              PR_BODY=$(printf '%s\n\n%s\n\n%s\n' \
+                "Automated by the Release workflow: the direct push to \`main\` was declined by branch protection, so the download-link sync is offered as a PR instead." \
+                "Moves the download links in \`README.md\` and both docs landing pages from **v$OLD** to **v$TARGET**." \
+                "Safe to merge once the v$TARGET release is **published** — while it is still a draft, its release assets 404.")
+              if git push -f origin "HEAD:$BRANCH" \
+                && GH_TOKEN="${{ secrets.GITHUB_TOKEN }}" gh pr create \
+                     --base main --head "$BRANCH" \
+                     --title "docs: point download links at v$TARGET" \
+                     --body "$PR_BODY"; then
+                echo "Opened docs-link PR for v$TARGET (direct push declined)."
+              else
+                echo "::warning::Could not push or open a PR for the download-link \
+          update (branch protection / missing bypass). Release continues; move the \
+          links manually. Links: v$OLD → v$TARGET."
+              fi
             fi
           fi
 
