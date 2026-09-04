@@ -1,11 +1,23 @@
 /**
- * Bump the app version in lockstep across tauri.conf.json + Cargo.toml.
+ * Bump the app version in lockstep across tauri.conf.json, Cargo.toml, and
+ * both package.json files.
  *
  *   yarn bump-version 0.2.0
  *
- * Fails loudly if the two files disagree before the bump (so we don't
- * silently overwrite a hand-edit). Doesn't touch root package.json —
- * the app's version is driven by Tauri / Cargo.
+ * Fails loudly if tauri.conf.json and Cargo.toml disagree before the bump (so
+ * we don't silently overwrite a hand-edit).
+ *
+ * The package.json files were deliberately excluded here once, on the grounds
+ * that "the app's version is driven by Tauri / Cargo". That held for the
+ * shipped binary, but not for everything reading the manifest: they sat at
+ * 0.1.0 while the app shipped 0.4.x, which made `yarn release-local` refuse to
+ * run (it treats apps/desktop/package.json as the expected version and asserts
+ * the manifests match). Keeping all four in lockstep costs nothing and removes
+ * a whole class of "which version is real?" confusion.
+ *
+ * Note the manifests remain the SOURCE OF TRUTH — the pre-bump equality check
+ * and the tag guard below both read tauri.conf.json, and vite injects
+ * __APP_VERSION__ from it. package.json is kept in sync, not consulted.
  */
 
 import { readFileSync, writeFileSync } from "node:fs";
@@ -18,8 +30,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // Script lives at apps/desktop/scripts/; the desktop app's manifests
 // are one level up.
 const APP_ROOT = join(__dirname, "..");
+const REPO_ROOT = join(APP_ROOT, "..", "..");
 const TAURI_CONF = join(APP_ROOT, "src-tauri", "tauri.conf.json");
 const CARGO_TOML = join(APP_ROOT, "src-tauri", "Cargo.toml");
+const APP_PKG = join(APP_ROOT, "package.json");
+const ROOT_PKG = join(REPO_ROOT, "package.json");
 
 const next = process.argv[2];
 if (!next || !/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(next)) {
@@ -89,7 +104,32 @@ const cargoNext = cargoText.replace(
 );
 writeFileSync(CARGO_TOML, cargoNext);
 
+/**
+ * Rewrite just the top-level "version" line of a package.json.
+ *
+ * A targeted regex rather than JSON.parse + stringify: re-serializing would
+ * reformat the whole file (key order is preserved by JSON.parse, but
+ * indentation and any trailing newline are not), turning a one-line version
+ * bump into a noisy diff over an otherwise untouched manifest. The anchor is
+ * the first `"version": "..."` at two-space indent, which is the top-level
+ * field — nested ones (in dependencies, etc.) are indented deeper.
+ */
+function bumpPackageJson(path: string, version: string): void {
+  const text = readFileSync(path, "utf8");
+  const re = /^(\s{2}"version"\s*:\s*)"[^"]+"/m;
+  if (!re.test(text)) {
+    console.error(`Could not find a top-level "version" field in ${path}`);
+    process.exit(1);
+  }
+  writeFileSync(path, text.replace(re, `$1"${version}"`));
+}
+
+bumpPackageJson(APP_PKG, next);
+bumpPackageJson(ROOT_PKG, next);
+
 console.log(`updated ${TAURI_CONF}`);
 console.log(`updated ${CARGO_TOML}`);
+console.log(`updated ${APP_PKG}`);
+console.log(`updated ${ROOT_PKG}`);
 console.log("");
 console.log(`next: git add -p && git commit -m "Release v${next}" && trigger the Release workflow.`);

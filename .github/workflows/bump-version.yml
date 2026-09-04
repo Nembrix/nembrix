@@ -76,8 +76,9 @@ jobs:
         shell: bash
         run: |
           set -e
-          # bump-version rewrites tauri.conf.json + Cargo.toml together (and
-          # fails loudly if they disagree beforehand).
+          # bump-version rewrites tauri.conf.json + Cargo.toml + both
+          # package.json files together (and fails loudly if the two manifests
+          # disagree beforehand).
           yarn --cwd apps/desktop bump-version "${{ github.event.inputs.version }}"
 
       - name: Sync Cargo.lock to the new version
@@ -114,7 +115,8 @@ jobs:
             Automated version bump to **v${{ github.event.inputs.version }}**, opened by
             the Bump Version workflow (`main` is protected, so the bump goes through a PR).
 
-            Bumps `tauri.conf.json`, `Cargo.toml`, and `Cargo.lock` in lockstep.
+            Bumps `tauri.conf.json`, `Cargo.toml`, `Cargo.lock`, and both
+            `package.json` files in lockstep.
 
             **Next steps:**
             1. Review + merge this PR.
@@ -125,3 +127,5 @@ jobs:
             apps/desktop/src-tauri/tauri.conf.json
             apps/desktop/src-tauri/Cargo.toml
             apps/desktop/Cargo.lock
+            apps/desktop/package.json
+            package.json
