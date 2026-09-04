@@ -22,6 +22,18 @@ export interface Prefs {
     /** \n or \r\n. */
     lineEnding: "\n" | "\r\n";
   };
+  updates: {
+    /** When true, an update found by the on-launch check downloads and
+     *  stages itself without prompting; the user is only told once it's
+     *  ready to apply. Off by default — installing unprompted is a
+     *  surprise the user should opt into. */
+    auto: boolean;
+    /** A version the user chose to skip, e.g. "0.4.5". The on-launch check
+     *  stays silent for exactly this version; anything newer prompts again,
+     *  and a manual "Check for Updates…" ignores it entirely so the menu
+     *  item is never dead. */
+    skipVersion: string | null;
+  };
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -30,6 +42,10 @@ export const DEFAULT_PREFS: Prefs = {
     delimiter: ",",
     emptyIsNull: false,
     lineEnding: "\n",
+  },
+  updates: {
+    auto: false,
+    skipVersion: null,
   },
 };
 
@@ -40,6 +56,7 @@ export function loadPrefs(): Prefs {
     const parsed = JSON.parse(raw) as Partial<Prefs>;
     return {
       csv: { ...DEFAULT_PREFS.csv, ...(parsed.csv ?? {}) },
+      updates: { ...DEFAULT_PREFS.updates, ...(parsed.updates ?? {}) },
     };
   } catch {
     return clone(DEFAULT_PREFS);

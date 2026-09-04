@@ -2869,6 +2869,38 @@ tr.row-focused.row-dirty > td:not(.dirty) {
 .about-links a:hover { text-decoration: underline; }
 
 /* ============================================================
+   Update dialog
+   ============================================================ */
+/* Icon + headline row, so the update reads as an announcement rather
+   than another line of body copy. */
+.update-lede {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.update-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.update-sub {
+  margin: 2px 0 0;
+  font-size: 12px;
+}
+/* The auto-update opt-in sits between the body and the buttons, aligned
+   with the footer's padding so it reads as part of the action area. */
+.update-auto {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px 4px;
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+.update-auto input { cursor: pointer; }
+
+/* ============================================================
    ER diagram
    ============================================================ */
 .er-canvas {
