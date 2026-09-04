@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath, URL } from "node:url";
-import pkg from "./package.json" with { type: "json" };
+import tauriConf from "./src-tauri/tauri.conf.json" with { type: "json" };
 
 export default defineConfig({
   plugins: [react()],
@@ -9,7 +9,14 @@ export default defineConfig({
   define: {
     // Injected at build time so the About dialog and any debug pane can
     // surface the shipping version without an IPC round-trip.
-    __APP_VERSION__: JSON.stringify(pkg.version),
+    //
+    // Read from tauri.conf.json, NOT package.json: the release pipeline
+    // (.github/workflows/bump-version.yml) rewrites tauri.conf.json +
+    // Cargo.toml + Cargo.lock in lockstep and never touches package.json, so
+    // package.json's version is frozen at 0.1.0 and drifts further from the
+    // shipping version with every release. tauri.conf.json is the same source
+    // the installer and updater use, so About now agrees with them.
+    __APP_VERSION__: JSON.stringify(tauriConf.version),
   },
   resolve: {
     alias: {
