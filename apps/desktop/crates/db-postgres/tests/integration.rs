@@ -434,13 +434,60 @@ async fn script_surfaces_real_query_error() -> anyhow::Result<()> {
           await db.query("SELECT * FROM does_not_exist");
           console.log("no error");
         } catch (e) {
-          console.log("caught");
+          console.log(e.message);
         }
     "#;
     let out = db_script::run(script, runner, db_script::Limits::default())
         .await
         .map_err(|e| anyhow::anyhow!("{e}"))?;
-    assert_eq!(out.logs[0].text, "caught");
+    // The message must name the real cause. Asserting only that *something*
+    // was caught is what let two layers of message-mangling ship: the driver
+    // collapsing tokio-postgres' source chain to a bare "db error", and the
+    // sandbox wrapping that in a type-conversion error.
+    let msg = &out.logs[0].text;
+    assert!(
+        msg.contains("does_not_exist"),
+        "expected the Postgres message, got: {msg}"
+    );
+    assert_ne!(msg.trim(), "db error", "source chain was dropped: {msg}");
+    assert!(
+        !msg.contains("converting from js"),
+        "driver error framed as a type conversion: {msg}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn script_surfaces_syntax_error_verbatim() -> anyhow::Result<()> {
+    // Regression for the reported bug: a syntax error (here, `return *`
+    // instead of `RETURNING *`) surfaced as the useless
+    // "Error converting from js 'db' into type 'query': db error".
+    // tokio-postgres' Display is only that outer "db error" layer, so the
+    // server's actual complaint has to come out of the source chain.
+    require_docker!();
+    let f = common::start_pg().await?;
+    common::exec(
+        &f,
+        "CREATE TABLE api_keys (id serial PRIMARY KEY, name text)",
+    )
+    .await?;
+    let runner: Arc<dyn QueryRunner> = Arc::new(PgScriptRunner { db: f.conn.clone() });
+    let script = r#"
+        try {
+          await db.query("INSERT INTO api_keys (name) VALUES ($1) return *", ["k"]);
+        } catch (e) {
+          console.log(e.message);
+        }
+    "#;
+    let out = db_script::run(script, runner, db_script::Limits::default())
+        .await
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    let msg = &out.logs[0].text;
+    assert!(
+        msg.to_lowercase().contains("syntax error"),
+        "expected Postgres' syntax error, got: {msg}"
+    );
+    assert_ne!(msg.trim(), "db error", "source chain was dropped: {msg}");
     Ok(())
 }
 

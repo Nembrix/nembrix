@@ -315,10 +315,14 @@ impl DbConnection for PgConn {
             let stream = match result {
                 Ok(s) => s,
                 Err(e) => {
+                    // `error_chain`, not `to_string()`: tokio-postgres' Display
+                    // is just the outer "db error" layer, and the actual server
+                    // message (syntax error, constraint violation, …) lives in
+                    // the source chain underneath it.
                     let _ = sink
                         .send(RowBatch {
                             columns: None,
-                            rows: vec![vec![CellValue::Text(e.to_string())]],
+                            rows: vec![vec![CellValue::Text(error_chain(&e))]],
                             done: true,
                         })
                         .await;
@@ -376,10 +380,12 @@ impl DbConnection for PgConn {
                         break;
                     }
                     Err(e) => {
+                        // Same as above: keep the source chain, or the caller
+                        // only ever sees the bare "db error" outer layer.
                         let _ = sink
                             .send(RowBatch {
                                 columns: columns.take(),
-                                rows: vec![vec![CellValue::Text(e.to_string())]],
+                                rows: vec![vec![CellValue::Text(error_chain(&e))]],
                                 done: true,
                             })
                             .await;

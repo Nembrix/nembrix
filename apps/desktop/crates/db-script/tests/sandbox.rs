@@ -322,6 +322,74 @@ async fn query_error_propagates_into_script() {
 }
 
 #[tokio::test]
+async fn query_error_message_is_the_drivers_own_words() {
+    // Regression: driver failures used to be reported with rquickjs'
+    // `new_from_js_message`, a *type-conversion* constructor, so a script
+    // caught "Error converting from js 'db' into type 'query': <msg>" — a cast
+    // that never happened, wrapped around the only useful part. `e.message`
+    // must now be exactly what the driver said, with no framing.
+    struct FailingDb;
+    #[async_trait]
+    impl QueryRunner for FailingDb {
+        async fn query(
+            &self,
+            _sql: &str,
+            _params: Vec<serde_json::Value>,
+        ) -> Result<QueryResult, String> {
+            Err("ERROR: syntax error at or near \"return\"".into())
+        }
+    }
+    let script = r#"
+        try {
+          await db.query("INSERT INTO api_keys (name) VALUES ($1) return *", ["x"]);
+        } catch (e) {
+          console.log(e.message);
+        }
+    "#;
+    let out = run(script, Arc::new(FailingDb), Limits::default())
+        .await
+        .expect("the script catches its own error");
+    assert_eq!(
+        out.logs[0].text, "ERROR: syntax error at or near \"return\"",
+        "driver message must arrive verbatim, with no conversion-error framing"
+    );
+    assert!(
+        !out.logs[0].text.contains("converting from js"),
+        "got conversion framing: {:?}",
+        out.logs
+    );
+}
+
+#[tokio::test]
+async fn query_error_is_a_real_js_error_instance() {
+    // The thrown value must be a genuine `Error`, so idiomatic handling
+    // (`instanceof Error`, `e.stack`) works rather than surfacing an opaque
+    // host object.
+    struct FailingDb;
+    #[async_trait]
+    impl QueryRunner for FailingDb {
+        async fn query(
+            &self,
+            _sql: &str,
+            _params: Vec<serde_json::Value>,
+        ) -> Result<QueryResult, String> {
+            Err("relation \"nope\" does not exist".into())
+        }
+    }
+    let script = r#"
+        try {
+          await db.query("SELECT * FROM nope");
+        } catch (e) {
+          console.log(String(e instanceof Error));
+        }
+    "#;
+    let out = run(script, Arc::new(FailingDb), Limits::default())
+        .await
+        .expect("the script catches its own error");
+    assert_eq!(out.logs[0].text, "true", "got: {:?}", out.logs);
+}
+
+#[tokio::test]
 async fn wall_clock_timeout_stops_a_pure_cpu_loop() {
     // A `while (true) {}` with NO db.query and NO await never trips the
     // query cap and never yields — only the interrupt-handler timeout can
