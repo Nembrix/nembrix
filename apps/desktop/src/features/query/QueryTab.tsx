@@ -39,6 +39,11 @@ function toCell(v: unknown): import("@/ipc/types").CellValue {
   return { kind: "document", value: v };
 }
 
+/** How long a stream may produce nothing before we call it stalled. Matches
+ *  the table view's watchdog. */
+const STALL_MS =
+  (window as { __STALL_MS__?: number }).__STALL_MS__ ?? 20_000;
+
 export default function QueryTab({ tab }: { tab: Tab }) {
   const { schemas, updateTab, appendBatch, activeTabId, editorTick, editorAction, panels, togglePanel } = useStore();
   const tree = schemas[tab.connId];
@@ -184,7 +189,26 @@ export default function QueryTab({ tab }: { tab: Tab }) {
     setStatusMsg("Running…");
     setView("data");
     try {
+      // Same stall watchdog as the table view: a dropped connection can leave
+      // `stream` resolved with no batch ever arriving, neither `done` nor an
+      // error, leaving the grid on "Running…" indefinitely.
+      let sawBatch = false;
+      const stallTimer = setTimeout(() => {
+        if (sawBatch) return;
+        updateTab(tab.id, {
+          running: false,
+          error:
+            "No response from the database. The connection may have dropped — " +
+            "try running again, or reconnect from the sidebar.",
+        });
+        setStatusMsg("No response — connection may have dropped");
+        const h = handleRef.current;
+        if (h) void api.cancel(tab.connId, h).catch(() => {});
+      }, STALL_MS);
+
       handleRef.current = await api.stream(tab.connId, sql, (b) => {
+        sawBatch = true;
+        clearTimeout(stallTimer);
         appendBatch(tab.id, b);
         if (b.done) {
           const ms = Math.round(performance.now() - started);
