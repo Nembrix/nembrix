@@ -47,3 +47,33 @@ test("running a bulk export in browser mode produces a combined download", async
   // Per-table progress rows show success.
   await expect(page.locator(".bulk-job.status-done")).toHaveCount(2);
 });
+
+test("Export is enabled without a destination folder", async ({ page }) => {
+  // Regression: the button was gated on a folder being chosen, so in the
+  // desktop app clicking it did nothing and gave no reason. It now stays
+  // enabled and opens the folder picker on click (Tauri), and only a genuinely
+  // unsatisfiable state — no tables selected — disables it.
+  //
+  // NOTE: this suite runs in browser mode (isTauri === false), where the folder
+  // requirement never applied, so it cannot exercise the Tauri-only picker
+  // branch. What it does pin is the disable rule: only an empty selection
+  // disables Export, with a stated reason.
+  await seedConnectedSession(page);
+  await page.locator(".menu-bar-item", { hasText: "View" }).click();
+  await page.locator(".menu-item", { hasText: /Command Palette/ }).click();
+  await expect(page.getByPlaceholder(/Search actions/)).toBeVisible();
+  await page.keyboard.type("export");
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("Bulk export")).toBeVisible();
+
+  const exportBtn = page.getByRole("button", { name: /^Export \d+ table/ });
+  await expect(exportBtn).toBeEnabled();
+
+  // Deselecting everything is the one state that should disable it.
+  await page.getByRole("button", { name: "None" }).click();
+  await expect(exportBtn).toBeDisabled();
+  await expect(page.getByText("Select at least one table.")).toBeVisible();
+
+  await page.getByRole("button", { name: "Select all" }).click();
+  await expect(exportBtn).toBeEnabled();
+});
