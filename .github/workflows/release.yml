@@ -213,7 +213,7 @@ jobs:
       # commits since the previous v* tag under the version being cut.
       - id: cliff
         name: Generate release notes (git-cliff)
-        uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5 # v4.8.0
+        uses: orhun/git-cliff-action@3d96a18cc4ec17e9dc69ddcc424ccafaf1f78ce2 # v4.9.0
         with:
           config: cliff.toml
           args: --unreleased --tag ${{ steps.resolve.outputs.tag }} --strip header
@@ -344,14 +344,14 @@ jobs:
           node-version: "22"
           cache: "yarn"
 
-      - uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c # stable
+      - uses: dtolnay/rust-toolchain@d1031067263f94b142dd6c0ce24c5eb9d02d52a0 # stable
         with:
           # Required when pinning by SHA — the action can't read the
           # toolchain from the ref name like it does with @stable.
           toolchain: stable
           targets: ${{ matrix.rust_targets }}
 
-      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: apps/desktop -> apps/desktop/target
           key: ${{ matrix.target }}
@@ -510,7 +510,7 @@ jobs:
 
       - name: Sign Windows installers (SignPath)
         if: startsWith(matrix.os, 'windows') && env.SIGNPATH_API_TOKEN != ''
-        uses: signpath/github-action-submit-signing-request@b9d91eadd323de506c0c81cf0c7fe7438f3360fd # v2.2
+        uses: signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2.3
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
