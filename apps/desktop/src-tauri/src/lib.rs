@@ -89,9 +89,47 @@ pub fn run() {
             // if the webview never loads (JS crash, blank bundle), show the
             // window anyway after a short delay so a broken frontend can't
             // leave an invisible, un-closable window.
+
+            // Set when the user closes the window, so the startup safety net
+            // below can tell "the frontend never came up" from "the user shut
+            // this on purpose" — both look like a hidden window otherwise.
+            //
+            // Only macOS hides on close (other platforms exit), so elsewhere
+            // this stays false and the net behaves exactly as before. The
+            // allow keeps non-macOS builds warning-free, since nothing writes
+            // to it there.
+            #[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
+            let user_closed = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+
+            // macOS: the red close button destroys the window by default,
+            // which leaves the process running with nothing to click and no
+            // window for Reopen to restore — the app looks shut but only Quit
+            // actually exits. Hide instead, matching platform convention, so
+            // the dock icon brings it back.
+            #[cfg(target_os = "macos")]
             if let Some(win) = app_handle.get_webview_window("main") {
+                let handle = win.clone();
+                let closed = user_closed.clone();
+                win.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        closed.store(true, std::sync::atomic::Ordering::Relaxed);
+                        let _ = handle.hide();
+                    }
+                });
+            }
+
+            if let Some(win) = app_handle.get_webview_window("main") {
+                // Skipped once the user has closed the window. Without that
+                // check this net fights the close handler above: closing
+                // within the first 3s reads as "never shown", and the timer
+                // pops the window straight back up.
+                let closed = user_closed.clone();
                 std::thread::spawn(move || {
                     std::thread::sleep(std::time::Duration::from_millis(3000));
+                    if closed.load(std::sync::atomic::Ordering::Relaxed) {
+                        return;
+                    }
                     if let Ok(false) = win.is_visible() {
                         let _ = win.show();
                     }
@@ -129,6 +167,20 @@ pub fn run() {
             commands::history::save_query,
             commands::history::delete_saved_query,
         ])
-        .run(tauri::generate_context!())
-        .expect("error running app");
+        .build(tauri::generate_context!())
+        .expect("error building app")
+        .run(|app, event| {
+            // macOS: the red close button destroys the window but leaves the
+            // process alive, and without a Reopen handler clicking the dock
+            // icon does nothing — the app looks shut but Quit is the only way
+            // out. Recreate (or re-show) the main window instead.
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = event {
+                if let Some(win) = app.get_webview_window("main") {
+                    let _ = win.show();
+                    let _ = win.set_focus();
+                }
+            }
+            let _ = (app, event);
+        });
 }
