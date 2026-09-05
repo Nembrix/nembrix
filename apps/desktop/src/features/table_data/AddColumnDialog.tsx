@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { buildAddColumnSql } from "./buildAddColumnSql";
 import { AlertTriangle, X } from "lucide-react";
 import * as api from "@/ipc/commands";
 import { useStore } from "@/store";
@@ -116,20 +117,4 @@ export default function AddColumnDialog({ connId, schema, table, onClose }: Prop
   );
 }
 
-function qi(s: string): string {
-  return `"${s.replace(/"/g, '""')}"`;
-}
 
-export function buildAddColumnSql(
-  schema: string,
-  table: string,
-  name: string,
-  type: string,
-  nullable: boolean,
-  dflt: string,
-): string {
-  let sql = `ALTER TABLE ${qi(schema)}.${qi(table)} ADD COLUMN ${qi(name)} ${type}`;
-  if (dflt.trim()) sql += ` DEFAULT ${dflt.trim()}`;
-  if (!nullable) sql += " NOT NULL";
-  return sql + ";";
-}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildCreateIndexSql } from "./AddIndexDialog";
+import { buildCreateIndexSql } from "./buildCreateIndexSql";
 
 describe("buildCreateIndexSql", () => {
   it("builds a single-column index with a derived name", () => {

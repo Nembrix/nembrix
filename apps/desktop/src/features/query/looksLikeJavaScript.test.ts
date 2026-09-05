@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { looksLikeJavaScript } from "./QueryTab";
+import { looksLikeJavaScript } from "./looksLikeJavaScript";
 
 describe("looksLikeJavaScript", () => {
   it("flags obvious scripts even behind a leading comment", () => {

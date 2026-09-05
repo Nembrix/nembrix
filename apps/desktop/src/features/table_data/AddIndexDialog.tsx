@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { buildCreateIndexSql } from "./buildCreateIndexSql";
 import { AlertTriangle, X } from "lucide-react";
 import * as api from "@/ipc/commands";
 import { useStore } from "@/store";
@@ -98,18 +99,4 @@ export default function AddIndexDialog({ connId, schema, table, onClose }: Props
   );
 }
 
-function qi(s: string): string {
-  return `"${s.replace(/"/g, '""')}"`;
-}
 
-export function buildCreateIndexSql(
-  schema: string,
-  table: string,
-  columns: string[],
-  unique: boolean,
-): string {
-  const name = `${table}_${columns.join("_")}_idx`;
-  const cols = columns.map(qi).join(", ");
-  const kind = unique ? "UNIQUE INDEX" : "INDEX";
-  return `CREATE ${kind} ${qi(name)} ON ${qi(schema)}.${qi(table)} (${cols});`;
-}
