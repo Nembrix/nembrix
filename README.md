@@ -75,20 +75,20 @@ Full guide: [JavaScript scripting docs](apps/docs/src/content/docs/scripting.mdx
 > notice between minor versions. Don't use it as the only client
 > against production data.
 
-### Download v0.5.2
+### Download v0.5.3
 
 Direct installer links — these download the file, no Releases page detour.
 <!-- Kept current by `yarn bump-version`; see apps/desktop/scripts/bump-version.ts. -->
 
 | Platform | Download |
 | --- | --- |
-| macOS (Apple Silicon) | [`.dmg`](https://github.com/nembrix/nembrix/releases/download/v0.5.2/Nembrix_0.5.2_macOS_Apple_Silicon.dmg) |
-| macOS (Intel) | [`.dmg`](https://github.com/nembrix/nembrix/releases/download/v0.5.2/Nembrix_0.5.2_macOS_Intel.dmg) |
-| Windows (x64) | [`.msi`](https://github.com/nembrix/nembrix/releases/download/v0.5.2/Nembrix_0.5.2_x64_en-US.msi) · [`.exe`](https://github.com/nembrix/nembrix/releases/download/v0.5.2/Nembrix_0.5.2_x64-setup.exe) |
-| Windows (ARM64) | [`.msi`](https://github.com/nembrix/nembrix/releases/download/v0.5.2/Nembrix_0.5.2_arm64_en-US.msi) · [`.exe`](https://github.com/nembrix/nembrix/releases/download/v0.5.2/Nembrix_0.5.2_arm64-setup.exe) |
-| Linux (Debian/Ubuntu) | [`.deb`](https://github.com/nembrix/nembrix/releases/download/v0.5.2/Nembrix_0.5.2_amd64.deb) |
-| Linux (Fedora/RHEL) | [`.rpm`](https://github.com/nembrix/nembrix/releases/download/v0.5.2/Nembrix-0.5.2-1.x86_64.rpm) |
-| Linux (universal) | [`.AppImage`](https://github.com/nembrix/nembrix/releases/download/v0.5.2/Nembrix_0.5.2_amd64.AppImage) |
+| macOS (Apple Silicon) | [`.dmg`](https://github.com/nembrix/nembrix/releases/download/v0.5.3/Nembrix_0.5.3_macOS_Apple_Silicon.dmg) |
+| macOS (Intel) | [`.dmg`](https://github.com/nembrix/nembrix/releases/download/v0.5.3/Nembrix_0.5.3_macOS_Intel.dmg) |
+| Windows (x64) | [`.msi`](https://github.com/nembrix/nembrix/releases/download/v0.5.3/Nembrix_0.5.3_x64_en-US.msi) · [`.exe`](https://github.com/nembrix/nembrix/releases/download/v0.5.3/Nembrix_0.5.3_x64-setup.exe) |
+| Windows (ARM64) | [`.msi`](https://github.com/nembrix/nembrix/releases/download/v0.5.3/Nembrix_0.5.3_arm64_en-US.msi) · [`.exe`](https://github.com/nembrix/nembrix/releases/download/v0.5.3/Nembrix_0.5.3_arm64-setup.exe) |
+| Linux (Debian/Ubuntu) | [`.deb`](https://github.com/nembrix/nembrix/releases/download/v0.5.3/Nembrix_0.5.3_amd64.deb) |
+| Linux (Fedora/RHEL) | [`.rpm`](https://github.com/nembrix/nembrix/releases/download/v0.5.3/Nembrix-0.5.3-1.x86_64.rpm) |
+| Linux (universal) | [`.AppImage`](https://github.com/nembrix/nembrix/releases/download/v0.5.3/Nembrix_0.5.3_amd64.AppImage) |
 
 Every other build, plus checksums and signatures, is on the
 [Releases](https://github.com/nembrix/nembrix/releases) page.
