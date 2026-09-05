@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useAsyncResource } from "@/lib/useAsyncResource";
 import { ArrowRight, ExternalLink, X } from "lucide-react";
 import type { CellValue, ColMeta, ForeignKey } from "@/ipc/types";
 import * as api from "@/ipc/commands";
@@ -13,32 +13,35 @@ interface Props {
 }
 
 export default function ForeignKeyPanel({ connId, fk, cellValue, onClose }: Props) {
-  const [rows, setRows] = useState<CellValue[][]>([]);
-  const [cols, setCols] = useState<ColMeta[]>([]);
-  const [err, setErr] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Accumulate the streamed batches inside the loader and resolve once, so the
+  // component holds a single async resource rather than four setState cells
+  // written to from an effect body.
+  const { data, error: err, loading } = useAsyncResource<{
+    rows: CellValue[][];
+    cols: ColMeta[];
+  }>(
+    async (isCancelled) => {
+      const where = fk.referenced_columns
+        .map((c, i) => `${quoteIdent(c)} = ${quoteValue(cellValue, i)}`)
+        .join(" AND ");
+      const sql = `SELECT * FROM ${quoteIdent(fk.referenced_schema)}.${quoteIdent(fk.referenced_table)} WHERE ${where} LIMIT 5;`;
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setErr(null);
-
-    const where = fk.referenced_columns
-      .map((c, i) => `${quoteIdent(c)} = ${quoteValue(cellValue, i)}`)
-      .join(" AND ");
-    const sql = `SELECT * FROM ${quoteIdent(fk.referenced_schema)}.${quoteIdent(fk.referenced_table)} WHERE ${where} LIMIT 5;`;
-
-    api.stream(connId, sql, (b) => {
-      if (cancelled) return;
-      if (b.columns) setCols(b.columns);
-      setRows((prev) => [...prev, ...b.rows]);
-      if (b.done) setLoading(false);
-    }).catch((e) => {
-      if (!cancelled) { setErr(String(e)); setLoading(false); }
-    });
-
-    return () => { cancelled = true; };
-  }, [connId, fk, cellValue]);
+      const rows: CellValue[][] = [];
+      let cols: ColMeta[] = [];
+      await new Promise<void>((resolve, reject) => {
+        api.stream(connId, sql, (b) => {
+          if (isCancelled()) return;
+          if (b.columns) cols = b.columns;
+          rows.push(...b.rows);
+          if (b.done) resolve();
+        }).catch(reject);
+      });
+      return { rows, cols };
+    },
+    [connId, fk, cellValue],
+  );
+  const rows = data?.rows ?? [];
+  const cols = data?.cols ?? [];
 
   const openInTab = () => {
     const where = fk.referenced_columns
