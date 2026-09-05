@@ -3219,6 +3219,35 @@ tr.row-focused.row-dirty > td:not(.dirty) {
   border: 1px solid var(--border-soft);
   border-radius: var(--r-1);
 }
+/* Aggregate export progress — a count plus a bar, above the per-table list. */
+.bulk-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.bulk-progress-track {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-elev);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.bulk-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 0.18s ease-out;
+}
+/* Tint the bar when at least one table failed, so a partial run doesn't read
+   as a clean one at a glance. */
+.bulk-progress-fill.has-error { background: var(--warn, #e0a458); }
+.bulk-progress-label {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--fg-2);
+}
+
 .bulk-job {
   display: flex; align-items: center; gap: 8px;
   padding: 3px 6px;

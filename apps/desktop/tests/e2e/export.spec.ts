@@ -26,15 +26,18 @@ test("opens the Export dialog with all columns checked and the right default fil
   for (let i = 0; i < 4; i++) {
     await expect(boxes.nth(i)).toBeChecked();
   }
-  await expect(page.getByText("→ public.orders.csv")).toBeVisible();
+  // Filename drops the default `public` schema — `orders.csv`, not
+  // `public.orders.csv`. The dialog title above still shows the qualified
+  // table, which is the right level of detail there.
+  await expect(page.getByText("→ orders.csv")).toBeVisible();
 });
 
 test("switching format updates the suggested filename extension", async ({ page }) => {
   await page.getByRole("button", { name: /Export/ }).click();
   await page.locator(".segmented button", { hasText: "JSONL" }).click();
-  await expect(page.getByText("→ public.orders.jsonl")).toBeVisible();
+  await expect(page.getByText("→ orders.jsonl")).toBeVisible();
   await page.locator(".segmented button", { hasText: "SQL" }).click();
-  await expect(page.getByText("→ public.orders.sql")).toBeVisible();
+  await expect(page.getByText("→ orders.sql")).toBeVisible();
 });
 
 test("CSV download contains the expected header + cell values", async ({ page }) => {

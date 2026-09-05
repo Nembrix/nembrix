@@ -220,3 +220,15 @@ export function mimeType(format: ExportFormat): string {
     case "sql": return "application/sql";
   }
 }
+
+/**
+ * Filename stem for an exported table.
+ *
+ * `public` is Postgres' default schema and carries no information in a
+ * filename — `users.csv` reads better than `public.users.csv`. Any other
+ * schema stays in the name, because exporting `users` from two schemas into
+ * one folder would otherwise overwrite the first file.
+ */
+export function fileBase(schema: string, table: string): string {
+  return schema === "public" ? table : `${schema}.${table}`;
+}
