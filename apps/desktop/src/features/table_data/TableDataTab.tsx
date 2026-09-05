@@ -29,6 +29,12 @@ type ResultView = "data" | "structure" | "indexes" | "info" | "chart";
  * touches a control. The grid offers column show/hide, filter chips, sort,
  * row pinning, FK navigation, and the chart tab.
  */
+/** How long a stream may produce nothing before we call it stalled. Generous
+ *  enough for a slow first batch on a large table, short enough that a dead
+ *  connection doesn't spin indefinitely. */
+const STALL_MS =
+  (window as { __STALL_MS__?: number }).__STALL_MS__ ?? 20_000;
+
 export default function TableDataTab({ tab }: { tab: Tab }) {
   const { updateTab, appendBatch, schemas } = useStore();
   // Subscribe to this session's connection status. On app restart a tab is
@@ -96,9 +102,15 @@ export default function TableDataTab({ tab }: { tab: Tab }) {
     const connectionId = session?.connectionId ?? tab.connId;
     return conns.find((c) => c.id === connectionId)?.engine;
   }, [tab.connId, sessions, conns]);
+  // Build nothing until the engine is known. `engine` is undefined while the
+  // sessions/connections lists hydrate, and `undefined !== "mongo"` used to
+  // fall through to buildSql — sending Postgres SQL to a Mongo connection,
+  // which the driver rejects with "expected `db.<collection>.<method>(…)`".
+  // An empty string means `run()` no-ops, and the effect re-runs once the
+  // engine resolves because `sql` is part of its key.
   const sql = useMemo(
     () =>
-      !rel
+      !rel || !engine
         ? ""
         : engine === "mongo"
           ? buildMongoFind(rel, filters, tab.sort, limit)
@@ -107,14 +119,39 @@ export default function TableDataTab({ tab }: { tab: Tab }) {
   );
 
   const run = async () => {
-    if (!rel) return;
+    // No relation or no engine yet: nothing to send. Clear any spinner rather
+    // than leaving the grid on "Running…" forever.
+    if (!rel || !sql) {
+      if (tab.running) updateTab(tab.id, { running: false });
+      return;
+    }
     const started = performance.now();
     updateTab(tab.id, {
       columns: undefined, rows: [], running: true, error: undefined,
       queryStartedAt: started, elapsedMs: undefined,
     });
     try {
+      // Watchdog: a dropped or wedged connection can leave `stream` resolved
+      // with no batch ever arriving — neither `done` nor an error — so the
+      // grid sat on "Running…" indefinitely (seen as "0 rows · 12.0 s" and
+      // climbing). Surface it as an error the user can act on instead.
+      let sawBatch = false;
+      const stallTimer = setTimeout(() => {
+        if (sawBatch) return;
+        updateTab(tab.id, {
+          running: false,
+          error:
+            "No response from the database. The connection may have dropped — " +
+            "try Refresh, or reconnect from the sidebar.",
+        });
+        // Best-effort: release the server-side handle so it isn't left running.
+        const h = handleRef.current;
+        if (h) void api.cancel(tab.connId, h).catch(() => {});
+      }, STALL_MS);
+
       handleRef.current = await api.stream(tab.connId, sql, (b) => {
+        sawBatch = true;
+        clearTimeout(stallTimer);
         appendBatch(tab.id, b);
         if (b.done) {
           updateTab(tab.id, {

@@ -198,6 +198,12 @@ async function mockInvoke<T>(cmd: string, args: Record<string, unknown> = {}): P
     case "stream": {
       const sink = args.sink as ChannelLike<RowBatch>;
       const rawSql = String(args.sql ?? "");
+      // Test hook (mock backend only, never reached under Tauri): resolve the
+      // call but never emit a batch, reproducing a wedged connection so the
+      // stall watchdog can be exercised end to end.
+      if ((window as { __STALL_STREAM__?: boolean }).__STALL_STREAM__) {
+        return "stalled-handle" as T;
+      }
       const sql = rawSql.toLowerCase();
       // Record this Run in mock history.
       try {
