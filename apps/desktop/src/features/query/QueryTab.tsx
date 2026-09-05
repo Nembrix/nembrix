@@ -6,6 +6,8 @@ import { buildJsScriptExtension } from "@/editor/js-completion";
 import { buildMongoExtension } from "@/editor/mongo-completion";
 import { Play, Square, Sparkles, Star, PanelBottom } from "lucide-react";
 import { buildSqlExtension } from "@/editor/sql-completion";
+import { looksLikeJavaScript } from "./looksLikeJavaScript";
+import { toggleLineComment } from "./toggleLineComment";
 import { completionTabKeymap } from "@/editor/completion-tab";
 import { useStore, type Tab, type FilterChip } from "@/store";
 import * as api from "@/ipc/commands";
@@ -24,87 +26,6 @@ type ResultView = "data" | "message" | "chart" | "analysis";
 /** Map a JSON value coming back from a script's query result into the grid's
  *  tagged CellValue union, so script results render through the same DataGrid
  *  as normal queries. Objects/arrays land in the collapsible `document` cell. */
-/**
- * Heuristic: does this text look like a JavaScript script rather than SQL?
- * Used to catch a script typed into a SQL-mode tab (which would otherwise be
- * sent to Postgres and fail with a cryptic "syntax error at or near const").
- * Matches tokens that appear in the scripting API / JS syntax but never in
- * plain SQL. Scans the whole text so a leading comment can't hide the opener.
- */
-export function looksLikeJavaScript(text: string): boolean {
-  return (
-    /\bdb\.query\s*\(/.test(text) ||       // the scripting API
-    /\bconsole\.(log|warn|error)\s*\(/.test(text) ||
-    /\bawait\b/.test(text) ||              // SQL has no await
-    /=>/.test(text) ||                     // arrow functions
-    /\$\{[^}]*\}/.test(text) ||            // template literals
-    /\bfor\s*\(\s*(const|let|var)\b/.test(text) || // JS for-of/for-let
-    /^\s*(const|let|var|function|async)\b/m.test(text) // JS declarations, any line
-  );
-}
-
-/** A line as (absolute start offset, text) — the minimal shape the comment
- *  toggler needs, so the core logic is testable without a real EditorView. */
-export interface CommentLine {
-  from: number;
-  text: string;
-}
-
-/**
- * Pure core of the comment toggle: given the selected lines and a token
- * (`--` / `//`), return the document changes. If every non-blank line is
- * already commented, uncomment; otherwise comment. Indentation is preserved
- * (the token goes after leading whitespace). No DOM / EditorView needed.
- */
-export function computeCommentToggle(
-  lines: CommentLine[],
-  token: string,
-): { from: number; to?: number; insert?: string }[] {
-  const prefix = token + " ";
-  const nonBlank = lines.filter((l) => l.text.trim().length > 0);
-  const allCommented =
-    nonBlank.length > 0 &&
-    nonBlank.every((l) => l.text.trimStart().startsWith(token));
-  const changes: { from: number; to?: number; insert?: string }[] = [];
-  for (const line of lines) {
-    const indent = line.text.length - line.text.trimStart().length;
-    if (allCommented) {
-      const rest = line.text.slice(indent);
-      if (rest.startsWith(token)) {
-        const cut = rest.startsWith(prefix) ? prefix.length : token.length;
-        changes.push({ from: line.from + indent, to: line.from + indent + cut });
-      }
-    } else if (line.text.trim().length > 0) {
-      changes.push({ from: line.from + indent, insert: prefix });
-    }
-  }
-  return changes;
-}
-
-/**
- * Toggle a line comment across the selected lines using the given token
- * (`--` for SQL, `//` for JavaScript). Written by hand (via
- * [`computeCommentToggle`]) rather than via `@codemirror/commands` to avoid a
- * monorepo dep-identity clash between the hoisted `@codemirror/state`/`view`
- * copies.
- */
-export function toggleLineComment(view: EditorView, token: string): boolean {
-  const { state } = view;
-  const lineNums = new Set<number>();
-  for (const range of state.selection.ranges) {
-    const first = state.doc.lineAt(range.from).number;
-    const last = state.doc.lineAt(range.to).number;
-    for (let n = first; n <= last; n++) lineNums.add(n);
-  }
-  const lines: CommentLine[] = [...lineNums].map((n) => {
-    const l = state.doc.line(n);
-    return { from: l.from, text: l.text };
-  });
-  const changes = computeCommentToggle(lines, token);
-  if (!changes.length) return false;
-  view.dispatch(state.update({ changes }));
-  return true;
-}
 
 function toCell(v: unknown): import("@/ipc/types").CellValue {
   if (v === null || v === undefined) return { kind: "null" };

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeCommentToggle, type CommentLine } from "./QueryTab";
+import { computeCommentToggle, type CommentLine } from "./toggleLineComment";
 
 /** Turn a document into (from, text) lines like CodeMirror would. */
 function lines(doc: string): CommentLine[] {

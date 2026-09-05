@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildAddColumnSql } from "./AddColumnDialog";
+import { buildAddColumnSql } from "./buildAddColumnSql";
 
 describe("buildAddColumnSql", () => {
   it("builds a basic nullable column", () => {
