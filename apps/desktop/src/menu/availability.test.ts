@@ -82,4 +82,29 @@ describe("menu availability", () => {
     // The Command Palette has no availability rule — never disabled.
     expect(ids).not.toContain(MENU.COMMAND_PALETTE);
   });
+
+  it("Import / Export need a selected connection", () => {
+    // Both open a dialog that reads from a connection. Without one their
+    // handlers bail out silently, so the rows looked live and clicking did
+    // nothing — these rules grey them out instead.
+    let s = useStore.getState();
+    expect(isEnabled(MENU.IMPORT, s)).toBe(false);
+    expect(isEnabled(MENU.EXPORT, s)).toBe(false);
+
+    useStore.setState({ connections: [baseConn as never], selectedConnId: baseConn.id });
+    s = useStore.getState();
+    expect(isEnabled(MENU.IMPORT, s)).toBe(true);
+    expect(isEnabled(MENU.EXPORT, s)).toBe(true);
+  });
+
+  it("Export does not require an established connection, only a selected one", () => {
+    // Deliberately connSelected rather than connected: the dialog can open and
+    // show its schema picker while the session is still connecting.
+    useStore.setState({
+      connections: [baseConn as never],
+      selectedConnId: baseConn.id,
+      status: { [baseConn.id]: "connecting" },
+    });
+    expect(isEnabled(MENU.EXPORT, useStore.getState())).toBe(true);
+  });
 });

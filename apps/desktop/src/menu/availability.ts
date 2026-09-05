@@ -57,6 +57,12 @@ type Predicate = (s: Snapshot) => boolean;
 const RULES: Partial<Record<MenuId, Predicate>> = {
   // File
   [MENU.NEW_QUERY_TAB]:   (s) => ctx(s).connected,
+  // Import/Export open a dialog that needs a connection to read from. Their
+  // handlers already bail out without one, but silently — the menu row and
+  // palette entry looked live and clicking did nothing. A rule here greys them
+  // out instead, so the reason is visible.
+  [MENU.IMPORT]:          (s) => ctx(s).connSelected,
+  [MENU.EXPORT]:          (s) => ctx(s).connSelected,
   [MENU.SAVE_QUERY]:      (s) => ctx(s).tabIsQuery,
   [MENU.SAVE_QUERY_AS]:   (s) => ctx(s).tabIsQuery,
   [MENU.CLOSE_TAB]:       (s) => ctx(s).hasTabs,

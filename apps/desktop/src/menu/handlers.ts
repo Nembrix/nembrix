@@ -40,6 +40,10 @@ export function registerAllMenuHandlers() {
     } catch (e) { alert(`Save failed: ${e}`); }
   });
   registerMenu(MENU.SAVE_QUERY_AS, async () => dispatchMenu(MENU.SAVE_QUERY));
+  // The `selectedConnId` guards are defense in depth: availability.ts now
+  // disables both actions without a connection, so the menu/palette greys them
+  // out rather than accepting a click that silently does nothing. Kept because
+  // the palette can still force-dispatch a disabled action.
   registerMenu(MENU.IMPORT, () => {
     if (!s().selectedConnId) return;
     s().openImport(null);
