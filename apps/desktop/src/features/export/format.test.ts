@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_CSV, exportCsv, exportJson, exportRows, exportSqlInsert,
-  filterColumns, suggestExt,
+  fileBase, filterColumns, suggestExt,
 } from "./format";
 import type { CellValue, ColMeta } from "@/ipc/types";
 
@@ -207,5 +207,23 @@ describe("suggestExt", () => {
     expect(suggestExt("csv")).toBe("csv");
     expect(suggestExt("jsonl")).toBe("jsonl");
     expect(suggestExt("sql")).toBe("sql");
+  });
+});
+
+describe("fileBase", () => {
+  it("omits the default public schema", () => {
+    expect(fileBase("public", "users")).toBe("users");
+  });
+
+  it("keeps a non-default schema so same-named tables don't collide", () => {
+    // Exporting `users` from both `public` and `auth` into one folder must
+    // produce two files, not one overwriting the other.
+    expect(fileBase("auth", "users")).toBe("auth.users");
+    expect(fileBase("public", "users")).not.toBe(fileBase("auth", "users"));
+  });
+
+  it("leaves the table name untouched", () => {
+    expect(fileBase("public", "TypeormMigrations")).toBe("TypeormMigrations");
+    expect(fileBase("reporting", "swap_quotes")).toBe("reporting.swap_quotes");
   });
 });

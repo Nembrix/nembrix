@@ -6,6 +6,7 @@ import { isTauri } from "@/ipc/commands";
 import {
   DEFAULT_CSV, DEFAULT_JSON, exportRows, suggestExt, mimeType,
   type ExportFormat, type CsvOptions, type JsonOptions,
+  fileBase,
 } from "./format";
 import { loadPrefs } from "@/features/preferences/prefs";
 
@@ -62,7 +63,7 @@ export default function ExportDialog({ source, connId, columns, rows, onClose }:
 
   const allChosen = included.length === columns.length;
   const filename = useMemo(() => {
-    const base = source ? `${source.schema}.${source.table}` : "export";
+    const base = source ? fileBase(source.schema, source.table) : "export";
     return `${base}.${suggestExt(format)}`;
   }, [source, format]);
   // Whether we can pop a real save dialog (name + location). True in the
