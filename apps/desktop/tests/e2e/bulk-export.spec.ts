@@ -80,3 +80,33 @@ test("Export is enabled without a destination folder", async ({ page }) => {
   await page.getByRole("button", { name: "Select all" }).click();
   await expect(exportBtn).toBeEnabled();
 });
+
+test("the dialog locks while running and closes itself on success", async ({ page }) => {
+  // Previously the dialog stayed open after a clean run (an extra click every
+  // time) and could be dismissed mid-export by a backdrop click or the ✕,
+  // unmounting the component while its write loop was still going.
+  await openBulkExport(page);
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: /^Export \d+ table/ }).click();
+  await downloadPromise;
+
+  // Closes itself once every table succeeded.
+  await expect(page.getByText("Bulk export")).toHaveCount(0, { timeout: 5000 });
+});
+
+test("progress shows an aggregate bar, not just per-table rows", async ({ page }) => {
+  // With ~40 tables the per-row list alone doesn't answer "how far along is
+  // this?" without scrolling, so a count + bar sits above it.
+  await openBulkExport(page);
+  await page.getByRole("button", { name: /^Export \d+ table/ }).click();
+
+  // The bar mounts as soon as the first job row exists. Catch it before the
+  // dialog auto-closes rather than racing the download event.
+  await expect(page.locator(".bulk-progress-track")).toBeVisible();
+  await expect(page.locator(".bulk-progress-label")).toContainText("/2");
+  const width = await page.locator(".bulk-progress-fill").evaluate(
+    (el) => (el as HTMLElement).style.width,
+  );
+  expect(width).toMatch(/%$/);
+});

@@ -4,7 +4,7 @@ import type { CellValue, ColMeta, RelationNode } from "@/ipc/types";
 import * as api from "@/ipc/commands";
 import { isTauri } from "@/ipc/commands";
 import {
-  exportRows, suggestExt, type ExportFormat,
+  exportRows, suggestExt, fileBase, type ExportFormat,
 } from "./format";
 
 type Status = "pending" | "running" | "done" | "error";
@@ -104,6 +104,16 @@ export default function BulkExportDialog({ connId, preselectSchema, onClose }: P
     return null;
   };
 
+  // Set when a run finishes with every table exported. Drives a short
+  // success beat before the dialog closes itself, so the outcome is visible
+  // rather than the window just vanishing.
+  const [done, setDone] = useState(false);
+  useEffect(() => {
+    if (!done) return;
+    const t = setTimeout(() => onClose(), 900);
+    return () => clearTimeout(t);
+  }, [done, onClose]);
+
   const start = async () => {
     setErr(null);
     // No destination yet? Ask for one now rather than refusing the click. A
@@ -129,7 +139,7 @@ export default function BulkExportDialog({ connId, preselectSchema, onClose }: P
               sql: { qualifiedTarget: `"${schema}"."${targets[i].name}"`, batchSize: 100 },
             });
             const { writeTextFile } = await import("@tauri-apps/plugin-fs");
-            const path = `${dest}/${schema}.${targets[i].name}.${suggestExt(format)}`;
+            const path = `${dest}/${fileBase(schema, targets[i].name)}.${suggestExt(format)}`;
             await writeTextFile(path, text);
             setJobs((cur) => cur.map((j, ix) => ix === i
               ? { ...j, status: "done", rows: rows.length, bytes: text.length } : j));
@@ -176,23 +186,45 @@ ${text}`);
     } finally {
       setRunning(false);
     }
+
+    // Close on a clean run — the dialog has nothing left to say, and leaving
+    // it up means an extra click every time. Any failure keeps it open so the
+    // per-table errors stay readable.
+    setJobs((cur) => {
+      if (cur.length > 0 && cur.every((j) => j.status === "done")) {
+        setDone(true);
+      }
+      return cur;
+    });
   };
 
   // A missing destination folder does NOT disable Export — clicking opens the
   // folder picker and then runs, so the common path is one click instead of
   // "notice the disabled button, find Browse, come back". Only a genuinely
   // unsatisfiable state (no tables selected) disables it.
+  const settledCount = jobs.filter((j) => j.status === "done" || j.status === "error").length;
+  const failedCount = jobs.filter((j) => j.status === "error").length;
   const blockedReason = running || included.size > 0 ? null : "Select at least one table.";
   const canStart = !running && included.size > 0;
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    // While a run is in flight the dialog is locked: a backdrop click or ✕
+    // would unmount the component mid-loop, leaving the remaining writes to
+    // finish against a dead tree with no way to see what happened.
+    <div className="modal-backdrop" onClick={running ? undefined : onClose}>
       <div className="modal" style={{ width: 720 }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <Download size={14} />
           <span>Bulk export</span>
           <span style={{ flex: 1 }} />
-          <button className="icon-btn" onClick={onClose}><X size={14} /></button>
+          <button
+            className="icon-btn"
+            onClick={onClose}
+            disabled={running}
+            title={running ? "Export in progress…" : "Close"}
+          >
+            <X size={14} />
+          </button>
         </div>
         <div className="modal-body">
           <div className="form-grid">
@@ -262,10 +294,27 @@ ${text}`);
             {jobs.length > 0 && (
               <>
                 <div className="section-title">Progress</div>
+                {/* Aggregate bar: with 40 tables the per-row list alone doesn't
+                    answer "how far along is this?" without scrolling. */}
+                <div className="full bulk-progress">
+                  <div className="bulk-progress-track">
+                    <div
+                      className={`bulk-progress-fill ${failedCount > 0 ? "has-error" : ""}`}
+                      style={{ width: `${jobs.length ? (settledCount / jobs.length) * 100 : 0}%` }}
+                    />
+                  </div>
+                  <span className="bulk-progress-label mono">
+                    {settledCount}/{jobs.length}
+                    {failedCount > 0 && ` · ${failedCount} failed`}
+                    {done && " · done"}
+                  </span>
+                </div>
                 <div className="full bulk-jobs">
                   {jobs.map((j) => (
                     <div key={`${j.schema}.${j.name}`} className={`bulk-job status-${j.status}`}>
-                      <span className="bulk-job-name mono">{j.schema}.{j.name}</span>
+                      {/* Matches the filename the export actually writes, so
+                          the row and the file on disk read the same. */}
+                      <span className="bulk-job-name mono">{fileBase(j.schema, j.name)}</span>
                       <span className="bulk-job-status">
                         {j.status === "pending"  && "queued"}
                         {j.status === "running"  && "exporting…"}
