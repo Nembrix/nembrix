@@ -6,15 +6,29 @@ test.beforeEach(async ({ page }) => {
   await seedConnectedSession(page);
 });
 
-test("File → Export opens the bulk dialog with all tables checked", async ({ page }) => {
-  // Use the palette so we don't depend on the menu's open-then-click sequence.
+/**
+ * Open the bulk-export dialog through the command palette.
+ *
+ * Waits for the palette to actually narrow to the export action before
+ * pressing Enter. Typing and immediately pressing Enter races the filter: on a
+ * loaded CI runner the highlighted row can still be the pre-filter selection,
+ * so Enter fires the wrong action and "Bulk export" never appears.
+ */
+async function openBulkExport(page: import("@playwright/test").Page) {
   await page.locator(".menu-bar-item", { hasText: "View" }).click();
   await page.locator(".menu-item", { hasText: /Command Palette/ }).click();
   await expect(page.getByPlaceholder(/Search actions/)).toBeVisible();
   await page.keyboard.type("export");
+  // Enter fires whatever row is `.active`, so wait until the ACTIVE row is the
+  // export one — not merely until an export row exists somewhere in the list.
+  await expect(page.locator(".palette-row.active")).toContainText(/export/i);
   await page.keyboard.press("Enter");
-
   await expect(page.getByText("Bulk export")).toBeVisible();
+}
+
+test("File → Export opens the bulk dialog with all tables checked", async ({ page }) => {
+  // Use the palette so we don't depend on the menu's open-then-click sequence.
+  await openBulkExport(page);
   const boxes = page.locator(".export-columns input[type='checkbox']");
   // Mock seeds 2 relations in public (users + orders).
   await expect(boxes).toHaveCount(2);
@@ -24,12 +38,7 @@ test("File → Export opens the bulk dialog with all tables checked", async ({ p
 });
 
 test("running a bulk export in browser mode produces a combined download", async ({ page }) => {
-  await page.locator(".menu-bar-item", { hasText: "View" }).click();
-  await page.locator(".menu-item", { hasText: /Command Palette/ }).click();
-  await expect(page.getByPlaceholder(/Search actions/)).toBeVisible();
-  await page.keyboard.type("export");
-  await page.keyboard.press("Enter");
-  await expect(page.getByText("Bulk export")).toBeVisible();
+  await openBulkExport(page);
 
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: /Export 2 tables/ }).click();
@@ -58,13 +67,7 @@ test("Export is enabled without a destination folder", async ({ page }) => {
   // requirement never applied, so it cannot exercise the Tauri-only picker
   // branch. What it does pin is the disable rule: only an empty selection
   // disables Export, with a stated reason.
-  await seedConnectedSession(page);
-  await page.locator(".menu-bar-item", { hasText: "View" }).click();
-  await page.locator(".menu-item", { hasText: /Command Palette/ }).click();
-  await expect(page.getByPlaceholder(/Search actions/)).toBeVisible();
-  await page.keyboard.type("export");
-  await page.keyboard.press("Enter");
-  await expect(page.getByText("Bulk export")).toBeVisible();
+  await openBulkExport(page);
 
   const exportBtn = page.getByRole("button", { name: /^Export \d+ table/ });
   await expect(exportBtn).toBeEnabled();
