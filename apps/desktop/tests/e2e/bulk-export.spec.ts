@@ -18,9 +18,16 @@ async function openBulkExport(page: import("@playwright/test").Page) {
   await page.locator(".menu-bar-item", { hasText: "View" }).click();
   await page.locator(".menu-item", { hasText: /Command Palette/ }).click();
   await expect(page.getByPlaceholder(/Search actions/)).toBeVisible();
-  await page.keyboard.type("export");
-  // Enter fires whatever row is `.active`, so wait until the ACTIVE row is the
-  // export one — not merely until an export row exists somewhere in the list.
+  // Fill, don't type: `keyboard.type` sends one character at a time, and the
+  // assertions below can evaluate against a half-typed query.
+  await page.getByPlaceholder(/Search actions/).fill("export");
+  // Wait for the list to actually NARROW. On open the palette shows every
+  // action with "New Connection…" active, so asserting on `.active` alone can
+  // pass/fail against the unfiltered list before any filtering happened —
+  // which is exactly what made this flaky (CI saw active =
+  // "FileNew Connection…File⌘N").
+  await expect(page.locator(".palette-row")).toHaveCount(1);
+  // Enter fires whatever row is `.active`, so confirm that's the export one.
   await expect(page.locator(".palette-row.active")).toContainText(/export/i);
   await page.keyboard.press("Enter");
   await expect(page.getByText("Bulk export")).toBeVisible();
