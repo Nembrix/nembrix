@@ -431,6 +431,11 @@ function QueryHistoryList({ connId }: { connId: string }) {
     api.queryHistory(connId, 200)
       .then((rows) => { if (!cancelled) setItems(rows); })
       .catch((e) => { if (!cancelled) setErr(String(e)); });
+    // Reads an external store (the localStorage slow-query log) on connection
+    // change. `slow` can't just be derived from it: the Clear button below
+    // writes to this state imperatively after wiping the log, so it needs to
+    // be a real state cell rather than a useMemo over localStorage.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSlow(loadSlowQueries().filter((e) => e.connId === connId));
     return () => { cancelled = true; };
   }, [connId, tick]);

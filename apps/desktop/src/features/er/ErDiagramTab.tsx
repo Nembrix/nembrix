@@ -135,7 +135,14 @@ export default function ErDiagramTab({ tab }: { tab: Tab }) {
   };
 
   // Initial layout. Runs once when nodes/edges change.
+  //
+  // Kept as an effect on purpose. Deriving this with useMemo and re-seeding
+  // during render looks equivalent — `relax` is pure — but it broke two of the
+  // three ER e2e tests: the layout has to settle after the nodes have measured,
+  // and computing it during the same render produced a diagram with no
+  // positioned nodes. Verified by trying it.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (nodes.length === 0) { setPositions([]); return; }
     const fixed = loadFixed(scope);
     const tuned = autoTune(DEFAULT_LAYOUT, nodes.length);

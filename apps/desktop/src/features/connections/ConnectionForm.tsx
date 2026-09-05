@@ -140,8 +140,15 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
   };
 
   // Re-prefill if the editing target changes while the modal is open.
+  //
+  // Deliberately keyed on the editing *id*, not on `editing`: the form is a
+  // draft the user is actively typing into, so it must reseed only when the
+  // target record changes, never on every re-render of the same one. That
+  // makes it an event ("the user switched which connection they're editing"),
+  // which is why the reset lives here rather than being derived during render.
   useEffect(() => {
     if (editing) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setV(recordToInput(editing));
       setUseSsh(!!editing.ssh);
     }

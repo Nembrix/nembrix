@@ -123,8 +123,15 @@ function RecentsPanel({
   const { openConnectionForm, openConnectionManager } = useStore();
   const [recentIds, setRecentIds] = useState<string[]>(() => loadRecent());
 
-  // Refresh from localStorage when this panel mounts so newly-bumped
-  // entries (e.g. user just connected through the manager) show up.
+  // Refresh from localStorage when this panel mounts so newly-bumped entries
+  // (e.g. the user just connected through the manager) show up.
+  //
+  // Kept as an effect deliberately. Reading an external store on mount is the
+  // "subscribe to an external system" case the rule's own docs allow, and there
+  // is no prop or state to derive this from. Dropping it makes the recents list
+  // go stale when the panel is re-shown, because React can reuse the instance
+  // and skip the useState initializer.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setRecentIds(loadRecent()); }, []);
 
   // Filter down to recents that still exist as saved connections. A

@@ -44,6 +44,10 @@ function Inner({ request, close, connId, schemaName, readOnly }: {
   const startedAtRef = useRef<number | null>(null);
   useEffect(() => {
     if (phase === null) {
+      // Resetting a timer on a phase transition, not deriving state from props
+      // — `elapsed` is driven by the setInterval below, so there is nothing to
+      // compute it from during render.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setElapsed(0);
       startedAtRef.current = null;
       return;
@@ -68,6 +72,9 @@ function Inner({ request, close, connId, schemaName, readOnly }: {
       defaults.toName = request.name + "_copy";
       defaults.toSchema = request.schema;
     }
+    // Re-seeding the form for a new request. The user then edits `args`, so it
+    // has to be state rather than a value derived from `request`.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setArgs(defaults);
     setPreview(null);
   }, [request]);

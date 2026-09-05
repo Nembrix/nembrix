@@ -40,7 +40,14 @@ export default function SchemaDiffTab({ tab }: { tab: Tab }) {
   }, [schemas, status, setSchema]);
 
   // Fetch on connect if we haven't already.
+  //
+  // `ensureTree` writes the fetched schema into the Zustand store, i.e. it
+  // updates an external system from an effect — the case the rule's docs
+  // explicitly allow. The setState it trips on is the store's, not local state
+  // this component could derive.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void ensureTree(leftConnId); }, [leftConnId, ensureTree]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void ensureTree(rightConnId); }, [rightConnId, ensureTree]);
 
   const leftTree  = schemas[leftConnId];
@@ -56,7 +63,11 @@ export default function SchemaDiffTab({ tab }: { tab: Tab }) {
   // Track which ops the user wants in the migration. Reset to "all selected"
   // when the diff changes.
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  // Re-selecting everything is a response to the diff being recomputed, not
+  // state derivable during render: the user's subsequent tick/untick edits live
+  // in this same cell, so it can't be a useMemo over `diff`.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!diff) { setSelectedKeys(new Set()); return; }
     setSelectedKeys(new Set(diff.ops.map(opKey)));
   }, [diff]);

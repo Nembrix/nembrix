@@ -76,8 +76,14 @@ export default function StatusBar() {
   }, [dbMenuOpen]);
   // Reset the filter and focus the search box each time the menu opens so
   // the user can start typing immediately without a stale query.
+  //
+  // This is a one-shot response to an open/close transition, not state derived
+  // from props — there is nothing to compute it from during render, and the
+  // focus() call has to happen after the input is mounted. Keeping the reset
+  // beside the focus keeps the two in step.
   useEffect(() => {
     if (dbMenuOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDbFilter("");
       dbSearchRef.current?.focus();
     }

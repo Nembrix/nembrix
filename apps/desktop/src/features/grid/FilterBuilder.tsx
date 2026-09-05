@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Filter, Plus, X } from "lucide-react";
 import type { ColMeta } from "@/ipc/types";
 import type { FilterChip } from "@/store";
@@ -66,9 +66,17 @@ export default function FilterBuilder({ columns, filters, onApply }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Re-sync the draft when external filters change (e.g. cleared via
-  // a different control, or seeded from the column-summary popover).
-  useEffect(() => { setDraft(filters); }, [filters]);
+  // Re-sync the draft when external filters change (e.g. cleared via a
+  // different control, or seeded from the column-summary popover).
+  //
+  // Adjusting during render rather than in an effect: React documents this for
+  // deriving state from props, and it re-renders immediately with the new value
+  // instead of painting the stale draft first and correcting it a frame later.
+  const [lastFilters, setLastFilters] = useState(filters);
+  if (filters !== lastFilters) {
+    setLastFilters(filters);
+    setDraft(filters);
+  }
 
   // Map column name → its ColMeta for validator lookup.
   const colByName = useMemo(

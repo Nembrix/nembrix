@@ -10,7 +10,7 @@
  * pull into charts later.
  */
 
-import { useEffect, useState } from "react";
+import { useAsyncResource } from "@/lib/useAsyncResource";
 import * as api from "@/ipc/commands";
 
 export interface TableStats {
@@ -92,28 +92,18 @@ ORDER BY pg_relation_size(c.oid) DESC
 
 /** Query the catalogs for table + per-index size and scan stats. */
 export function useTableStats(connId: string, schema: string, table: string): Result {
-  const [stats, setStats] = useState<TableStats | null>(null);
-  const [indexes, setIndexes] = useState<IndexStats[]>([]);
-  const [err, setErr] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setErr(null);
-
-    // Skip the stats query entirely when we don't have a valid
-    // schema+table — the panes pass empty strings before sourceRelation
-    // is hydrated, and running a catalog query bound to empty strings
-    // either errors on the server or returns nothing useful but still
-    // burns a roundtrip.
-    if (!schema || !table) {
-      setLoading(false);
-      return () => { cancelled = true; };
-    }
-
-    const run = async () => {
-      try {
+  const { data, error: err, loading } = useAsyncResource<{
+    stats: TableStats | null;
+    indexes: IndexStats[];
+  }>(
+    async (isCancelled) => {
+      // Skip the stats query entirely when we don't have a valid
+      // schema+table — the panes pass empty strings before sourceRelation
+      // is hydrated, and running a catalog query bound to empty strings
+      // either errors on the server or returns nothing useful but still
+      // burns a roundtrip.
+      if (!schema || !table) return { stats: null, indexes: [] };
+      {
         // The streaming API is the only path that handles parameter
         // binding for us; we collect the single row in a buffer.
         const tableRows: unknown[][] = [];
@@ -155,38 +145,40 @@ export function useTableStats(connId: string, schema: string, table: string): Re
           }).catch(rej);
         });
 
-        if (cancelled) return;
+        if (isCancelled()) return { stats: null, indexes: [] };
         const r = tableRows[0];
-        if (r) {
-          setStats({
-            totalBytes: Number(r[0] ?? 0),
-            tableBytes: Number(r[1] ?? 0),
-            indexBytes: Number(r[2] ?? 0),
-            toastBytes: Number(r[3] ?? 0),
-            estimatedRows: Number(r[4] ?? -1),
-            seqScans: Number(r[5] ?? 0),
-            idxScans: Number(r[6] ?? 0),
-            lastVacuum: (r[7] as string | null) ?? null,
-            lastAnalyze: (r[8] as string | null) ?? null,
-          });
-        }
-        setIndexes(indexRows.map((r) => ({
-          name: String(r[0] ?? ""),
-          bytes: Number(r[1] ?? 0),
-          scans: Number(r[2] ?? 0),
-        })));
-      } catch (e) {
-        if (!cancelled) setErr(String(e));
-      } finally {
-        if (!cancelled) setLoading(false);
+        const stats: TableStats | null = r
+          ? {
+              totalBytes: Number(r[0] ?? 0),
+              tableBytes: Number(r[1] ?? 0),
+              indexBytes: Number(r[2] ?? 0),
+              toastBytes: Number(r[3] ?? 0),
+              estimatedRows: Number(r[4] ?? -1),
+              seqScans: Number(r[5] ?? 0),
+              idxScans: Number(r[6] ?? 0),
+              lastVacuum: (r[7] as string | null) ?? null,
+              lastAnalyze: (r[8] as string | null) ?? null,
+            }
+          : null;
+        return {
+          stats,
+          indexes: indexRows.map((r) => ({
+            name: String(r[0] ?? ""),
+            bytes: Number(r[1] ?? 0),
+            scans: Number(r[2] ?? 0),
+          })),
+        };
       }
-    };
+    },
+    [connId, schema, table],
+  );
 
-    void run();
-    return () => { cancelled = true; };
-  }, [connId, schema, table]);
-
-  return { stats, indexes, err, loading };
+  return {
+    stats: data?.stats ?? null,
+    indexes: data?.indexes ?? [],
+    err,
+    loading,
+  };
 }
 
 /** Format a byte count as "12.4 MB" / "256 KB" / "892 B". */
