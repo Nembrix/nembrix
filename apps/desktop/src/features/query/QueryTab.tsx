@@ -266,6 +266,10 @@ export default function QueryTab({ tab }: { tab: Tab }) {
   // effect (which the lint flow-analysis forbids).
   useEffect(() => {
     if (activeTabId !== tab.id || !editorAction) return;
+    // Dispatching a command the menu/palette requested. `run` and `cancel`
+    // set state as a side effect of starting or stopping a query — this is an
+    // external command channel, not derived state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (editorAction === "run" || editorAction === "run-all") run();
     else if (editorAction === "cancel") cancel();
     else if (editorAction === "format") format();

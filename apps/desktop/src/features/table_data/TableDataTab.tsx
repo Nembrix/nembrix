@@ -684,8 +684,16 @@ function FragmentRow({
    *  undefined = haven't checked yet. */
   const [enumLabels, setEnumLabels] = useState<string[] | null | undefined>(undefined);
 
-  useEffect(() => { setTypeValue(col.type_name); }, [col.type_name]);
-  useEffect(() => { setDefaultValue(col.default ?? ""); }, [col.default]);
+  // Re-seed the editable fields when the column being edited changes.
+  // Adjusting during render (React's documented pattern for deriving state from
+  // props) rather than in an effect, so the inputs never paint the previous
+  // column's values for a frame before correcting.
+  const [lastCol, setLastCol] = useState(col);
+  if (col.type_name !== lastCol.type_name || col.default !== lastCol.default) {
+    setLastCol(col);
+    setTypeValue(col.type_name);
+    setDefaultValue(col.default ?? "");
+  }
 
   // Lazy-load enum membership only when the user opens the default
   // editor — saves a round-trip per row otherwise.
