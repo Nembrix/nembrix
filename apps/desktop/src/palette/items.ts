@@ -40,9 +40,18 @@ export function buildPaletteItems(): PaletteItem[] {
   const out: PaletteItem[] = [];
 
   /* ── menu actions ── */
+  // A few actions intentionally appear under more than one menu ("New
+  // Connection…" is on both File and Connection). The menus want that; the
+  // palette does not — it would list the action twice under a duplicate
+  // `action:<id>` key, which React flags ("Encountered two children with the
+  // same key") and which renders BOTH copies as the active row, so Enter can
+  // fire the wrong one. Keep the first occurrence; later menus repeat it.
+  const seenActions = new Set<string>();
   for (const group of MENUS) {
     for (const it of group.items) {
       if (it.separator || !it.id || !it.label) continue;
+      if (seenActions.has(it.id)) continue;
+      seenActions.add(it.id);
       const enabled = isEnabled(it.id as MenuId, s);
       out.push({
         id: `action:${it.id}`,
