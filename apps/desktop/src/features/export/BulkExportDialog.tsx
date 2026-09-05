@@ -90,21 +90,36 @@ export default function BulkExportDialog({ connId, preselectSchema, onClose }: P
   const allOn = () => setIncluded(new Set(relations.map((r) => r.name)));
   const allOff = () => setIncluded(new Set());
 
-  const pickFolder = async () => {
-    if (!isTauri) return;
+  /** Opens the directory picker. Returns the chosen path (and stores it), or
+   *  null if the user cancelled. The return value matters: `start` needs the
+   *  path in the same tick, and `setFolder` won't have applied by then. */
+  const pickFolder = async (): Promise<string | null> => {
+    if (!isTauri) return null;
     const { open } = await import("@tauri-apps/plugin-dialog");
     const result = await open({ directory: true, multiple: false });
-    if (typeof result === "string") setFolder(result);
+    if (typeof result === "string") {
+      setFolder(result);
+      return result;
+    }
+    return null;
   };
 
   const start = async () => {
     setErr(null);
+    // No destination yet? Ask for one now rather than refusing the click. A
+    // cancelled picker aborts quietly — the user chose not to proceed, so a
+    // warning would be noise.
+    let dest = folder;
+    if (isTauri && !dest) {
+      dest = await pickFolder();
+      if (!dest) return;
+    }
     setRunning(true);
     const targets = relations.filter((r) => included.has(r.name));
     const initial: JobRow[] = targets.map((r) => ({ schema, name: r.name, status: "pending" }));
     setJobs(initial);
     try {
-      if (isTauri && folder) {
+      if (isTauri && dest) {
         for (let i = 0; i < targets.length; i++) {
           setJobs((cur) => cur.map((j, ix) => ix === i ? { ...j, status: "running" } : j));
           try {
@@ -114,7 +129,7 @@ export default function BulkExportDialog({ connId, preselectSchema, onClose }: P
               sql: { qualifiedTarget: `"${schema}"."${targets[i].name}"`, batchSize: 100 },
             });
             const { writeTextFile } = await import("@tauri-apps/plugin-fs");
-            const path = `${folder}/${schema}.${targets[i].name}.${suggestExt(format)}`;
+            const path = `${dest}/${schema}.${targets[i].name}.${suggestExt(format)}`;
             await writeTextFile(path, text);
             setJobs((cur) => cur.map((j, ix) => ix === i
               ? { ...j, status: "done", rows: rows.length, bytes: text.length } : j));
@@ -163,7 +178,12 @@ ${text}`);
     }
   };
 
-  const canStart = !running && included.size > 0 && (!isTauri || !!folder);
+  // A missing destination folder does NOT disable Export — clicking opens the
+  // folder picker and then runs, so the common path is one click instead of
+  // "notice the disabled button, find Browse, come back". Only a genuinely
+  // unsatisfiable state (no tables selected) disables it.
+  const blockedReason = running || included.size > 0 ? null : "Select at least one table.";
+  const canStart = !running && included.size > 0;
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -198,7 +218,7 @@ ${text}`);
                     type="text"
                     value={folder ?? ""}
                     onChange={(e) => setFolder(e.target.value)}
-                    placeholder="Pick a folder…"
+                    placeholder="Pick a folder… (or just hit Export)"
                     style={{ flex: 1 }}
                   />
                   <button className="btn-pill" onClick={pickFolder}>
@@ -220,7 +240,10 @@ ${text}`);
               <button className="btn-link" onClick={allOn}>Select all</button>
               <button className="btn-link" onClick={allOff}>None</button>
             </div>
-            <div className="full export-columns" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))", maxHeight: 220 }}>
+            {/* maxHeight is a whole number of rows (7 x 30px + padding) so the
+                scroll edge lands between rows instead of slicing one in half,
+                which read as a rendering glitch. */}
+            <div className="full export-columns" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))", maxHeight: 232 }}>
               {filtered.map((r) => (
                 <label key={r.name} className="export-column">
                   <input
@@ -273,9 +296,15 @@ ${text}`);
               Browser mode: one combined download (run <code>cargo tauri dev</code> for one file per table).
             </span>
           )}
+          {blockedReason && <span className="muted export-blocked">{blockedReason}</span>}
           <span style={{ flex: 1 }} />
           <button className="btn-pill" onClick={onClose} disabled={running}>Close</button>
-          <button className="btn-pill primary" disabled={!canStart} onClick={start}>
+          <button
+            className="btn-pill primary"
+            disabled={!canStart}
+            onClick={start}
+            title={blockedReason ?? "Start the export"}
+          >
             {running ? "Exporting…" : `Export ${included.size} ${included.size === 1 ? "table" : "tables"}`}
           </button>
         </div>
