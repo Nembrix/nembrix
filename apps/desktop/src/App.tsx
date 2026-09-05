@@ -24,6 +24,7 @@ import ObjectOpDialog from "@/features/object_ops/ObjectOpDialog";
 import BulkExportDialog from "@/features/export/BulkExportDialog";
 import ImportDialog from "@/features/import/ImportDialog";
 import { useStore } from "@/store";
+import { useWakeReflow } from "@/lib/useWakeReflow";
 import { startMenuBridge } from "@/menu/dispatch";
 import { installAccelerators } from "@/menu/accelerators";
 import { registerAllMenuHandlers } from "@/menu/handlers";
@@ -47,6 +48,10 @@ export default function App() {
   const active = tabs.find(
     (t) => t.id === activeTabId && t.connId === selectedConnId,
   );
+
+  // Nudge the webview to re-measure after a sleep/wake cycle — see the hook
+  // for why this is a workaround rather than a fix.
+  useWakeReflow();
 
   // Register handlers + bridges once.
   useEffect(() => {
