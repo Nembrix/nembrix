@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Download, RefreshCw, X, CheckCircle2, AlertTriangle, ExternalLink } from "lucide-react";
 import { useStore } from "@/store";
 import { isTauri } from "@/ipc/commands";
+import { explainUpdateError } from "./explainUpdateError";
 import NembrixMark from "@/components/NembrixMark";
 import { loadPrefs, savePrefs } from "@/features/preferences/prefs";
 import { setPendingInstall } from "./pendingInstall";
@@ -352,12 +353,28 @@ export default function UpdateDialog() {
             </p>
           )}
 
-          {phase === "error" && (
-            <pre className="message-pane err" style={{
-              whiteSpace: "pre-wrap", wordBreak: "break-word",
-              padding: 10, fontSize: 12, maxHeight: 200, overflowY: "auto",
-            }}>{error}</pre>
-          )}
+          {phase === "error" && error && (() => {
+            const { summary, detail } = explainUpdateError(error);
+            return (
+              <>
+                <div className="message-pane err" style={{ padding: 10, fontSize: 13 }}>
+                  {summary}
+                </div>
+                {/* The raw message stays available for a bug report, but folded
+                    away so it isn't the first thing the user has to parse. */}
+                <details style={{ marginTop: 8 }}>
+                  <summary className="muted" style={{ fontSize: 11, cursor: "pointer" }}>
+                    Technical details
+                  </summary>
+                  <pre style={{
+                    whiteSpace: "pre-wrap", wordBreak: "break-word",
+                    padding: 10, fontSize: 11, maxHeight: 160, overflowY: "auto",
+                    color: "var(--fg-2)",
+                  }}>{detail}</pre>
+                </details>
+              </>
+            );
+          })()}
         </div>
 
         {/* The auto-update opt-in belongs to the "an update exists" moment —
