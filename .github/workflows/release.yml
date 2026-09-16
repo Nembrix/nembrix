@@ -344,7 +344,7 @@ jobs:
           node-version: "22"
           cache: "yarn"
 
-      - uses: dtolnay/rust-toolchain@d1031067263f94b142dd6c0ce24c5eb9d02d52a0 # stable
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # stable
         with:
           # Required when pinning by SHA — the action can't read the
           # toolchain from the ref name like it does with @stable.
@@ -510,7 +510,7 @@ jobs:
 
       - name: Sign Windows installers (SignPath)
         if: startsWith(matrix.os, 'windows') && env.SIGNPATH_API_TOKEN != ''
-        uses: signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2.3
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3.0
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
