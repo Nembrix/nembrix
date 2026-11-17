@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Target version, no leading 'v' (e.g. 0.4.5)."
+        description: "Target version, no leading 'v' (e.g. 0.5.4)."
         required: true
         type: string
 
@@ -54,9 +54,12 @@ jobs:
       # with a clearer message.
       - name: Validate the target version
         shell: bash
+        # Input passed via env, not `${{ }}` inside `run:`, so it can't be
+        # interpreted as script before the semver check rejects it.
+        env:
+          TARGET: ${{ github.event.inputs.version }}
         run: |
           set -e
-          TARGET="${{ github.event.inputs.version }}"
           if ! [[ "$TARGET" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             echo "::error::'$TARGET' is not a valid semver (e.g. 0.5.0 or 0.5.0-beta.1)."
             exit 1
@@ -74,12 +77,14 @@ jobs:
 
       - name: Bump manifests in lockstep
         shell: bash
+        env:
+          TARGET: ${{ github.event.inputs.version }}
         run: |
           set -e
           # bump-version rewrites tauri.conf.json + Cargo.toml + both
           # package.json files together (and fails loudly if the two manifests
           # disagree beforehand).
-          yarn --cwd apps/desktop bump-version "${{ github.event.inputs.version }}"
+          yarn --cwd apps/desktop bump-version "$TARGET"
 
       - name: Sync Cargo.lock to the new version
         shell: bash

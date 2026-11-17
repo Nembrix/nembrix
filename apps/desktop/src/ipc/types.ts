@@ -137,7 +137,7 @@ export interface ConnectionInput {
   username: string;
   password: string | null;
   database: string | null;
-  ssl_mode: "disable" | "prefer" | "require";
+  ssl_mode: "disable" | "prefer" | "require" | "verify-full";
   ssh: SshInput | null;
   color: string | null;
   environment?: Environment;

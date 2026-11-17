@@ -41,7 +41,10 @@ export function parsePostgresUri(raw: string): Partial<ConnectionInput> | null {
   const path = u.pathname.replace(/^\//, "");
   if (path) out.database = decodeURIComponent(path);
   const sslmode = u.searchParams.get("sslmode");
-  if (sslmode === "disable" || sslmode === "prefer" || sslmode === "require") {
+  if (
+    sslmode === "disable" || sslmode === "prefer" || sslmode === "require" ||
+    sslmode === "verify-full"
+  ) {
     out.ssl_mode = sslmode;
   }
   return out;

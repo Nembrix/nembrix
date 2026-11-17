@@ -10,7 +10,7 @@ use ssh_tunnel::{SshAuth, Tunnel, TunnelConfig, TunnelError};
 use tauri::State;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[derive(Clone, Serialize, Deserialize, Type)]
 pub struct ConnectionInput {
     pub id: Option<Uuid>,
     pub name: String,
@@ -27,7 +27,7 @@ pub struct ConnectionInput {
     pub group: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[derive(Clone, Serialize, Deserialize, Type)]
 pub struct SshInput {
     pub host: String,
     pub port: u16,
@@ -37,6 +37,47 @@ pub struct SshInput {
     pub key_path: Option<String>,
     pub key_passphrase: Option<String>,
     pub strict_host_key: bool,
+}
+
+/// Shown in place of a secret by the hand-written `Debug` impls below, so a
+/// `{:?}` of a form payload never prints a password or passphrase.
+fn redacted(v: &Option<String>) -> Option<&'static str> {
+    v.as_ref().map(|_| "<redacted>")
+}
+
+impl std::fmt::Debug for ConnectionInput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ConnectionInput")
+            .field("id", &self.id)
+            .field("name", &self.name)
+            .field("engine", &self.engine)
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("username", &self.username)
+            .field("password", &redacted(&self.password))
+            .field("database", &self.database)
+            .field("ssl_mode", &self.ssl_mode)
+            .field("ssh", &self.ssh)
+            .field("color", &self.color)
+            .field("environment", &self.environment)
+            .field("group", &self.group)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for SshInput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SshInput")
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("user", &self.user)
+            .field("auth_kind", &self.auth_kind)
+            .field("password", &redacted(&self.password))
+            .field("key_path", &self.key_path)
+            .field("key_passphrase", &redacted(&self.key_passphrase))
+            .field("strict_host_key", &self.strict_host_key)
+            .finish()
+    }
 }
 
 #[tauri::command]
@@ -287,11 +328,7 @@ async fn build_driver(
 ) -> Result<DynConn, String> {
     match engine {
         "postgres" => {
-            let ssl_mode = match ssl_mode {
-                "disable" => PgSsl::Disable,
-                "require" => PgSsl::Require,
-                _ => PgSsl::Prefer,
-            };
+            let ssl_mode = PgSsl::from_mode_str(ssl_mode);
             let pg = PgConn::connect(PgConfig {
                 host,
                 port,

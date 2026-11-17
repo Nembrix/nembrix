@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { useStore } from "@/store";
 import * as api from "@/ipc/commands";
-import type { ConnectionRecord, Environment } from "@/ipc/types";
+import type { ConnectionInput, ConnectionRecord, Environment } from "@/ipc/types";
 import { ENV_LABEL, ENVIRONMENTS, colorFor } from "./environment";
 import {
   addEmptyGroup, compareOrder, load as loadGroups, removeEmptyGroup, reorder,
@@ -160,7 +160,7 @@ export default function ConnectionManagerDialog({ onClose }: { onClose: () => vo
       username: c.username,
       password: null,
       database: c.database,
-      ssl_mode: c.ssl_mode as "disable" | "prefer" | "require",
+      ssl_mode: c.ssl_mode as ConnectionInput["ssl_mode"],
       ssh: c.ssh ? {
         host: c.ssh.host,
         port: c.ssh.port,

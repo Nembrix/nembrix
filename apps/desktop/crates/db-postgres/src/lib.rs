@@ -54,7 +54,7 @@ const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 /// same live connection (via [`DbConnection::as_any`] downcast to [`PgConn`]).
 pub type PgPool = Pool;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[derive(Clone, Serialize, Deserialize, Type)]
 pub struct PgConfig {
     pub host: String,
     pub port: u16,
@@ -72,12 +72,33 @@ pub struct PgConfig {
     pub connect_timeout_ms: Option<u32>,
 }
 
+/// Hand-written so a `{:?}` never prints the password.
+impl std::fmt::Debug for PgConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PgConfig")
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("user", &self.user)
+            .field("password", &self.password.as_ref().map(|_| "<redacted>"))
+            .field("database", &self.database)
+            .field("ssl_mode", &self.ssl_mode)
+            .field("application_name", &self.application_name)
+            .field("statement_timeout_ms", &self.statement_timeout_ms)
+            .field("connect_timeout_ms", &self.connect_timeout_ms)
+            .finish()
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum PgSsl {
     Disable,
     Prefer,
     Require,
+    /// TLS required, and the server certificate must chain to a CA in the OS
+    /// trust store and match the host name — libpq `sslmode=verify-full`. The
+    /// only mode that resists an on-path attacker.
+    VerifyFull,
 }
 
 impl PgSsl {
@@ -89,31 +110,69 @@ impl PgSsl {
             // connects instead of erroring "server does not support TLS".
             PgSsl::Disable => SslMode::Disable,
             PgSsl::Prefer => SslMode::Prefer,
-            PgSsl::Require => SslMode::Require,
+            // tokio-postgres has no verify-* modes of its own: verification is
+            // the connector's job (see `tls_connector`). It just needs TLS on.
+            PgSsl::Require | PgSsl::VerifyFull => SslMode::Require,
+        }
+    }
+
+    /// Parse the persisted `ssl_mode` string. Unknown values fall back to
+    /// `Prefer`, the historical default. Both libpq's `verify-full` spelling and
+    /// the snake_case form are accepted.
+    pub fn from_mode_str(s: &str) -> Self {
+        match s {
+            "disable" => PgSsl::Disable,
+            "require" => PgSsl::Require,
+            "verify-full" | "verify_full" => PgSsl::VerifyFull,
+            _ => PgSsl::Prefer,
         }
     }
 }
 
-/// TLS connector that encrypts but does NOT verify the server certificate —
-/// mirrors libpq `sslmode=require` (encryption without authentication). A
-/// stricter verifying mode is a future knob; for now this matches the posture
-/// users get from `psql "…sslmode=require"`.
-fn tls_connector() -> MakeRustlsConnect {
-    let config = rustls::ClientConfig::builder()
-        .dangerous()
-        .with_custom_certificate_verifier(Arc::new(danger::NoVerify))
-        .with_no_client_auth();
-    MakeRustlsConnect::new(config)
+/// TLS connector for an SSL mode.
+///
+/// `VerifyFull` authenticates the server with the platform verifier (chain to
+/// an OS-trusted CA + host name match). Every other mode encrypts WITHOUT
+/// authenticating the server — libpq `sslmode=require` semantics — via
+/// [`danger::NoVerify`].
+fn tls_connector(ssl: PgSsl) -> DbResult<MakeRustlsConnect> {
+    use rustls_platform_verifier::BuilderVerifierExt;
+    let builder = rustls::ClientConfig::builder();
+    let config = match ssl {
+        PgSsl::VerifyFull => builder
+            .with_platform_verifier()
+            .map_err(|e| DbError::Connect(format!("TLS setup failed: {e}")))?
+            .with_no_client_auth(),
+        PgSsl::Disable | PgSsl::Prefer | PgSsl::Require => builder
+            .dangerous()
+            .with_custom_certificate_verifier(Arc::new(danger::NoVerify::new()))
+            .with_no_client_auth(),
+    };
+    Ok(MakeRustlsConnect::new(config))
 }
 
-/// Certificate verifier that accepts any server cert. See [`tls_connector`].
+/// Certificate verifier that accepts any server cert chain, but still checks
+/// the handshake signature against the presented cert — so the peer must at
+/// least hold that cert's private key. See [`tls_connector`].
 mod danger {
     use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
+    use rustls::crypto::{verify_tls12_signature, verify_tls13_signature, CryptoProvider};
     use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
     use rustls::{DigitallySignedStruct, SignatureScheme};
+    use std::sync::Arc;
 
     #[derive(Debug)]
-    pub struct NoVerify;
+    pub struct NoVerify(Arc<CryptoProvider>);
+
+    impl NoVerify {
+        pub fn new() -> Self {
+            Self(
+                CryptoProvider::get_default()
+                    .cloned()
+                    .unwrap_or_else(|| Arc::new(rustls::crypto::ring::default_provider())),
+            )
+        }
+    }
 
     impl ServerCertVerifier for NoVerify {
         fn verify_server_cert(
@@ -129,36 +188,34 @@ mod danger {
 
         fn verify_tls12_signature(
             &self,
-            _message: &[u8],
-            _cert: &CertificateDer<'_>,
-            _dss: &DigitallySignedStruct,
+            message: &[u8],
+            cert: &CertificateDer<'_>,
+            dss: &DigitallySignedStruct,
         ) -> Result<HandshakeSignatureValid, rustls::Error> {
-            Ok(HandshakeSignatureValid::assertion())
+            verify_tls12_signature(
+                message,
+                cert,
+                dss,
+                &self.0.signature_verification_algorithms,
+            )
         }
 
         fn verify_tls13_signature(
             &self,
-            _message: &[u8],
-            _cert: &CertificateDer<'_>,
-            _dss: &DigitallySignedStruct,
+            message: &[u8],
+            cert: &CertificateDer<'_>,
+            dss: &DigitallySignedStruct,
         ) -> Result<HandshakeSignatureValid, rustls::Error> {
-            Ok(HandshakeSignatureValid::assertion())
+            verify_tls13_signature(
+                message,
+                cert,
+                dss,
+                &self.0.signature_verification_algorithms,
+            )
         }
 
         fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
-            use SignatureScheme::*;
-            vec![
-                RSA_PKCS1_SHA256,
-                RSA_PKCS1_SHA384,
-                RSA_PKCS1_SHA512,
-                ECDSA_NISTP256_SHA256,
-                ECDSA_NISTP384_SHA384,
-                ECDSA_NISTP521_SHA512,
-                RSA_PSS_SHA256,
-                RSA_PSS_SHA384,
-                RSA_PSS_SHA512,
-                ED25519,
-            ]
+            self.0.signature_verification_algorithms.supported_schemes()
         }
     }
 }
@@ -171,6 +228,9 @@ pub struct PgConn {
     /// backend, so this cancels correctly *through* the pooler (unlike
     /// `pg_cancel_backend`, which needs the real backend PID we can't see).
     cancels: Arc<DashMap<QueryHandle, CancelToken>>,
+    /// The SSL mode the pool connects with, so a cancel request is sent over
+    /// the same (verifying or not) TLS posture as the session it cancels.
+    ssl: PgSsl,
 }
 
 impl PgConn {
@@ -203,7 +263,7 @@ impl PgConn {
             // nothing that could trip a pooler.
             recycling_method: RecyclingMethod::Fast,
         };
-        let mgr = Manager::from_config(pg, tls_connector(), mgr_config);
+        let mgr = Manager::from_config(pg, tls_connector(cfg.ssl_mode)?, mgr_config);
         let pool = Pool::builder(mgr)
             .max_size(POOL_SIZE)
             .build()
@@ -250,6 +310,7 @@ impl PgConn {
         Ok(Arc::new(Self {
             pool,
             cancels: Arc::new(DashMap::new()),
+            ssl: cfg.ssl_mode,
         }))
     }
 
@@ -409,7 +470,7 @@ impl DbConnection for PgConn {
         // Opens its own connection and sends a CancelRequest; the pooler
         // forwards it to the backend running the query.
         token
-            .cancel_query(tls_connector())
+            .cancel_query(tls_connector(self.ssl)?)
             .await
             .map_err(driver_err)?;
         Ok(())

@@ -96,6 +96,18 @@ pub struct Limits {
     /// down at the next check. Shared so the engine thread and the command
     /// handler point at one bool.
     pub cancel: Arc<std::sync::atomic::AtomicBool>,
+    /// Ceiling on the JS heap. Past it QuickJS throws an out-of-memory error
+    /// instead of growing until the whole app is starved — the timeout alone
+    /// can't stop `while (1) a.push(new Array(1e6))` before RAM runs out.
+    pub max_memory_bytes: usize,
+    /// Ceiling on the JS stack, so runaway recursion throws instead of
+    /// overflowing the engine thread's native stack.
+    pub max_stack_bytes: usize,
+    /// Cap on captured `console.*` lines. Further lines are dropped and one
+    /// "log truncated" line is appended.
+    pub max_log_lines: usize,
+    /// Cap on one captured log line, in bytes; longer lines are cut short.
+    pub max_log_line_bytes: usize,
 }
 
 impl Default for Limits {
@@ -105,6 +117,10 @@ impl Default for Limits {
             max_queries: 100_000,
             timeout: std::time::Duration::from_secs(30),
             cancel: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            max_memory_bytes: 256 * 1024 * 1024,
+            max_stack_bytes: 1024 * 1024,
+            max_log_lines: 10_000,
+            max_log_line_bytes: 64 * 1024,
         }
     }
 }

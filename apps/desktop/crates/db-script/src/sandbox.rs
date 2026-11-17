@@ -56,6 +56,8 @@ pub(crate) async fn execute(
     });
 
     let rt = AsyncRuntime::new().map_err(engine)?;
+    rt.set_memory_limit(bridge.limits.max_memory_bytes).await;
+    rt.set_max_stack_size(bridge.limits.max_stack_bytes).await;
 
     // Wall-clock timeout + cooperative cancellation, both enforced through
     // rquickjs's interrupt handler: it's called regularly while JS executes,
@@ -182,8 +184,29 @@ fn install_console(ctx: &rquickjs::Ctx<'_>, bridge: Arc<Bridge>) -> Result<(), S
         let f = Function::new(
             ctx.clone(),
             move |args: rquickjs::function::Rest<rquickjs::Value>| {
-                let text = args.0.iter().map(stringify).collect::<Vec<_>>().join(" ");
-                b.logs.lock().unwrap().push(LogLine {
+                let mut logs = b.logs.lock().unwrap();
+                let max_lines = b.limits.max_log_lines;
+                if logs.len() > max_lines {
+                    return; // already capped and marked
+                }
+                if logs.len() == max_lines {
+                    logs.push(LogLine {
+                        level: LogLevel::Warn,
+                        text: format!("… log truncated after {max_lines} lines"),
+                    });
+                    return;
+                }
+                let mut text = args.0.iter().map(stringify).collect::<Vec<_>>().join(" ");
+                let max_bytes = b.limits.max_log_line_bytes;
+                if text.len() > max_bytes {
+                    let mut cut = max_bytes;
+                    while !text.is_char_boundary(cut) {
+                        cut -= 1;
+                    }
+                    text.truncate(cut);
+                    text.push_str(" … (truncated)");
+                }
+                logs.push(LogLine {
                     level: lvl.clone(),
                     text,
                 });

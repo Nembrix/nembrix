@@ -565,14 +565,18 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
                     <div className="field">
                       {/* Mongo's TLS is a simple on/off, so we show a TLS select
                           with disable/require. SQL engines keep the libpq
-                          sslmode ladder (disable/prefer/require). Both reuse the
-                          ssl_mode field — the driver treats non-disable as TLS. */}
+                          sslmode ladder (disable/prefer/require/verify-full). Both
+                          reuse the ssl_mode field — the driver treats non-disable
+                          as TLS. Only verify-full authenticates the server. */}
                       <label htmlFor="cf-ssl">{v.engine === "mongo" ? "TLS" : "SSL"}</label>
                       <select id="cf-ssl" value={v.ssl_mode}
                         onChange={(e) => patch({ ssl_mode: e.target.value as never })}>
                         <option value="disable">{v.engine === "mongo" ? "off" : "disable"}</option>
                         {v.engine !== "mongo" && <option value="prefer">prefer</option>}
                         <option value="require">{v.engine === "mongo" ? "on" : "require"}</option>
+                        {v.engine !== "mongo" && (
+                          <option value="verify-full">verify-full</option>
+                        )}
                       </select>
                     </div>
                   )}
