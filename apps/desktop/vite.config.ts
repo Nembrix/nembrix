@@ -38,7 +38,8 @@ export default defineConfig({
   envPrefix: ["VITE_", "TAURI_"],
   build: {
     target: "es2022",
-    minify: !process.env.TAURI_DEBUG ? "esbuild" : false,
+    // Vite's default minifier (Oxc since Vite 8); off for debug builds.
+    minify: !process.env.TAURI_DEBUG,
     sourcemap: !!process.env.TAURI_DEBUG,
   },
 });

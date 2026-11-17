@@ -20,7 +20,7 @@ export default defineConfig({
   integrations: [
     starlight({
       title: "Nembrix",
-      tagline: "Connect. Query. Control.",
+      description: "Connect. Query. Control.",
       // Header logo — the mark on a white tile so it reads on any header
       // background (the dark docs theme, and the mobile header). Shown
       // alongside the "Nembrix" title.
