@@ -28,7 +28,7 @@ export default defineConfig({
     // CodeMirror's `instanceof` extension checks throw
     // ("Unrecognized extension value… multiple instances of @codemirror/state"),
     // blanking the editor. Force a single instance of the core CM packages.
-    dedupe: ["@codemirror/state", "@codemirror/view"],
+    dedupe: ["@codemirror/state", "@codemirror/view", "@codemirror/language"],
   },
   server: {
     port: 1420,

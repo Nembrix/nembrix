@@ -59,6 +59,7 @@ export default defineConfig({
           items: [
             { label: "Saving a connection", link: "/connect/" },
             { label: "SSH tunneling", link: "/ssh/" },
+            { label: "Redis", link: "/redis/" },
             { label: "Groups & recents", link: "/groups-recents/" },
             { label: "Multiple sessions", link: "/sessions/" },
             { label: "Copy between connections", link: "/copy-between-connections/" },

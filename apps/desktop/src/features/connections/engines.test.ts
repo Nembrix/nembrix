@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { ENGINES, ENGINE_ORDER, engineSpec, engineLabel } from "./engines";
+import {
+  ENGINES, ENGINE_ORDER, engineSpec, engineLabel, engineQueryLang, isSqlEngine,
+} from "./engines";
 
 describe("engine registry", () => {
   it("labels known engines and falls back for unknown ones", () => {
@@ -21,11 +23,22 @@ describe("engine registry", () => {
     }
   });
 
-  it("marks postgres + mongo supported and the rest coming-soon", () => {
+  it("marks postgres, mongo + redis supported and the rest coming-soon", () => {
     expect(ENGINES.postgres.supported).toBe(true);
     expect(ENGINES.mongo.supported).toBe(true);
+    expect(ENGINES.redis.supported).toBe(true);
     expect(ENGINES.mysql.supported).toBe(false);
-    expect(ENGINES.redis.supported).toBe(false);
+  });
+
+  it("knows each engine's query language", () => {
+    expect(engineQueryLang("postgres")).toBe("sql");
+    expect(engineQueryLang("mongo")).toBe("mongo_shell");
+    expect(engineQueryLang("redis")).toBe("redis_cmd");
+    expect(isSqlEngine("postgres")).toBe(true);
+    expect(isSqlEngine("mongo")).toBe(false);
+    expect(isSqlEngine("redis")).toBe(false);
+    // Unknown / not-yet-hydrated engines fall back to SQL, the historical path.
+    expect(isSqlEngine(undefined)).toBe(true);
   });
 
   it("gives each engine its well-known default port", () => {

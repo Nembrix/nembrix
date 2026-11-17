@@ -29,7 +29,7 @@ import { useStore } from "@/store";
 import * as api from "@/ipc/commands";
 import Tooltip from "@/components/Tooltip";
 import { colorFor, ENV_LABEL } from "@/features/connections/environment";
-import { engineLabel } from "@/features/connections/engines";
+import { engineLabel, isSqlEngine } from "@/features/connections/engines";
 import { isTauri } from "@/ipc/commands";
 
 export default function StatusBar() {
@@ -112,7 +112,8 @@ export default function StatusBar() {
   // Display name for the connection's engine (the pill was hardcoded to
   // "PostgreSQL") — from the central engine registry so it stays in sync.
   const engineName = engineLabel(conn.engine);
-  const isMongo = conn.engine === "mongo";
+  // Non-SQL engines (Mongo, Redis) open a "Query" tab rather than "SQL".
+  const isSql = isSqlEngine(conn.engine);
 
   const newQueryTab = () => {
     addTab({
@@ -318,14 +319,14 @@ export default function StatusBar() {
           )}
         </div>
 
-        <Tooltip label={`New ${isMongo ? "query" : "SQL"} tab`} shortcut="⌘T">
+        <Tooltip label={`New ${isSql ? "SQL" : "query"} tab`} shortcut="⌘T">
           <button
             className="status-action status-sql"
             onClick={newQueryTab}
-            aria-label={`New ${isMongo ? "query" : "SQL"} tab`}
+            aria-label={`New ${isSql ? "SQL" : "query"} tab`}
           >
             <FileCode2 size={12} />
-            <span>{isMongo ? "Query" : "SQL"}</span>
+            <span>{isSql ? "SQL" : "Query"}</span>
           </button>
         </Tooltip>
       </div>

@@ -5,7 +5,8 @@ import {
 } from "lucide-react";
 import { useStore, type Tab, type FilterChip } from "@/store";
 import * as api from "@/ipc/commands";
-import { buildMongoFind } from "./buildTableQuery";
+import { buildMongoFind, buildRedisBrowse, redisKeyType } from "./buildTableQuery";
+import { engineLabel, engineQueryLang, isSqlEngine } from "@/features/connections/engines";
 import DataGrid from "@/components/DataGrid";
 import FilterBuilder from "@/features/grid/FilterBuilder";
 import ChartPane from "@/features/grid/ChartPane";
@@ -17,7 +18,9 @@ import ExportDialog from "@/features/export/ExportDialog";
 import RunningTimer from "@/components/RunningTimer";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { enumValuesFor } from "@/features/table_data/enum_values";
-import { fetchEstimate, fetchExact, fetchMongoCount } from "@/features/table_data/row_count";
+import {
+  fetchEstimate, fetchExact, fetchMongoCount, fetchRedisCount,
+} from "@/features/table_data/row_count";
 import { formatBytes, useTableStats } from "@/features/table_data/useTableStats";
 import type { ColumnNode, RelationNode } from "@/ipc/types";
 
@@ -108,14 +111,19 @@ export default function TableDataTab({ tab }: { tab: Tab }) {
   // which the driver rejects with "expected `db.<collection>.<method>(…)`".
   // An empty string means `run()` no-ops, and the effect re-runs once the
   // engine resolves because `sql` is part of its key.
+  // Redis browses a key with a type-specific read, so it also waits for the
+  // key's metadata (its type) to arrive in the schema cache.
+  const lang = engine ? engineQueryLang(engine) : undefined;
   const sql = useMemo(
     () =>
-      !rel || !engine
+      !rel || !lang
         ? ""
-        : engine === "mongo"
+        : lang === "mongo_shell"
           ? buildMongoFind(rel, filters, tab.sort, limit)
-          : buildSql(rel, filters, tab.sort, limit),
-    [engine, rel, filters, tab.sort, limit],
+          : lang === "redis_cmd"
+            ? relationMeta ? buildRedisBrowse(rel.table, redisKeyType(relationMeta), limit) : ""
+            : buildSql(rel, filters, tab.sort, limit),
+    [lang, rel, relationMeta, filters, tab.sort, limit],
   );
 
   const run = async () => {
@@ -226,6 +234,16 @@ export default function TableDataTab({ tab }: { tab: Tab }) {
       return () => { cancelled = true; };
     }
 
+    // Redis: the key's cardinality (HLEN, LLEN, …); a string is one value.
+    if (engine === "redis") {
+      void (async () => {
+        const n = await fetchRedisCount(tab.connId, rel.table, redisKeyType(relationMeta));
+        if (cancelled || countSeqRef.current !== seq) return;
+        if (n != null) updateTab(tab.id, { rowsTotal: n, rowsTotalEstimated: false });
+      })();
+      return () => { cancelled = true; };
+    }
+
     const whereClause = buildWhereClause(filters);
 
     void (async () => {
@@ -310,7 +328,9 @@ export default function TableDataTab({ tab }: { tab: Tab }) {
 
       {/* ─── 2. Filters ─── (Data view only) the filters determine what
             the row count and grid below show, so they live above. */}
-      {view === "data" && (
+      {/* Redis has no filter syntax to translate chips into — hide rather
+          than silently ignore them. */}
+      {view === "data" && lang !== "redis_cmd" && (
         <FilterBuilder
           columns={tab.columns ?? []}
           filters={filters}
@@ -563,15 +583,15 @@ function StructurePane({
 }) {
   const [errByCol, setErrByCol] = useState<Record<string, string>>({});
   const [pending, setPending] = useState<string | null>(null);
-  // Mongo has no ALTER/DDL and a fluid, per-document schema. The columns here
-  // are inferred from a sample; showing SQL type/nullable/default editors (or
-  // Add column) would send pg DDL the Mongo driver rejects. Render a
-  // read-only, inferred-schema view instead.
+  // Non-SQL engines have no ALTER/DDL. Mongo's columns are inferred from a
+  // sample; Redis's are the grid columns for the key's type. Showing SQL
+  // type/nullable/default editors (or Add column) would send pg DDL the
+  // driver rejects. Render a read-only view instead.
   const isMongo = engine === "mongo";
 
   if (!rel) return <div className="placeholder muted">No structure metadata yet — reconnect to refresh.</div>;
 
-  if (isMongo) {
+  if (!isSqlEngine(engine)) {
     return (
       <div className="pane">
         <div className="pane-toolbar">
@@ -579,10 +599,13 @@ function StructurePane({
           <span className="muted">{rel.columns.length}</span>
         </div>
         <p className="muted" style={{ margin: "0 0 6px", fontSize: 11 }}>
-          Inferred from a sample of documents — MongoDB collections have no
-          fixed schema, so fields and types can vary per document. Editing the
-          structure here isn't available; change documents directly in the
-          Data view.
+          {isMongo
+            ? "Inferred from a sample of documents — MongoDB collections have no " +
+              "fixed schema, so fields and types can vary per document. Editing the " +
+              "structure here isn't available; change documents directly in the " +
+              "Data view."
+            : `The columns the Data view shows for a Redis ${rel.columns[0]?.type_name ?? ""} ` +
+              "key. Redis keys have no schema to edit."}
         </p>
         <table className="meta-table">
           <thead><tr>
@@ -903,11 +926,11 @@ function IndexesPane({
   engine?: string;
   onAddIndex: () => void;
 }) {
-  const isMongo = engine === "mongo";
+  const isSql = isSqlEngine(engine);
   // Size/scan stats come from pg_stat_user_indexes — pass empty schema for
-  // Mongo so useTableStats skips the catalog query (which the Mongo driver
-  // would reject). Index metadata itself still comes from introspection.
-  const { indexes: stats } = useTableStats(connId, isMongo ? "" : schema, table);
+  // non-SQL engines so useTableStats skips the catalog query (which their
+  // drivers would reject). Index metadata itself still comes from introspection.
+  const { indexes: stats } = useTableStats(connId, isSql ? schema : "", table);
   const statByName = useMemo(() => {
     const m = new Map<string, { bytes: number; scans: number }>();
     for (const s of stats) m.set(s.name, s);
@@ -922,7 +945,7 @@ function IndexesPane({
         <span className="muted">{rel.indexes.length}</span>
         <div className="spacer" />
         {/* Add index emits pg CREATE INDEX DDL — hide it on Mongo. */}
-        {!isMongo && <button className="btn-pill" onClick={onAddIndex}>+ Add index</button>}
+        {isSql && <button className="btn-pill" onClick={onAddIndex}>+ Add index</button>}
       </div>
       {rel.indexes.length === 0 ? (
         <div className="placeholder muted">No indexes on this table.</div>
@@ -963,11 +986,11 @@ function InfoPane({
   table: string;
   engine?: string;
 }) {
-  const isMongo = engine === "mongo";
+  const isSql = isSqlEngine(engine);
   // Storage/activity numbers come from pg_class + pg_stat_user_tables. Pass an
-  // empty schema for Mongo so useTableStats skips the catalog query entirely
-  // (it would otherwise be sent to the Mongo driver and error).
-  const { stats, loading, err } = useTableStats(connId, isMongo ? "" : schema, table);
+  // empty schema for non-SQL engines so useTableStats skips the catalog query
+  // entirely (it would otherwise be sent to their driver and error).
+  const { stats, loading, err } = useTableStats(connId, isSql ? schema : "", table);
   if (!rel) return <div className="placeholder muted">No metadata yet.</div>;
   return (
     <div className="pane">
@@ -983,9 +1006,9 @@ function InfoPane({
       </table>
 
       <div className="pane-toolbar"><strong>Storage &amp; activity</strong></div>
-      {isMongo ? (
+      {!isSql ? (
         <div className="placeholder muted" style={{ padding: 8 }}>
-          Not available for MongoDB.
+          Not available for {engineLabel(engine)}.
         </div>
       ) : (
         <>

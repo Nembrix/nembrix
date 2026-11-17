@@ -8,6 +8,9 @@ import {
   buildMongoCount,
   mongoIdFilter,
   mongoIdMatchValue,
+  quoteRedisArg,
+  buildRedisBrowse,
+  buildRedisCount,
 } from "./buildTableQuery";
 import type { FilterChip } from "@/store";
 import type { CellValue } from "@/ipc/types";
@@ -151,5 +154,33 @@ describe("buildMongoCount", () => {
   it("builds countDocuments honoring filter chips", () => {
     const cmd = buildMongoCount(rel, [chip({ column: "active", op: "=", value: "true" })]);
     expect(cmd).toBe('db.users.countDocuments({"active":true})');
+  });
+});
+
+describe("redis table-data commands", () => {
+  it("quotes keys only when they need it", () => {
+    expect(quoteRedisArg("user:1")).toBe("user:1");
+    expect(quoteRedisArg("my key")).toBe('"my key"');
+    expect(quoteRedisArg('say "hi"\\now')).toBe('"say \\"hi\\"\\\\now"');
+    expect(quoteRedisArg("it's")).toBe('"it\'s"');
+    expect(quoteRedisArg("a\nb")).toBe('"a\\nb"');
+    expect(quoteRedisArg("")).toBe('""');
+  });
+
+  it("browses each type with a bounded read", () => {
+    expect(buildRedisBrowse("k", "string", 200)).toBe("GET k");
+    expect(buildRedisBrowse("k", "hash", 200)).toBe("HSCAN k 0 COUNT 200");
+    expect(buildRedisBrowse("k", "list", 200)).toBe("LRANGE k 0 199");
+    expect(buildRedisBrowse("k", "set", 200)).toBe("SSCAN k 0 COUNT 200");
+    expect(buildRedisBrowse("k", "zset", 200)).toBe("ZRANGE k 0 199 WITHSCORES");
+    expect(buildRedisBrowse("k", "stream", 200)).toBe("XRANGE k - + COUNT 200");
+    expect(buildRedisBrowse("doc", "ReJSON-RL", 200)).toBe("TYPE doc");
+    expect(buildRedisBrowse("my list", "list", 50)).toBe('LRANGE "my list" 0 49');
+  });
+
+  it("counts collection types and skips the rest", () => {
+    expect(buildRedisCount("k", "hash")).toBe("HLEN k");
+    expect(buildRedisCount("k", "zset")).toBe("ZCARD k");
+    expect(buildRedisCount("k", "string")).toBeNull();
   });
 });

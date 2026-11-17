@@ -12,6 +12,7 @@ import ContextMenu, { type ContextItem } from "@/components/ContextMenu";
 import { buildUpdate, buildDelete, cellToText, pkValuesFor, valueLiteral } from "@/components/grid_edit";
 import { buildMongoUpdate, buildMongoInsert, buildMongoDelete } from "@/features/table_data/buildTableQuery";
 import ExportDialog from "@/features/export/ExportDialog";
+import { isSqlEngine } from "@/features/connections/engines";
 import * as api from "@/ipc/commands";
 
 const ROW_H = 22;
@@ -147,7 +148,10 @@ export default function DataGrid({ tab, engine, onAddColumn }: {
   // editable gates inline cell edits, +Row, Save All. Read-only mode
   // (toggled via the StatusBar lock) flips this off without changing
   // anything on the Postgres side — it's a UI guard.
-  const editable = pk.length > 0 && !!tab.sourceRelation && !isReadOnly;
+  // Redis replies have no row identity to write back to, so its grid is
+  // always read-only (its keys also carry no primary key; this is explicit
+  // so that can't silently change).
+  const editable = pk.length > 0 && !!tab.sourceRelation && !isReadOnly && engine !== "redis";
 
   // Live width overrides from drag (committed to localStorage on mouseup).
   // Stored in state so the table re-renders during the drag.
@@ -716,7 +720,7 @@ export default function DataGrid({ tab, engine, onAddColumn }: {
                   band. SQL engines only (Mongo has no fixed schema). It reuses
                   the filler cell so it doesn't add width; when there's no
                   filler, it still renders as a compact trailing cell. */}
-              {onAddColumn && !isMongo ? (
+              {onAddColumn && isSqlEngine(engine) ? (
                 <th className="grid-filler-cell grid-add-col" title="Add column">
                   <button
                     className="grid-add-col-btn"
@@ -948,7 +952,9 @@ export default function DataGrid({ tab, engine, onAddColumn }: {
           rows={rows}
           colIndex={summary.col}
           onClose={() => setSummary(null)}
-          onAddFilter={(value) => {
+          // Adding a filter rewrites the tab's query as SQL — only meaningful
+          // when the query is SQL (not a Mongo or Redis command).
+          onAddFilter={!isSqlEngine(engine) ? undefined : (value) => {
             const colName = cols[summary.col].name;
             const next = [
               ...(tab.filters ?? []),

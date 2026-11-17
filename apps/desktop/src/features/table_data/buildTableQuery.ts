@@ -174,3 +174,56 @@ export function buildMongoCount(
 ): string {
   return `db.${rel.table}.countDocuments(${JSON.stringify(mongoFilterDoc(filters))})`;
 }
+
+/** Quote a Redis argument for the editor's `redis-cli` syntax (see the
+ *  db-redis tokenizer): plain when it has no whitespace or quote characters,
+ *  otherwise double-quoted with `\` and `"` escaped and control characters as
+ *  `\n`/`\r`/`\t`. */
+export function quoteRedisArg(arg: string): string {
+  if (arg !== "" && !/[\s"'\\]/.test(arg)) return arg;
+  const body = arg
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r")
+    .replace(/\t/g, "\\t");
+  return `"${body}"`;
+}
+
+/** The Redis type of an introspected key. The driver stamps every column's
+ *  `type_name` with it (see db-redis introspect). */
+export function redisKeyType(rel: { columns: { type_name: string }[] } | undefined): string | undefined {
+  return rel?.columns[0]?.type_name;
+}
+
+/** The read command that browses one key in the table-data view, bounded by
+ *  the grid's row limit. `*SCAN`'s COUNT is a hint, so hashes/sets may return
+ *  somewhat more or fewer — but never the whole of a huge key. */
+export function buildRedisBrowse(key: string, type: string | undefined, limit: number): string {
+  const k = quoteRedisArg(key);
+  const last = Math.max(limit, 1) - 1;
+  switch (type) {
+    case "string": return `GET ${k}`;
+    case "hash":   return `HSCAN ${k} 0 COUNT ${limit}`;
+    case "list":   return `LRANGE ${k} 0 ${last}`;
+    case "set":    return `SSCAN ${k} 0 COUNT ${limit}`;
+    case "zset":   return `ZRANGE ${k} 0 ${last} WITHSCORES`;
+    case "stream": return `XRANGE ${k} - + COUNT ${limit}`;
+    // Module types (ReJSON-RL, TSDB-TYPE, …) have no generic reader.
+    default:       return `TYPE ${k}`;
+  }
+}
+
+/** Command returning the size of a key, for the grid's row total; null when
+ *  the type has no cardinality command. */
+export function buildRedisCount(key: string, type: string | undefined): string | null {
+  const k = quoteRedisArg(key);
+  switch (type) {
+    case "hash":   return `HLEN ${k}`;
+    case "list":   return `LLEN ${k}`;
+    case "set":    return `SCARD ${k}`;
+    case "zset":   return `ZCARD ${k}`;
+    case "stream": return `XLEN ${k}`;
+    default:       return null;
+  }
+}

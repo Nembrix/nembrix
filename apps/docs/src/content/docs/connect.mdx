@@ -13,7 +13,10 @@ dialog with sections for **General**, **Group**, **Environment**, and
 
 - **Name** — what you'll see in the rail and recents.
 - **Host / Port / User / Password / Database** — standard.
-- **SSL mode** — `disable`, `prefer` (default), `require`.
+- **SSL mode** — `disable`, `prefer` (default), `require`, or
+  `verify-full`, which also checks the server's certificate against the
+  system trust store. MongoDB and [Redis](../redis/) have a plain TLS
+  on/off switch instead.
 - **Environment** — drives the avatar tint and the destructive
   confirmation flow. **Production** gets red; the editor refuses to
   `DROP TABLE` on it without you typing the connection name.
