@@ -13,10 +13,14 @@
     "allowImportingTsExtensions": false,
     "noEmit": true,
     "forceConsistentCasingInFileNames": true,
-    "baseUrl": ".",
+    // TS 6 no longer auto-includes every installed @types package; the e2e
+    // specs use node:fs / node:path, so name it explicitly.
+    "types": ["node"],
+    // No `baseUrl`: deprecated in TS 6, removed in 7. `paths` entries are
+    // resolved relative to this file, hence the explicit `./`.
     "paths": {
-      "@/*": ["src/*"],
-      "@bindings/*": ["bindings/*"]
+      "@/*": ["./src/*"],
+      "@bindings/*": ["./bindings/*"]
     }
   },
   // `bindings/` is deliberately excluded: `bindings/commands.ts` is a
