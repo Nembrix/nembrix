@@ -290,13 +290,13 @@ jobs:
           # ── macOS (separate Apple Silicon + Intel; no universal) ─
           - label: macOS Apple Silicon (aarch64)
             slug: macos-aarch64
-            os: macos-14
+            os: macos-15
             target: aarch64-apple-darwin
             rust_targets: aarch64-apple-darwin
             args: --target aarch64-apple-darwin
           - label: macOS Intel (x86_64)
             slug: macos-x86_64
-            os: macos-14
+            os: macos-15
             target: x86_64-apple-darwin
             rust_targets: x86_64-apple-darwin
             args: --target x86_64-apple-darwin
