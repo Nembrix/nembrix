@@ -45,7 +45,7 @@ use value::ColumnAccumulator;
 
 const STREAM_BATCH: usize = 200;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[derive(Clone, Serialize, Deserialize, Type)]
 pub struct MongoConfig {
     pub host: String,
     pub port: u16,
@@ -62,6 +62,23 @@ pub struct MongoConfig {
     /// Server selection / connect timeout. Keeps `test_connection` from
     /// hanging on an unreachable host.
     pub connect_timeout_ms: Option<u64>,
+}
+
+/// Hand-written so a `{:?}` never prints the password.
+impl std::fmt::Debug for MongoConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MongoConfig")
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("user", &self.user)
+            .field("password", &self.password.as_ref().map(|_| "<redacted>"))
+            .field("database", &self.database)
+            .field("auth_source", &self.auth_source)
+            .field("tls", &self.tls)
+            .field("app_name", &self.app_name)
+            .field("connect_timeout_ms", &self.connect_timeout_ms)
+            .finish()
+    }
 }
 
 impl MongoConfig {

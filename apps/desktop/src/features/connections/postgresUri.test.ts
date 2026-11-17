@@ -50,7 +50,8 @@ describe("parsePostgresUri", () => {
 
   it("only accepts known ssl modes, ignores others", () => {
     expect(parsePostgresUri("postgres://u:p@h/db?sslmode=require")?.ssl_mode).toBe("require");
-    expect(parsePostgresUri("postgres://u:p@h/db?sslmode=verify-full")?.ssl_mode).toBeUndefined();
+    expect(parsePostgresUri("postgres://u:p@h/db?sslmode=verify-full")?.ssl_mode).toBe("verify-full");
+    expect(parsePostgresUri("postgres://u:p@h/db?sslmode=verify-ca")?.ssl_mode).toBeUndefined();
   });
 
   it("returns null for non-postgres or unparseable input", () => {

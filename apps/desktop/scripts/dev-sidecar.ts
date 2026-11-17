@@ -291,15 +291,37 @@ async function introspect(pool: Pool) {
 /* ───────────────────────── HTTP server ───────────────────────── */
 
 const app = express();
-app.use(express.json({ limit: "1mb" }));
 
-/* Open CORS for the Vite dev origin. */
-app.use((_req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+/* Lock the sidecar to the local Vite dev origin. It can open connections to
+ * arbitrary hosts and run SQL, so it must not be drivable by other machines on
+ * the LAN (we bind loopback below), by other websites open in the developer's
+ * browser (Origin allowlist — a wildcard CORS header would let any page script
+ * it), or by DNS rebinding (Host allowlist — a rebound name reaches loopback
+ * with a foreign Host header). Requests with no Origin (curl, tests) are fine:
+ * only local processes can reach the socket at all. */
+const ALLOWED_ORIGINS = new Set(
+  (process.env.DBCLIENT_SIDECAR_ORIGINS ?? "http://localhost:1420,http://127.0.0.1:1420")
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean),
+);
+const ALLOWED_HOSTS = new Set([`localhost:${PORT}`, `127.0.0.1:${PORT}`, `[::1]:${PORT}`]);
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (!ALLOWED_HOSTS.has(req.headers.host ?? "") || (origin && !ALLOWED_ORIGINS.has(origin))) {
+    res.sendStatus(403);
+    return;
+  }
+  if (origin) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+  }
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   next();
 });
+// After the guard, so a rejected request is never parsed.
+app.use(express.json({ limit: "1mb" }));
 // Express 5 / path-to-regexp 8 requires a named splat; bare "*" throws.
 app.options("/*splat", (_req, res) => res.sendStatus(204));
 
@@ -469,7 +491,9 @@ app.post("/cancel", async (req: Request, res: Response) => {
   res.sendStatus(204);
 });
 
-app.listen(PORT, () => {
+// Loopback only — same host Vite binds. Never 0.0.0.0: see the Origin/Host
+// guard above for why this process must not be reachable off-machine.
+app.listen(PORT, "localhost", () => {
   console.log(`[nembrix sidecar] listening on http://localhost:${PORT}`);
   console.log("[nembrix sidecar] the browser dev mode will use this for real Postgres connections");
 });

@@ -1,7 +1,7 @@
 {
   "name": "nembrix-workspace",
   "private": true,
-  "version": "0.5.3",
+  "version": "0.5.4",
   "type": "module",
   "packageManager": "yarn@1.22.22",
   "workspaces": [
@@ -41,7 +41,8 @@
     "prepare": "husky"
   },
   "resolutions": {
-    "cookie": "2.0.1"
+    "cookie": "2.0.1",
+    "dompurify": "^3.4.18"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.2",

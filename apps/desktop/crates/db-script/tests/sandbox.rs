@@ -436,3 +436,55 @@ async fn cancellation_stops_a_running_script() {
         "expected Cancelled, got: {err:?}",
     );
 }
+
+#[tokio::test]
+async fn runaway_allocation_hits_the_memory_cap_instead_of_exhausting_ram() {
+    let db = Arc::new(FakeDb::default());
+    let limits = Limits {
+        max_memory_bytes: 16 * 1024 * 1024,
+        ..Default::default()
+    };
+    let started = std::time::Instant::now();
+    let err = run(
+        "const a = []; while (true) { a.push(new Array(100000).fill(1)); }",
+        db,
+        limits,
+    )
+    .await
+    .unwrap_err();
+    // Stopped by the heap cap, well before the 30s timeout.
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(10),
+        "allocation loop should fail fast at the memory cap",
+    );
+    assert!(
+        !matches!(err, db_script::ScriptError::Timeout(_)),
+        "expected an out-of-memory error, got: {err:?}",
+    );
+}
+
+#[tokio::test]
+async fn console_output_is_capped() {
+    let db = Arc::new(FakeDb::default());
+    let limits = Limits {
+        max_log_lines: 3,
+        max_log_line_bytes: 8,
+        ..Default::default()
+    };
+    let out = run(
+        r#"console.log("é".repeat(10)); for (let i = 0; i < 100; i++) console.log(i);"#,
+        db,
+        limits,
+    )
+    .await
+    .unwrap();
+    // 3 kept lines + 1 truncation marker; later lines (and the return echo) dropped.
+    assert_eq!(
+        out.logs.len(),
+        4,
+        "{:?}",
+        out.logs.iter().map(|l| &l.text).collect::<Vec<_>>()
+    );
+    assert_eq!(out.logs[0].text, "éééé … (truncated)");
+    assert!(out.logs[3].text.contains("truncated after 3 lines"));
+}

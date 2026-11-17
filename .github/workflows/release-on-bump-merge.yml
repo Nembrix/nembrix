@@ -38,10 +38,14 @@ jobs:
       - name: Dispatch the Release workflow (draft, not pre-release)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # PR-controlled text goes through env, never `${{ }}` inside `run:`,
+          # so the shell treats it as data rather than script.
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
         shell: bash
         run: |
           set -e
-          echo "Bump PR '${{ github.event.pull_request.title }}' merged (branch ${{ github.event.pull_request.head.ref }})."
+          echo "Bump PR '$PR_TITLE' merged (branch $PR_BRANCH)."
           echo "Triggering the draft Release workflow on main…"
           # Release reads the version from the (now-merged) code and verifies it
           # is ahead of the latest release, so it's safe to fire unconditionally
