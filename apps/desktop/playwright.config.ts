@@ -11,6 +11,10 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: process.env.CI ? "github" : "list",
+  // Shared CI runners are much slower than a dev machine: a tab that opens in
+  // ~1s locally can take >5s there, and the default 5s assertion timeout then
+  // fails it on every retry. Locally keep the default so real hangs show fast.
+  expect: { timeout: process.env.CI ? 15_000 : 5_000 },
   use: {
     baseURL: "http://localhost:1420",
     trace: "on-first-retry",
