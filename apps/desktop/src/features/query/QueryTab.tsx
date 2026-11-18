@@ -18,7 +18,9 @@ import ChartPane from "@/features/grid/ChartPane";
 import { rewriteSqlWithFilters } from "@/features/grid/filter-sql";
 import { rememberRecentSql } from "@/palette/items";
 import { destructiveReason, redisDestructiveReason } from "@/features/connections/environment";
-import { engineQueryLang } from "@/features/connections/engines";
+import {
+  engineDialect, engineQueryLang, engineSpec, hasPgTools,
+} from "@/features/connections/engines";
 import RunningTimer from "@/components/RunningTimer";
 import AnalysisPane from "@/features/query/AnalysisPane";
 import { recordSlowQuery } from "@/features/query/slowQueries";
@@ -73,8 +75,7 @@ export default function QueryTab({ tab }: { tab: Tab }) {
   // Engines that support JS scripting mode. SQL engines run SQL inside
   // db.query(...); Mongo runs a mongo-shell command string (db.coll.find({…}))
   // through the same seam. Redis/others have no db.query facade.
-  const scriptEngines = new Set(["postgres", "mysql", "sqlite", "mongo"]);
-  const scriptingAvailable = scriptEngines.has(conn?.engine ?? "");
+  const scriptingAvailable = engineSpec(conn?.engine)?.scripting ?? false;
   const isMongo = conn?.engine === "mongo";
   // SQL-only tooling (LIMIT injection, Beautify, EXPLAIN analysis, filter
   // chips that rewrite the query) is gated on the engine's native language.
@@ -286,7 +287,7 @@ export default function QueryTab({ tab }: { tab: Tab }) {
 
   // Filter chip mutations: keep the SQL and chip list in lockstep, then re-run.
   const applyFilters = (next: FilterChip[]) => {
-    const newSql = rewriteSqlWithFilters(tab.sql ?? "", next);
+    const newSql = rewriteSqlWithFilters(tab.sql ?? "", next, engineDialect(conn?.engine));
     updateTab(tab.id, { filters: next, sql: newSql });
     // Defer the run so the editor sees the new value first.
     setTimeout(run, 0);
@@ -344,7 +345,7 @@ export default function QueryTab({ tab }: { tab: Tab }) {
       ? buildMongoExtension(tree)
       : queryLang === "redis_cmd"
         ? buildRedisExtension(tree)
-        : buildSqlExtension(tree);
+        : buildSqlExtension(tree, engineDialect(conn?.engine));
   const rowCount = tab.rows?.length ?? 0;
 
   // Editor height — user-draggable via the separator between the
@@ -706,7 +707,8 @@ export default function QueryTab({ tab }: { tab: Tab }) {
               <button className={view === "message" ? "active" : ""} onClick={() => setView("message")}>Message</button>
             )}
             <button className={view === "chart" ? "active" : ""} onClick={() => setView("chart")}>Chart</button>
-            {isSql && (
+            {/* EXPLAIN analysis reads Postgres' JSON plan format. */}
+            {isSql && hasPgTools(conn?.engine) && (
               <button className={view === "analysis" ? "active" : ""} onClick={() => setView("analysis")}>Analysis</button>
             )}
           </div>
@@ -745,7 +747,7 @@ export default function QueryTab({ tab }: { tab: Tab }) {
           {view === "chart" && tab.columns && tab.rows && (
             <ChartPane columns={tab.columns} rows={tab.rows} />
           )}
-          {view === "analysis" && isSql && (
+          {view === "analysis" && isSql && hasPgTools(conn?.engine) && (
             <AnalysisPane connId={tab.connId} sql={tab.sql ?? ""} />
           )}
         </div>

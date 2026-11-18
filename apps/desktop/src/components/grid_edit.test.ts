@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { buildUpdate, buildDelete, cellToText, pkLiteral, pkValuesFor, valueLiteral } from "./grid_edit";
+import {
+  buildDelete, buildInsert, buildUpdate, cellToText, pkLiteral, pkValuesFor, valueLiteral,
+} from "./grid_edit";
 import type { CellValue, ColMeta } from "@/ipc/types";
 
 const intCell = (n: number): CellValue => ({ kind: "int", value: n });
@@ -139,5 +141,47 @@ describe("pkValuesFor", () => {
   });
   it("returns undefined when there is no PK", () => {
     expect(pkValuesFor(cols, [intCell(1)], [])).toBeUndefined();
+  });
+});
+
+describe("MySQL dialect", () => {
+  it("quotes with backticks and MySQL literals", () => {
+    expect(buildUpdate({
+      schema: "shop", table: "orders", column: "note",
+      newLiteral: valueLiteral("a\\b", "varchar", "mysql"),
+      pkColumns: ["id"], pkValues: { id: { kind: "int", value: 7 } }, dialect: "mysql",
+    })).toBe("UPDATE `shop`.`orders` SET `note` = 'a\\\\b' WHERE `id` = 7;");
+    expect(buildDelete({
+      schema: "shop", table: "orders",
+      pkColumns: ["code"], pkValues: { code: { kind: "text", value: "x'y" } }, dialect: "mysql",
+    })).toBe("DELETE FROM `shop`.`orders` WHERE `code` = 'x''y';");
+  });
+
+  it("renders bytes and JSON keys without Postgres casts", () => {
+    expect(pkLiteral({ kind: "bytes", value: [0xff, 0x01] }, "mysql")).toBe("X'ff01'");
+    expect(pkLiteral({ kind: "document", value: { a: 1 } }, "mysql")).toBe(`CAST('{"a":1}' AS JSON)`);
+    expect(valueLiteral('{"a":1}', "json", "mysql")).toBe(`'{"a":1}'`);
+  });
+
+  it("inserts a row of defaults the way each dialect spells it", () => {
+    expect(buildInsert({ schema: "s", table: "t", values: [], dialect: "mysql" }))
+      .toBe("INSERT INTO `s`.`t` () VALUES ();");
+    expect(buildInsert({ schema: "s", table: "t", values: [] }))
+      .toBe(`INSERT INTO "s"."t" DEFAULT VALUES;`);
+    expect(buildInsert({ schema: "s", table: "t", values: [["n", "1"]], dialect: "mysql" }))
+      .toBe("INSERT INTO `s`.`t` (`n`) VALUES (1);");
+  });
+});
+
+describe("valueLiteral numeric guard", () => {
+  it("leaves real numbers bare for numeric columns (MySQL type names too)", () => {
+    expect(valueLiteral("42", "int", "mysql")).toBe("42");
+    expect(valueLiteral("-1.5e3", "double")).toBe("-1.5e3");
+    expect(valueLiteral("10", "int unsigned", "mysql")).toBe("10");
+  });
+
+  it("quotes anything that isn't a number instead of splicing it in", () => {
+    expect(valueLiteral("1; DROP TABLE t", "integer")).toBe("'1; DROP TABLE t'");
+    expect(valueLiteral("abc", "int", "mysql")).toBe("'abc'");
   });
 });

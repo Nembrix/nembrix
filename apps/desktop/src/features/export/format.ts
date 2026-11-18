@@ -9,6 +9,7 @@
  */
 
 import type { CellValue, ColMeta } from "@/ipc/types";
+import { quoteIdent, stringLiteral, type SqlDialect } from "@/lib/sql-dialect";
 
 export type ExportFormat = "csv" | "json" | "jsonl" | "sql";
 
@@ -33,6 +34,8 @@ export interface SqlOptions {
   qualifiedTarget: string;
   /** Rows per INSERT statement. Larger = faster but harder to read. */
   batchSize: number;
+  /** Quoting and literal rules for the target database. Default Postgres. */
+  dialect?: SqlDialect;
 }
 
 export const DEFAULT_CSV: CsvOptions = {
@@ -130,32 +133,35 @@ export function exportSqlInsert(
 ): string {
   if (!opts.qualifiedTarget) throw new Error("qualifiedTarget is required");
   if (rows.length === 0) return `-- no rows\n`;
-  const colList = columns.map((c) => quoteIdent(c.name)).join(", ");
+  const d = opts.dialect ?? "postgres";
+  const colList = columns.map((c) => quoteIdent(d, c.name)).join(", ");
   const header = `INSERT INTO ${opts.qualifiedTarget} (${colList}) VALUES`;
   const out: string[] = [];
   for (let i = 0; i < rows.length; i += opts.batchSize) {
     const batch = rows.slice(i, i + opts.batchSize);
-    const values = batch.map((r) => `  (${r.map(sqlLiteral).join(", ")})`).join(",\n");
+    const values = batch.map((r) => `  (${r.map((v) => sqlLiteral(v, d)).join(", ")})`).join(",\n");
     out.push(`${header}\n${values};`);
   }
   return out.join("\n\n") + "\n";
 }
 
-function quoteIdent(s: string): string {
-  return `"${s.replace(/"/g, '""')}"`;
-}
-
-function sqlLiteral(v: CellValue): string {
+function sqlLiteral(v: CellValue, d: SqlDialect): string {
   switch (v.kind) {
     case "null": return "NULL";
     case "bool": return v.value ? "TRUE" : "FALSE";
     case "int":
     case "float": return String(v.value);
     case "text":
-    case "raw":  return `'${v.value.replace(/'/g, "''")}'`;
-    case "document": return `'${JSON.stringify(v.value).replace(/'/g, "''")}'::jsonb`;
-    case "bytes":
-      return `decode('${v.value.map((b) => b.toString(16).padStart(2, "0")).join("")}', 'hex')`;
+    case "raw":  return stringLiteral(d, v.value);
+    case "document": {
+      // MySQL stores a JSON value from its text; Postgres casts to jsonb.
+      const lit = stringLiteral(d, JSON.stringify(v.value));
+      return d === "mysql" ? lit : `${lit}::jsonb`;
+    }
+    case "bytes": {
+      const hex = v.value.map((b) => b.toString(16).padStart(2, "0")).join("");
+      return d === "mysql" ? `X'${hex}'` : `decode('${hex}', 'hex')`;
+    }
   }
 }
 

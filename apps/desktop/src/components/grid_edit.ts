@@ -7,25 +7,25 @@
  */
 
 import type { CellValue, ColMeta } from "@/ipc/types";
-
-/** Quote a Postgres identifier (table, column). */
-function qi(s: string): string {
-  return `"${s.replace(/"/g, '""')}"`;
-}
+import { qualify, quoteIdent, stringLiteral, type SqlDialect } from "@/lib/sql-dialect";
 
 /** Render a CellValue as a SQL literal suitable for a WHERE clause. */
-export function pkLiteral(v: CellValue): string {
+export function pkLiteral(v: CellValue, d: SqlDialect = "postgres"): string {
   switch (v.kind) {
     case "null":  return "NULL"; // not valid in equality; caller checks
     case "bool":  return v.value ? "TRUE" : "FALSE";
     case "int":
     case "float": return String(v.value);
     case "text":
-    case "raw":   return `'${v.value.replace(/'/g, "''")}'`;
-    case "document": return `'${JSON.stringify(v.value).replace(/'/g, "''")}'::jsonb`;
+    case "raw":   return stringLiteral(d, v.value);
+    case "document": {
+      const lit = stringLiteral(d, JSON.stringify(v.value));
+      // MySQL compares a JSON column with CAST(… AS JSON); Postgres casts.
+      return d === "mysql" ? `CAST(${lit} AS JSON)` : `${lit}::jsonb`;
+    }
     case "bytes": {
       const hex = v.value.map((b) => b.toString(16).padStart(2, "0")).join("");
-      return `'\\x${hex}'::bytea`;
+      return d === "mysql" ? `X'${hex}'` : `'\\x${hex}'::bytea`;
     }
   }
 }
@@ -36,22 +36,27 @@ export function pkLiteral(v: CellValue): string {
  * Numeric-typed columns accept bare numeric literals (no quotes); booleans
  * use TRUE/FALSE; jsonb gets ::jsonb cast; everything else quotes.
  */
-export function valueLiteral(input: string, typeName: string): string {
-  const t = typeName.toLowerCase().replace(/\(.+\)$/, "").trim();
+export function valueLiteral(input: string, typeName: string, d: SqlDialect = "postgres"): string {
+  const t = typeName.toLowerCase().replace(/\(.+\)$/, "").replace(/ unsigned$/, "").trim();
   if (input === "") return "''";
-  if (["int2", "int4", "int8", "smallint", "integer", "bigint"].includes(t)) {
-    return input; // user is responsible for digits; pg will reject otherwise
-  }
-  if (["float4", "float8", "real", "double precision", "numeric", "decimal", "money"].includes(t)) {
-    return input;
+  const numeric = [
+    "int2", "int4", "int8", "smallint", "integer", "bigint",
+    "float4", "float8", "real", "double precision", "numeric", "decimal", "money",
+    // MySQL / MariaDB names
+    "tinyint", "mediumint", "int", "double", "float",
+  ];
+  // Bare only when it really is a number — anything else is quoted, so the
+  // input can never end up as SQL syntax.
+  if (numeric.includes(t) && /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(input.trim())) {
+    return input.trim();
   }
   if (["bool", "boolean"].includes(t)) {
     return /^(t|true|1|y|yes)$/i.test(input.trim()) ? "TRUE" : "FALSE";
   }
   if (["json", "jsonb"].includes(t)) {
-    return `'${input.replace(/'/g, "''")}'::${t}`;
+    return d === "mysql" ? stringLiteral(d, input) : `${stringLiteral(d, input)}::${t}`;
   }
-  return `'${input.replace(/'/g, "''")}'`;
+  return stringLiteral(d, input);
 }
 
 /**
@@ -71,7 +76,9 @@ export function buildUpdate(opts: {
   newLiteral: string;
   pkColumns: string[];
   pkValues: Record<string, CellValue>;
+  dialect?: SqlDialect;
 }): string {
+  const d = opts.dialect ?? "postgres";
   if (opts.pkColumns.length === 0) {
     throw new Error("Cannot edit cells in a table without a primary key.");
   }
@@ -80,10 +87,10 @@ export function buildUpdate(opts: {
     if (!v || v.kind === "null") {
       throw new Error(`Primary key column "${col}" is null — refusing to UPDATE.`);
     }
-    return `${qi(col)} = ${pkLiteral(v)}`;
+    return `${quoteIdent(d, col)} = ${pkLiteral(v, d)}`;
   }).join(" AND ");
-  const qt = `${qi(opts.schema)}.${qi(opts.table)}`;
-  return `UPDATE ${qt} SET ${qi(opts.column)} = ${opts.newLiteral} WHERE ${where};`;
+  const qt = qualify(d, opts.schema, opts.table);
+  return `UPDATE ${qt} SET ${quoteIdent(d, opts.column)} = ${opts.newLiteral} WHERE ${where};`;
 }
 
 /**
@@ -96,7 +103,9 @@ export function buildDelete(opts: {
   table: string;
   pkColumns: string[];
   pkValues: Record<string, CellValue>;
+  dialect?: SqlDialect;
 }): string {
+  const d = opts.dialect ?? "postgres";
   if (opts.pkColumns.length === 0) {
     throw new Error("Cannot delete rows in a table without a primary key.");
   }
@@ -105,10 +114,32 @@ export function buildDelete(opts: {
     if (!v || v.kind === "null") {
       throw new Error(`Primary key column "${col}" is null — refusing to DELETE.`);
     }
-    return `${qi(col)} = ${pkLiteral(v)}`;
+    return `${quoteIdent(d, col)} = ${pkLiteral(v, d)}`;
   }).join(" AND ");
-  const qt = `${qi(opts.schema)}.${qi(opts.table)}`;
+  const qt = qualify(d, opts.schema, opts.table);
   return `DELETE FROM ${qt} WHERE ${where};`;
+}
+
+/**
+ * Build an INSERT for a draft row. `values` maps column name → the
+ * already-rendered SQL literal; columns left out get their DB default. An
+ * empty map inserts a row of defaults — `DEFAULT VALUES` in Postgres,
+ * `() VALUES ()` in MySQL (which has no DEFAULT VALUES).
+ */
+export function buildInsert(opts: {
+  schema: string;
+  table: string;
+  values: [column: string, literal: string][];
+  dialect?: SqlDialect;
+}): string {
+  const d = opts.dialect ?? "postgres";
+  const qt = qualify(d, opts.schema, opts.table);
+  if (opts.values.length === 0) {
+    return d === "mysql" ? `INSERT INTO ${qt} () VALUES ();` : `INSERT INTO ${qt} DEFAULT VALUES;`;
+  }
+  const cols = opts.values.map(([c]) => quoteIdent(d, c)).join(", ");
+  const vals = opts.values.map(([, v]) => v).join(", ");
+  return `INSERT INTO ${qt} (${cols}) VALUES (${vals});`;
 }
 
 /** Render a cell as plain text for clipboard / display. */

@@ -11,6 +11,8 @@ import {
   quoteRedisArg,
   buildRedisBrowse,
   buildRedisCount,
+  buildSql,
+  buildWhereClause,
 } from "./buildTableQuery";
 import type { FilterChip } from "@/store";
 import type { CellValue } from "@/ipc/types";
@@ -182,5 +184,33 @@ describe("redis table-data commands", () => {
     expect(buildRedisCount("k", "hash")).toBe("HLEN k");
     expect(buildRedisCount("k", "zset")).toBe("ZCARD k");
     expect(buildRedisCount("k", "string")).toBeNull();
+  });
+});
+
+describe("SQL table-data queries per dialect", () => {
+  const chip = (column: string, op: FilterChip["op"], value: string | null): FilterChip =>
+    ({ id: column + op, column, op, value } as FilterChip);
+  const rel = { schema: "shop", table: "orders" };
+
+  it("keeps the Postgres query exactly as before", () => {
+    expect(buildSql(rel, [chip("status", "=", "paid")], { column: "id", dir: "desc" }, 50))
+      .toBe(`SELECT * FROM "shop"."orders" WHERE "status" = 'paid' ORDER BY "id" DESC LIMIT 50;`);
+    expect(buildWhereClause([chip("name", "ICONTAINS", "a_b")]))
+      .toBe(`WHERE "name" ILIKE '%a\\_b%'`);
+  });
+
+  it("uses backticks and MySQL literal escaping", () => {
+    expect(buildSql(rel, [chip("note", "=", "it's \\ fine")], { column: "id", dir: "asc" }, 50, "mysql"))
+      .toBe("SELECT * FROM `shop`.`orders` WHERE `note` = 'it''s \\\\ fine' ORDER BY `id` ASC LIMIT 50;");
+  });
+
+  it("maps CONTAINS / ICONTAINS to what MySQL has", () => {
+    expect(buildWhereClause([chip("name", "ICONTAINS", "Ab")], "mysql"))
+      .toBe("WHERE LOWER(`name`) LIKE LOWER('%Ab%')");
+    expect(buildWhereClause([chip("name", "NOT CONTAINS", "Ab")], "mysql"))
+      .toBe("WHERE `name` NOT LIKE BINARY '%Ab%'");
+    // LIKE wildcards in the value stay literal: \_ in the pattern, doubled in the MySQL literal.
+    expect(buildWhereClause([chip("code", "CONTAINS", "50%")], "mysql"))
+      .toBe("WHERE `code` LIKE BINARY '%50\\\\%%'");
   });
 });

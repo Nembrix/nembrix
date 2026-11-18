@@ -135,4 +135,24 @@ describe("menu availability", () => {
     }
     expect(sqlOnlyBlock(MENU.TABLE_DROP, connected("redis"))).toMatch(/Redis/);
   });
+
+  it("Postgres-only tools are off for MySQL / MariaDB, SQL tools stay on", () => {
+    for (const engine of ["mysql", "mariadb"]) {
+      useStore.setState({
+        connections: [{ ...baseConn, engine } as never],
+        selectedConnId: baseConn.id,
+        selectedTable: { schema: "shop", name: "orders" } as never,
+        status: { [baseConn.id]: "connected" },
+      });
+      const s = useStore.getState();
+      for (const id of [MENU.DB_MANAGE_ROLES, MENU.DB_ACTIVITY, MENU.TABLE_DROP, MENU.TABLE_VACUUM, MENU.IMPORT]) {
+        expect(isEnabled(id, s)).toBe(false);
+      }
+      expect(sqlOnlyBlock(MENU.TABLE_DROP, s)).toMatch(/MySQL|MariaDB/);
+      // Dialect-aware actions work on MySQL.
+      for (const id of [MENU.EXPORT, MENU.TABLE_TRUNCATE, MENU.TABLE_COPY_NAME, MENU.REFRESH_SCHEMA]) {
+        expect(isEnabled(id, s)).toBe(true);
+      }
+    }
+  });
 });

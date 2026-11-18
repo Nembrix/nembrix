@@ -34,8 +34,8 @@ for the workspace structure.
 - **Import / export** — CSV / JSON / SQL, plus a bulk multi-table export.
 - **Command palette** — `⌘P` fuzzy-search across actions, connections,
   schema items, open tabs, and recent SQL.
-- **Engines** — PostgreSQL, MongoDB, and Redis (browse keys by type, run
-  `redis-cli`-style commands).
+- **Engines** — PostgreSQL, MySQL / MariaDB, MongoDB, and Redis (browse
+  keys by type, run `redis-cli`-style commands).
 - **Native & private** — Postgres-first, cross-platform (macOS / Windows /
   Linux), no required cloud account, no telemetry by default.
 

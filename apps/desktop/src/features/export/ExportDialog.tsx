@@ -9,6 +9,8 @@ import {
   fileBase,
 } from "./format";
 import { loadPrefs } from "@/features/preferences/prefs";
+import { qualify } from "@/lib/sql-dialect";
+import { dialectFor } from "@/features/connections/dialectFor";
 
 /** Persisted preference: when set, success dialog is skipped and we just close. */
 const SKIP_SUCCESS_KEY = "nembrix.export.skipSuccess";
@@ -77,6 +79,7 @@ export default function ExportDialog({ source, connId, columns, rows, onClose }:
   const allOff = () => setIncluded([]);
 
   const run = async () => {
+    const dialect = dialectFor(connId);
     setErr(null);
     setWorking(true);
     setRowsCopied(0);
@@ -105,7 +108,9 @@ export default function ExportDialog({ source, connId, columns, rows, onClose }:
         includeColumns: allChosen ? null : included,
         csv,
         json,
-        sql: source ? { qualifiedTarget: `"${source.schema}"."${source.table}"`, batchSize } : { batchSize },
+        sql: source
+          ? { qualifiedTarget: qualify(dialect, source.schema, source.table), batchSize, dialect }
+          : { batchSize, dialect },
       });
       const path = await saveToDisk(text, filename, format);
       // User cancelled the OS save dialog — no path, no success view.
@@ -373,7 +378,7 @@ async function fetchAll(
     const batches: RowBatch[] = [];
     let cols: ColMeta[] = [];
     let total = 0;
-    const sql = `SELECT * FROM "${rel.schema}"."${rel.table}"`;
+    const sql = `SELECT * FROM ${qualify(dialectFor(connId), rel.schema, rel.table)}`;
     api.stream(connId, sql, (b) => {
       if (b.columns) cols = b.columns;
       batches.push(b);

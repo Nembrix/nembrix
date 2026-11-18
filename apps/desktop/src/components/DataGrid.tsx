@@ -9,10 +9,12 @@ import ForeignKeyPanel from "@/features/grid/ForeignKeyPanel";
 import { rewriteSqlWithFilters } from "@/features/grid/filter-sql";
 import { scopeKey, getWidth, setWidth, stretchLastColumn } from "@/components/grid-column-widths";
 import ContextMenu, { type ContextItem } from "@/components/ContextMenu";
-import { buildUpdate, buildDelete, cellToText, pkValuesFor, valueLiteral } from "@/components/grid_edit";
+import {
+  buildDelete, buildInsert, buildUpdate, cellToText, pkValuesFor, valueLiteral,
+} from "@/components/grid_edit";
 import { buildMongoUpdate, buildMongoInsert, buildMongoDelete } from "@/features/table_data/buildTableQuery";
 import ExportDialog from "@/features/export/ExportDialog";
-import { isSqlEngine } from "@/features/connections/engines";
+import { engineDialect, isSqlEngine } from "@/features/connections/engines";
 import * as api from "@/ipc/commands";
 
 const ROW_H = 22;
@@ -458,6 +460,7 @@ export default function DataGrid({ tab, engine, onAddColumn }: {
     }
 
     const stmts: string[] = [];
+    const dialect = engineDialect(engine);
     try {
       for (const [key, raw] of Object.entries(pendingEdits)) {
         const [rStr, cStr] = key.split(":");
@@ -469,7 +472,7 @@ export default function DataGrid({ tab, engine, onAddColumn }: {
         if (!pkVals) throw new Error(`Row ${rowIdx}: PK columns missing from result.`);
         const newLit = raw === "__NULL__"
           ? "NULL"
-          : valueLiteral(raw, col.type_name);
+          : valueLiteral(raw, col.type_name, dialect);
         stmts.push(buildUpdate({
           schema: tab.sourceRelation.schema,
           table: tab.sourceRelation.table,
@@ -477,31 +480,28 @@ export default function DataGrid({ tab, engine, onAddColumn }: {
           newLiteral: newLit,
           pkColumns: pk,
           pkValues: pkVals,
+          dialect,
         }));
       }
       // Append INSERT statements for every draft row. Cells the user
       // left untouched are omitted so the DB default (or NULL) kicks
       // in — that's how a NOT NULL column with a default works without
       // making the user type the value. Rows with no fields at all
-      // become INSERT … DEFAULT VALUES, same as the old +Row.
-      const qq = (s: string) => `"${s.replace(/"/g, '""')}"`;
-      const schemaIdent = qq(tab.sourceRelation.schema);
-      const tableIdent  = qq(tab.sourceRelation.table);
+      // become a row of defaults, same as the old +Row.
       for (const draft of pendingInserts) {
         const colIdxs = Object.keys(draft)
           .map((k) => Number(k))
           .filter((k) => Number.isFinite(k) && cols[k]);
-        if (colIdxs.length === 0) {
-          stmts.push(`INSERT INTO ${schemaIdent}.${tableIdent} DEFAULT VALUES;`);
-          continue;
-        }
-        const colList = colIdxs.map((i) => qq(cols[i].name)).join(", ");
-        const valList = colIdxs.map((i) => {
-          const v = draft[i];
-          if (v === "" || v === "__NULL__") return "NULL";
-          return valueLiteral(v, cols[i].type_name);
-        }).join(", ");
-        stmts.push(`INSERT INTO ${schemaIdent}.${tableIdent} (${colList}) VALUES (${valList});`);
+        stmts.push(buildInsert({
+          schema: tab.sourceRelation.schema,
+          table: tab.sourceRelation.table,
+          values: colIdxs.map((i) => {
+            const v = draft[i];
+            const lit = v === "" || v === "__NULL__" ? "NULL" : valueLiteral(v, cols[i].type_name, dialect);
+            return [cols[i].name, lit];
+          }),
+          dialect,
+        }));
       }
       // One transaction on one connection: every edit lands, or none do.
       await api.executeBatch(tab.connId, stmts);
@@ -547,6 +547,7 @@ export default function DataGrid({ tab, engine, onAddColumn }: {
           table: tab.sourceRelation.table,
           pkColumns: pk,
           pkValues: pkVals,
+          dialect: engineDialect(engine),
         }));
       }
       updateTab(tab.id, { refreshTick: (tab.refreshTick ?? 0) + 1 });
@@ -965,7 +966,10 @@ export default function DataGrid({ tab, engine, onAddColumn }: {
               },
             ];
             const currentSql = useStore.getState().tabs.find((t) => t.id === tab.id)?.sql ?? "";
-            updateTab(tab.id, { filters: next, sql: rewriteSqlWithFilters(currentSql, next) });
+            updateTab(tab.id, {
+              filters: next,
+              sql: rewriteSqlWithFilters(currentSql, next, engineDialect(engine)),
+            });
             setSummary(null);
           }}
         />

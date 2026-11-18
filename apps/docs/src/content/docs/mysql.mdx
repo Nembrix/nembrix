@@ -1,0 +1,40 @@
+---
+title: MySQL & MariaDB
+description: Connect to MySQL or MariaDB, browse, query and edit data.
+---
+
+Pick **MySQL** or **MariaDB** in the connection form's engine picker — one
+driver serves both.
+
+## Connecting
+
+- **Host / Port** — `3306` by default.
+- **User / Password** — the password is stored in the OS keychain.
+- **Database** — optional. The sidebar lists every database you can see
+  (system databases hidden); the one named here comes first and is the
+  default for unqualified table names.
+- **SSL mode**
+  - `disable` — plaintext.
+  - `prefer` — TLS when the server offers it, plaintext otherwise.
+  - `require` — TLS; the server's certificate isn't checked.
+  - `verify-full` — TLS, and the certificate must chain to a CA in the
+    system trust store and match the host name.
+- **SSH tunnel** works the same as for any other engine.
+
+## What works
+
+- Browsing databases, tables, views, columns, keys, indexes and routines.
+- The table view: filters, sorting, the row count (InnoDB's estimate, then an
+  exact `COUNT(*)` capped at 2.5 s on MySQL), and editing, inserting and
+  deleting rows — saved in one transaction.
+- The SQL editor with MySQL completion, multi-statement scripts, and
+  **Cancel**, which stops the query on the server (`KILL QUERY`).
+- [JavaScript scripting](../scripting/) — use `?` placeholders.
+- Export to CSV, JSON or SQL `INSERT`s.
+
+## Postgres-only for now
+
+Roles & grants, Activity, Schema Diff, the ER diagram, Import, copying
+between connections, the structure editors, and object operations (create,
+rename, duplicate, move, drop) are built on Postgres specifics and are
+disabled on MySQL connections. Use SQL in a query tab for those meanwhile.

@@ -3,10 +3,14 @@ import {
   RefreshCcw, Eye, EyeOff, ArrowUpDown, ArrowUp, ArrowDown, Filter as FilterIcon, BarChart3,
   Database, KeyRound, Info, Download, Search, Plus,
 } from "lucide-react";
-import { useStore, type Tab, type FilterChip } from "@/store";
+import { useStore, type Tab } from "@/store";
 import * as api from "@/ipc/commands";
-import { buildMongoFind, buildRedisBrowse, redisKeyType } from "./buildTableQuery";
-import { engineLabel, engineQueryLang, isSqlEngine } from "@/features/connections/engines";
+import {
+  buildMongoFind, buildRedisBrowse, buildSql, buildWhereClause, redisKeyType,
+} from "./buildTableQuery";
+import {
+  engineDialect, engineLabel, engineQueryLang, hasPgTools, isSqlEngine,
+} from "@/features/connections/engines";
 import DataGrid from "@/components/DataGrid";
 import FilterBuilder from "@/features/grid/FilterBuilder";
 import ChartPane from "@/features/grid/ChartPane";
@@ -122,8 +126,8 @@ export default function TableDataTab({ tab }: { tab: Tab }) {
           ? buildMongoFind(rel, filters, tab.sort, limit)
           : lang === "redis_cmd"
             ? relationMeta ? buildRedisBrowse(rel.table, redisKeyType(relationMeta), limit) : ""
-            : buildSql(rel, filters, tab.sort, limit),
-    [lang, rel, relationMeta, filters, tab.sort, limit],
+            : buildSql(rel, filters, tab.sort, limit, engineDialect(engine)),
+    [lang, engine, rel, relationMeta, filters, tab.sort, limit],
   );
 
   const run = async () => {
@@ -244,19 +248,21 @@ export default function TableDataTab({ tab }: { tab: Tab }) {
       return () => { cancelled = true; };
     }
 
-    const whereClause = buildWhereClause(filters);
+    const whereClause = buildWhereClause(filters, engineDialect(engine));
 
     void (async () => {
       // Phase 1 — fast estimate. Skip when filters are active because
       // the estimate is unfiltered and would be misleading.
       if (!whereClause) {
-        const est = await fetchEstimate(tab.connId, rel.schema, rel.table);
+        const est = await fetchEstimate(tab.connId, rel.schema, rel.table, engineDialect(engine));
         if (cancelled || countSeqRef.current !== seq) return;
         if (est != null) updateTab(tab.id, { rowsTotal: est, rowsTotalEstimated: true });
       }
       // Phase 2 — exact count (timeout-guarded). Replaces the estimate
       // when it arrives. If the COUNT times out we keep the estimate.
-      const exact = await fetchExact(tab.connId, rel.schema, rel.table, whereClause || undefined);
+      const exact = await fetchExact(
+        tab.connId, rel.schema, rel.table, whereClause || undefined, engineDialect(engine),
+      );
       if (cancelled || countSeqRef.current !== seq) return;
       if (exact != null) updateTab(tab.id, { rowsTotal: exact, rowsTotalEstimated: false });
     })();
@@ -592,7 +598,7 @@ function StructurePane({
 
   if (!rel) return <div className="placeholder muted">No structure metadata yet — reconnect to refresh.</div>;
 
-  if (!isSqlEngine(engine)) {
+  if (!hasPgTools(engine)) {
     return (
       <div className="pane">
         <div className="pane-toolbar">
@@ -605,8 +611,11 @@ function StructurePane({
               "fixed schema, so fields and types can vary per document. Editing the " +
               "structure here isn't available; change documents directly in the " +
               "Data view."
-            : `The columns the Data view shows for a Redis ${rel.columns[0]?.type_name ?? ""} ` +
-              "key. Redis keys have no schema to edit."}
+            : isSqlEngine(engine)
+              ? `Editing the structure isn't available for ${engineLabel(engine)} yet — ` +
+                "use ALTER TABLE in a query tab."
+              : `The columns the Data view shows for a Redis ${rel.columns[0]?.type_name ?? ""} ` +
+                "key. Redis keys have no schema to edit."}
         </p>
         <table className="meta-table">
           <thead><tr>
@@ -927,11 +936,11 @@ function IndexesPane({
   engine?: string;
   onAddIndex: () => void;
 }) {
-  const isSql = isSqlEngine(engine);
+  const pgTools = hasPgTools(engine);
   // Size/scan stats come from pg_stat_user_indexes — pass empty schema for
-  // non-SQL engines so useTableStats skips the catalog query (which their
+  // other engines so useTableStats skips the catalog query (which their
   // drivers would reject). Index metadata itself still comes from introspection.
-  const { indexes: stats } = useTableStats(connId, isSql ? schema : "", table);
+  const { indexes: stats } = useTableStats(connId, pgTools ? schema : "", table);
   const statByName = useMemo(() => {
     const m = new Map<string, { bytes: number; scans: number }>();
     for (const s of stats) m.set(s.name, s);
@@ -946,7 +955,7 @@ function IndexesPane({
         <span className="muted">{rel.indexes.length}</span>
         <div className="spacer" />
         {/* Add index emits pg CREATE INDEX DDL — hide it on Mongo. */}
-        {isSql && <button className="btn-pill" onClick={onAddIndex}>+ Add index</button>}
+        {pgTools && <button className="btn-pill" onClick={onAddIndex}>+ Add index</button>}
       </div>
       {rel.indexes.length === 0 ? (
         <div className="placeholder muted">No indexes on this table.</div>
@@ -987,11 +996,11 @@ function InfoPane({
   table: string;
   engine?: string;
 }) {
-  const isSql = isSqlEngine(engine);
+  const pgTools = hasPgTools(engine);
   // Storage/activity numbers come from pg_class + pg_stat_user_tables. Pass an
-  // empty schema for non-SQL engines so useTableStats skips the catalog query
+  // empty schema for other engines so useTableStats skips the catalog query
   // entirely (it would otherwise be sent to their driver and error).
-  const { stats, loading, err } = useTableStats(connId, isSql ? schema : "", table);
+  const { stats, loading, err } = useTableStats(connId, pgTools ? schema : "", table);
   if (!rel) return <div className="placeholder muted">No metadata yet.</div>;
   return (
     <div className="pane">
@@ -1007,7 +1016,7 @@ function InfoPane({
       </table>
 
       <div className="pane-toolbar"><strong>Storage &amp; activity</strong></div>
-      {!isSql ? (
+      {!pgTools ? (
         <div className="placeholder muted" style={{ padding: 8 }}>
           Not available for {engineLabel(engine)}.
         </div>
@@ -1117,72 +1126,3 @@ function filterVisible(tab: Tab, hidden: string[], search: string): Tab {
   return { ...tab, columns: cols, rows };
 }
 
-function qi(s: string): string {
-  return `"${s.replace(/"/g, '""')}"`;
-}
-function quoteValue(v: string | null, op: FilterChip["op"]): string {
-  if (op === "IS NULL" || op === "IS NOT NULL") return "";
-  if (v == null) return "";
-  if (/^-?\d+(\.\d+)?$/.test(v)) return v;
-  return `'${v.replace(/'/g, "''")}'`;
-}
-
-/** Escape % and _ in a substring so the user's value can't accidentally
- *  match more than intended in a LIKE/ILIKE pattern. */
-function escapeLike(v: string): string {
-  return v.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
-}
-
-/** Compile one chip to a SQL predicate. Some user-facing operators don't
- *  map 1:1 to SQL — CONTAINS becomes LIKE '%value%', NOT CONTAINS
- *  becomes NOT LIKE, ICONTAINS uses ILIKE for case-insensitive matching. */
-function compileChip(f: FilterChip): string {
-  const col = qi(f.column);
-  switch (f.op) {
-    case "IS NULL":      return `${col} IS NULL`;
-    case "IS NOT NULL":  return `${col} IS NOT NULL`;
-    case "CONTAINS":
-    case "NOT CONTAINS":
-    case "ICONTAINS":
-    case "NOT ICONTAINS": {
-      const v = f.value ?? "";
-      const lit = `'%${escapeLike(v).replace(/'/g, "''")}%'`;
-      const verb =
-        f.op === "CONTAINS"      ? "LIKE" :
-        f.op === "NOT CONTAINS"  ? "NOT LIKE" :
-        f.op === "ICONTAINS"     ? "ILIKE" :
-                                   "NOT ILIKE";
-      return `${col} ${verb} ${lit}`;
-    }
-    default: {
-      const lit = quoteValue(f.value, f.op);
-      return lit ? `${col} ${f.op} ${lit}` : `${col} ${f.op}`;
-    }
-  }
-}
-
-/** Build the WHERE clause body from filter chips (including the leading
- *  `WHERE`). Returns empty string when no filters are active. Exported so
- *  the row-count helper can build matching exact-count queries. */
-function buildWhereClause(filters: FilterChip[]): string {
-  // Skip chips the user has toggled off in the builder. `enabled` is
-  // undefined for legacy persisted chips → treat as enabled.
-  const active = filters.filter((f) => f.enabled !== false);
-  if (!active.length) return "";
-  return `WHERE ${active.map(compileChip).join(" AND ")}`;
-}
-
-function buildSql(
-  rel: { schema: string; table: string } | undefined,
-  filters: FilterChip[],
-  sort: Tab["sort"],
-  limit: number,
-): string {
-  if (!rel) return "";
-  let sql = `SELECT * FROM ${qi(rel.schema)}.${qi(rel.table)}`;
-  const where = buildWhereClause(filters);
-  if (where) sql += ` ${where}`;
-  if (sort) sql += ` ORDER BY ${qi(sort.column)} ${sort.dir.toUpperCase()}`;
-  sql += ` LIMIT ${limit}`;
-  return sql + ";";
-}

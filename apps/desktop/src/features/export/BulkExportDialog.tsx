@@ -6,6 +6,8 @@ import { isTauri } from "@/ipc/commands";
 import {
   exportRows, suggestExt, fileBase, type ExportFormat,
 } from "./format";
+import { qualify } from "@/lib/sql-dialect";
+import { dialectFor } from "@/features/connections/dialectFor";
 
 type Status = "pending" | "running" | "done" | "error";
 interface JobRow {
@@ -136,7 +138,11 @@ export default function BulkExportDialog({ connId, preselectSchema, onClose }: P
             const { cols, rows } = await fetchAll(connId, schema, targets[i].name);
             const text = exportRows({
               format, columns: cols, rows,
-              sql: { qualifiedTarget: `"${schema}"."${targets[i].name}"`, batchSize: 100 },
+              sql: {
+                qualifiedTarget: qualify(dialectFor(connId), schema, targets[i].name),
+                batchSize: 100,
+                dialect: dialectFor(connId),
+              },
             });
             const { writeTextFile } = await import("@tauri-apps/plugin-fs");
             const path = `${dest}/${fileBase(schema, targets[i].name)}.${suggestExt(format)}`;
@@ -157,7 +163,11 @@ export default function BulkExportDialog({ connId, preselectSchema, onClose }: P
             const { cols, rows } = await fetchAll(connId, schema, targets[i].name);
             const text = exportRows({
               format, columns: cols, rows,
-              sql: { qualifiedTarget: `"${schema}"."${targets[i].name}"`, batchSize: 100 },
+              sql: {
+                qualifiedTarget: qualify(dialectFor(connId), schema, targets[i].name),
+                batchSize: 100,
+                dialect: dialectFor(connId),
+              },
             });
             parts.push(`-- ════════════════════════════════════════
 -- ${schema}.${targets[i].name}  (${rows.length} rows)
@@ -367,7 +377,7 @@ async function fetchAll(connId: string, schema: string, table: string):
   return new Promise((resolve, reject) => {
     let cols: ColMeta[] = [];
     const rows: CellValue[][] = [];
-    api.stream(connId, `SELECT * FROM "${schema}"."${table}"`, (b) => {
+    api.stream(connId, `SELECT * FROM ${qualify(dialectFor(connId), schema, table)}`, (b) => {
       if (b.columns) cols = b.columns;
       rows.push(...b.rows);
       if (b.done) resolve({ cols, rows });
