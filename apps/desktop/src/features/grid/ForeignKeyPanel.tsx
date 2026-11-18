@@ -3,6 +3,9 @@ import { ArrowRight, ExternalLink, X } from "lucide-react";
 import type { CellValue, ColMeta, ForeignKey } from "@/ipc/types";
 import * as api from "@/ipc/commands";
 import { useStore } from "@/store";
+import { pkLiteral } from "@/components/grid_edit";
+import { qualify, quoteIdent } from "@/lib/sql-dialect";
+import { dialectFor } from "@/features/connections/dialectFor";
 
 interface Props {
   connId: string;
@@ -21,10 +24,8 @@ export default function ForeignKeyPanel({ connId, fk, cellValue, onClose }: Prop
     cols: ColMeta[];
   }>(
     async (isCancelled) => {
-      const where = fk.referenced_columns
-        .map((c, i) => `${quoteIdent(c)} = ${quoteValue(cellValue, i)}`)
-        .join(" AND ");
-      const sql = `SELECT * FROM ${quoteIdent(fk.referenced_schema)}.${quoteIdent(fk.referenced_table)} WHERE ${where} LIMIT 5;`;
+      const { target, where } = fkWhere(connId, fk, cellValue);
+      const sql = `SELECT * FROM ${target} WHERE ${where} LIMIT 5;`;
 
       const rows: CellValue[][] = [];
       let cols: ColMeta[] = [];
@@ -44,10 +45,8 @@ export default function ForeignKeyPanel({ connId, fk, cellValue, onClose }: Prop
   const cols = data?.cols ?? [];
 
   const openInTab = () => {
-    const where = fk.referenced_columns
-      .map((c, i) => `${quoteIdent(c)} = ${quoteValue(cellValue, i)}`)
-      .join(" AND ");
-    const sql = `SELECT * FROM ${quoteIdent(fk.referenced_schema)}.${quoteIdent(fk.referenced_table)} WHERE ${where};`;
+    const { target, where } = fkWhere(connId, fk, cellValue);
+    const sql = `SELECT * FROM ${target} WHERE ${where};`;
     useStore.getState().addTab({
       id: crypto.randomUUID(),
       connId,
@@ -115,17 +114,14 @@ function renderCell(v: CellValue): string {
   }
 }
 
-function quoteIdent(s: string): string {
-  return `"${s.replace(/"/g, '""')}"`;
-}
-
-function quoteValue(v: CellValue, _i: number): string {
-  switch (v.kind) {
-    case "null": return "NULL";
-    case "bool": return v.value ? "TRUE" : "FALSE";
-    case "int": case "float": return String(v.value);
-    case "text": case "raw": return `'${v.value.replace(/'/g, "''")}'`;
-    case "document": return `'${JSON.stringify(v.value).replace(/'/g, "''")}'::jsonb`;
-    case "bytes": return `decode('${Array.from(v.value).map((b) => b.toString(16).padStart(2, "0")).join("")}', 'hex')`;
-  }
+/** The `referenced = value` filter and target relation, in the connection's
+ *  dialect. Values render like row-edit keys (`pkLiteral`). */
+function fkWhere(connId: string, fk: ForeignKey, cellValue: CellValue): { target: string; where: string } {
+  const d = dialectFor(connId);
+  return {
+    target: qualify(d, fk.referenced_schema, fk.referenced_table),
+    where: fk.referenced_columns
+      .map((c) => `${quoteIdent(d, c)} = ${pkLiteral(cellValue, d)}`)
+      .join(" AND "),
+  };
 }

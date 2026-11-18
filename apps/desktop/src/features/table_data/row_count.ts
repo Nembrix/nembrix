@@ -24,6 +24,7 @@ import * as api from "@/ipc/commands";
 import type { CellValue } from "@/ipc/types";
 import type { FilterChip } from "@/store";
 import { buildMongoCount, buildRedisCount } from "./buildTableQuery";
+import { qualify, stringLiteral, type SqlDialect } from "@/lib/sql-dialect";
 
 /** Result of a single phase. `value` is null when the phase failed. */
 export interface CountPhase {
@@ -91,8 +92,15 @@ export async function fetchEstimate(
   connId: string,
   schema: string,
   table: string,
+  d: SqlDialect = "postgres",
 ): Promise<number | null> {
-  const sql = `
+  // MySQL / MariaDB: InnoDB's statistics estimate, the same order of
+  // accuracy as reltuples.
+  const sql = d === "mysql" ? `
+    SELECT TABLE_ROWS AS n FROM information_schema.TABLES
+     WHERE TABLE_SCHEMA = ${stringLiteral(d, schema)}
+       AND TABLE_NAME = ${stringLiteral(d, table)};
+  ` : `
     SELECT reltuples::bigint AS n
       FROM pg_class c
       JOIN pg_namespace n ON n.oid = c.relnamespace
@@ -125,11 +133,13 @@ export async function fetchExact(
   schema: string,
   table: string,
   whereClause?: string,
+  d: SqlDialect = "postgres",
 ): Promise<number | null> {
   const where = whereClause ? ` ${whereClause}` : "";
+  if (d === "mysql") return fetchExactMySql(connId, schema, table, where);
   const sql =
     `SET LOCAL statement_timeout = ${EXACT_TIMEOUT_MS}; ` +
-    `SELECT COUNT(*) FROM "${schema}"."${table}"${where};`;
+    `SELECT COUNT(*) FROM ${qualify(d, schema, table)}${where};`;
   return new Promise((resolve) => {
     let val: number | null = null;
     let sawColumns = false;
@@ -139,5 +149,30 @@ export async function fetchExact(
       if (sawColumns && b.rows.length > 0) val = asNumber(b.rows[0][0]);
       if (b.done) resolve(val);
     }).catch(() => resolve(null));
+  });
+}
+
+/** MySQL bounds the count with an optimizer hint on the statement itself —
+ *  no transaction or session state needed. MariaDB doesn't know the hint
+ *  and reads it as a comment, so there the count simply runs to completion. */
+async function fetchExactMySql(
+  connId: string,
+  schema: string,
+  table: string,
+  where: string,
+): Promise<number | null> {
+  return new Promise((resolve) => {
+    let val: number | null = null;
+    let sawColumns = false;
+    api.stream(
+      connId,
+      `SELECT /*+ MAX_EXECUTION_TIME(${EXACT_TIMEOUT_MS}) */ COUNT(*) FROM ${qualify("mysql", schema, table)}${where};`,
+      (b) => {
+        if (b.columns) sawColumns = true;
+        // An in-band error (e.g. the time limit) arrives as a column-less row.
+        if (sawColumns && b.rows.length > 0) val = asNumber(b.rows[0][0]);
+        if (b.done) resolve(val);
+      },
+    ).catch(() => resolve(null));
   });
 }

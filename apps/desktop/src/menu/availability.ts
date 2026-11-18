@@ -13,7 +13,7 @@
 
 import { MENU, type MenuId } from "./ids";
 import type { useStore } from "@/store";
-import { engineLabel, isSqlEngine } from "@/features/connections/engines";
+import { engineLabel, hasPgTools, isSqlEngine } from "@/features/connections/engines";
 
 type Snapshot = ReturnType<typeof useStore.getState>;
 
@@ -41,6 +41,7 @@ function ctx(s: Snapshot) {
     // No connection selected → nothing to gate on engine; the other
     // predicates already require one.
     sql: isSqlEngine(conn?.engine),
+    pg: hasPgTools(conn?.engine),
     connected: status === "connected",
     disconnected: status === "disconnected" || status === "error",
     schemaLoaded: !!s.selectedConnId && !!s.schemas[s.selectedConnId],
@@ -71,11 +72,28 @@ export const SQL_ONLY: ReadonlySet<MenuId> = new Set<MenuId>([
   MENU.QUERY_FORMAT, MENU.QUERY_EXPLAIN, MENU.QUERY_EXPLAIN_ANALYZE, MENU.QUERY_TOGGLE_LIMIT,
 ]);
 
-/** Why a SQL-only action can't run on the selected connection, or null. */
+/**
+ * Actions built on Postgres specifics — pg_catalog (roles, activity), Postgres
+ * DDL (object ops, schema diff, ER apply), VACUUM/REINDEX, ON CONFLICT
+ * imports, cross-connection copy. Disabled on other SQL engines (MySQL,
+ * MariaDB) until they get their own versions; also refused when forced.
+ */
+export const PG_ONLY: ReadonlySet<MenuId> = new Set<MenuId>([
+  MENU.IMPORT,
+  MENU.DB_NEW, MENU.DB_RENAME, MENU.DB_DUPLICATE, MENU.DB_DROP,
+  MENU.DB_MANAGE_ROLES, MENU.DB_ACTIVITY, MENU.DB_ER_DIAGRAM, MENU.DB_SCHEMA_DIFF,
+  MENU.DB_COPY_TO,
+  MENU.TABLE_NEW, MENU.TABLE_RENAME, MENU.TABLE_DUPLICATE, MENU.TABLE_MOVE_SCHEMA,
+  MENU.TABLE_DROP, MENU.TABLE_VACUUM, MENU.TABLE_REINDEX,
+  MENU.TABLE_COPY_CREATE, MENU.TABLE_COPY_TO,
+]);
+
+/** Why an engine-specific action can't run on the selected connection, or
+ *  null when it can. */
 export function sqlOnlyBlock(id: MenuId, s: Snapshot): string | null {
   const c = ctx(s);
-  if (!SQL_ONLY.has(id) || c.sql) return null;
-  return `This action isn't available for ${engineLabel(c.engine)} connections.`;
+  const blocked = (SQL_ONLY.has(id) && !c.sql) || (PG_ONLY.has(id) && !c.pg);
+  return blocked ? `This action isn't available for ${engineLabel(c.engine)} connections.` : null;
 }
 
 /**
@@ -157,7 +175,7 @@ export function isEnabled(id: MenuId, s: Snapshot): boolean {
  */
 export function disabledIds(s: Snapshot): string[] {
   const out: string[] = [];
-  const ids = new Set<MenuId>([...(Object.keys(RULES) as MenuId[]), ...SQL_ONLY]);
+  const ids = new Set<MenuId>([...(Object.keys(RULES) as MenuId[]), ...SQL_ONLY, ...PG_ONLY]);
   for (const id of ids) {
     if (!isEnabled(id, s)) out.push(id);
   }

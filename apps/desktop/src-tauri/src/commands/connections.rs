@@ -2,6 +2,7 @@ use crate::state::{AppState, LiveConn};
 use chrono::Utc;
 use db_core::DynConn;
 use db_mongo::{MongoConfig, MongoConn};
+use db_mysql::{MySqlConfig, MySqlConn, MySqlSsl};
 use db_postgres::{PgConfig, PgConn, PgSsl};
 use db_redis::{RedisConfig, RedisConn};
 use secrets::{ConnectionRecord, SecretSlot, SshRecord};
@@ -233,6 +234,8 @@ fn short_connect_error(raw: &str) -> String {
         // Redis: a password-protected server reached without a password. (A
         // wrong one already reads "Password authentication failed".)
         || low.contains("noauth")
+        // MySQL / MariaDB: ERROR 1045 (28000): Access denied for user …
+        || low.contains("access denied for user")
     {
         return "Authentication failed — check the user and password.".into();
     }
@@ -241,7 +244,10 @@ fn short_connect_error(raw: &str) -> String {
         // database/user — a server-side config issue, not a Nembrix one.
         return "No connection pool for this database on the server (pooler config).".into();
     }
-    if low.contains("does not exist") && low.contains("database") {
+    if (low.contains("does not exist") && low.contains("database"))
+        // MySQL / MariaDB: ERROR 1049 (42000): Unknown database 'x'
+        || low.contains("unknown database")
+    {
         return "Database not found — check the database name.".into();
     }
     if low.contains("connection refused") {
@@ -375,6 +381,21 @@ async fn build_driver(
             .await
             .map_err(|e| short_connect_error(&e.to_string()))?;
             Ok(mongo as DynConn)
+        }
+        // MariaDB speaks the MySQL protocol; one driver serves both.
+        "mysql" | "mariadb" => {
+            let mysql = MySqlConn::connect(MySqlConfig {
+                host,
+                port,
+                user: username.to_string(),
+                password,
+                database,
+                ssl_mode: MySqlSsl::from_mode_str(ssl_mode),
+                connect_timeout_ms,
+            })
+            .await
+            .map_err(|e| short_connect_error(&e.to_string()))?;
+            Ok(mysql as DynConn)
         }
         "redis" => {
             // The form's Database field is the logical DB index; blank means 0.
@@ -569,6 +590,14 @@ mod tests {
             (
                 "connect failed: NOAUTH: Authentication required.",
                 "Authentication",
+            ),
+            (
+                "connect failed: ERROR 1045 (28000): Access denied for user 'root'@'172.17.0.1' (using password: YES)",
+                "Authentication",
+            ),
+            (
+                "connect failed: ERROR 1049 (42000): Unknown database 'nope'",
+                "Database not found",
             ),
             ("Connection refused (os error 61)", "refused"),
             ("connection timed out", "timed out"),

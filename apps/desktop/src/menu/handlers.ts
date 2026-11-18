@@ -3,6 +3,8 @@ import { dispatchMenu, registerMenu, registerMenuPrefix, unregisterMenu } from "
 import { useStore } from "@/store";
 import * as api from "@/ipc/commands";
 import type { SshInput } from "@/ipc/types";
+import { qualify } from "@/lib/sql-dialect";
+import { dialectFor } from "@/features/connections/dialectFor";
 import { forgetRecent } from "@/features/connections/recent";
 
 /**
@@ -231,11 +233,12 @@ export function registerAllMenuHandlers() {
   registerMenu(MENU.TABLE_DUPLICATE,   () => withSelectedTable((sc, t) => s().openObjectOp({ kind: "table_duplicate", schema: sc, name: t })));
   registerMenu(MENU.TABLE_MOVE_SCHEMA, () => withSelectedTable((sc, t) => s().openObjectOp({ kind: "table_move", schema: sc, name: t })));
   registerMenu(MENU.TABLE_DROP,        () => withSelectedTable((sc, t) => s().openObjectOp({ kind: "table_drop", schema: sc, name: t })));
-  registerMenu(MENU.TABLE_TRUNCATE,    () => withSelectedTable((sc, t) => runDirect(`TRUNCATE TABLE ${qi(sc)}.${qi(t)};`)));
+  registerMenu(MENU.TABLE_TRUNCATE,    () => withSelectedTable((sc, t) =>
+    runDirect(`TRUNCATE TABLE ${qualify(dialectFor(s().selectedConnId), sc, t)};`)));
   registerMenu(MENU.TABLE_VACUUM,      () => withSelectedTable((sc, t) => runDirect(`VACUUM (ANALYZE) ${qi(sc)}.${qi(t)};`)));
   registerMenu(MENU.TABLE_REINDEX,     () => withSelectedTable((sc, t) => runDirect(`REINDEX TABLE ${qi(sc)}.${qi(t)};`)));
   registerMenu(MENU.TABLE_COPY_NAME,   () => withSelectedTable(async (sc, t) => {
-    await navigator.clipboard.writeText(`${qi(sc)}.${qi(t)}`);
+    await navigator.clipboard.writeText(qualify(dialectFor(s().selectedConnId), sc, t));
   }));
   registerMenu(MENU.TABLE_COPY_CREATE, () => withSelectedTable((sc, t) => runDirect(
     `-- show DDL inline; v3 will use pg_dump -t ${qi(sc)}.${qi(t)}`,

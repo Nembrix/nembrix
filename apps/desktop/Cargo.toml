@@ -10,6 +10,7 @@ members = [
     "crates/db-postgres",
     "crates/db-mongo",
     "crates/db-redis",
+    "crates/db-mysql",
     "crates/db-script",
     "crates/ssh-tunnel",
     "crates/secrets",
@@ -24,7 +25,7 @@ publish = false
 
 [workspace.dependencies]
 testcontainers = "0.23"
-testcontainers-modules = { version = "0.11", features = ["postgres", "mongo", "redis"] }
+testcontainers-modules = { version = "0.11", features = ["postgres", "mongo", "redis", "mysql", "mariadb"] }
 
 async-trait = "0.1"
 tokio = { version = "1", features = ["full"] }
@@ -69,6 +70,10 @@ rustls-platform-verifier = "0.7"
 # separate top-level `bson` dep, which would risk a v2/v3 type split.
 mongodb = "3"
 
+# MySQL / MariaDB. Pure-Rust async driver; rustls on the ring provider, same
+# single rustls 0.23 as the rest of the tree.
+mysql_async = { version = "0.37", default-features = false, features = ["default-rustls-ring"] }
+
 # Redis. Multiplexed async connection over tokio; `tokio-rustls-comp` gives
 # `rediss://` with certificate verification against the OS trust store (no
 # `tls-rustls-insecure`). Same single rustls 0.23 as the rest of the tree.
@@ -100,6 +105,7 @@ db-core = { path = "crates/db-core" }
 db-postgres = { path = "crates/db-postgres" }
 db-mongo = { path = "crates/db-mongo" }
 db-redis = { path = "crates/db-redis" }
+db-mysql = { path = "crates/db-mysql" }
 db-script = { path = "crates/db-script" }
 ssh-tunnel = { path = "crates/ssh-tunnel" }
 secrets = { path = "crates/secrets" }

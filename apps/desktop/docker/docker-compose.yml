@@ -14,6 +14,8 @@
 #
 # Redis behind the same bastion (also not published to the host):
 #   engine=Redis host=redis port=6379 password=app db=0, same SSH settings.
+# MySQL likewise:
+#   engine=MySQL host=mysql port=3306 user=app password=app db=demo.
 
 services:
   db:
@@ -24,6 +26,16 @@ services:
       POSTGRES_DB: demo
     volumes:
       - ./initdb:/docker-entrypoint-initdb.d:ro
+    networks:
+      - internal
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_USER: app
+      MYSQL_PASSWORD: app
+      MYSQL_DATABASE: demo
     networks:
       - internal
 
@@ -49,6 +61,7 @@ services:
       - internal
     depends_on:
       - db
+      - mysql
       - redis
 
 networks:

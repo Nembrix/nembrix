@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
-  ENGINES, ENGINE_ORDER, engineSpec, engineLabel, engineQueryLang, isSqlEngine,
+  ENGINES, ENGINE_ORDER, engineDialect, engineSpec, engineLabel, engineQueryLang, hasPgTools,
+  isSqlEngine,
 } from "./engines";
 
 describe("engine registry", () => {
@@ -23,11 +24,20 @@ describe("engine registry", () => {
     }
   });
 
-  it("marks postgres, mongo + redis supported and the rest coming-soon", () => {
-    expect(ENGINES.postgres.supported).toBe(true);
-    expect(ENGINES.mongo.supported).toBe(true);
-    expect(ENGINES.redis.supported).toBe(true);
-    expect(ENGINES.mysql.supported).toBe(false);
+  it("marks the shipped drivers supported and the rest coming-soon", () => {
+    for (const key of ["postgres", "mysql", "mariadb", "mongo", "redis"] as const) {
+      expect(ENGINES[key].supported).toBe(true);
+    }
+    expect(ENGINES.sqlite.supported).toBe(false);
+  });
+
+  it("knows each SQL engine's dialect and which have the Postgres tools", () => {
+    expect(engineDialect("postgres")).toBe("postgres");
+    expect(engineDialect("mysql")).toBe("mysql");
+    expect(engineDialect("mariadb")).toBe("mysql");
+    expect(hasPgTools("postgres")).toBe(true);
+    expect(hasPgTools("mysql")).toBe(false);
+    expect(hasPgTools("redis")).toBe(false);
   });
 
   it("knows each engine's query language", () => {

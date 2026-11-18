@@ -1,5 +1,8 @@
 import type { FilterChip, Tab } from "@/store";
 import type { CellValue } from "@/ipc/types";
+import {
+  ilike, like, qualify, quoteIdent, stringLiteral, type SqlDialect,
+} from "@/lib/sql-dialect";
 
 /** Build `db.<collection>.find(<filter>).sort(...).limit(N)` for the table-data
  *  view on a MongoDB connection. The SQL path (SELECT …) stays in TableDataTab;
@@ -226,4 +229,75 @@ export function buildRedisCount(key: string, type: string | undefined): string |
     case "stream": return `XLEN ${k}`;
     default:       return null;
   }
+}
+
+/** A filter value as a SQL literal: bare when numeric, else quoted for the
+ *  dialect. Empty for the null-check operators, which take no operand. */
+function quoteValue(v: string | null, op: FilterChip["op"], d: SqlDialect): string {
+  if (op === "IS NULL" || op === "IS NOT NULL") return "";
+  if (v == null) return "";
+  if (/^-?\d+(\.\d+)?$/.test(v)) return v;
+  return stringLiteral(d, v);
+}
+
+/** Escape % and _ in a substring so the user's value can't accidentally
+ *  match more than intended in a LIKE/ILIKE pattern. Backslash is the LIKE
+ *  escape character in both Postgres and MySQL; `stringLiteral` then makes
+ *  sure the backslashes survive MySQL's own literal escaping. */
+function escapeLike(v: string): string {
+  return v.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+}
+
+/** Compile one chip to a SQL predicate. Some user-facing operators don't
+ *  map 1:1 to SQL — CONTAINS becomes LIKE '%value%', NOT CONTAINS becomes
+ *  NOT LIKE, ICONTAINS a case-insensitive match (see `like` / `ilike`). */
+function compileChip(f: FilterChip, d: SqlDialect): string {
+  const col = quoteIdent(d, f.column);
+  switch (f.op) {
+    case "IS NULL":      return `${col} IS NULL`;
+    case "IS NOT NULL":  return `${col} IS NOT NULL`;
+    case "CONTAINS":
+    case "NOT CONTAINS":
+    case "ICONTAINS":
+    case "NOT ICONTAINS": {
+      const pattern = stringLiteral(d, `%${escapeLike(f.value ?? "")}%`);
+      const negate = f.op.startsWith("NOT");
+      return f.op.endsWith("ICONTAINS")
+        ? ilike(d, col, pattern, negate)
+        : like(d, col, pattern, negate);
+    }
+    default: {
+      const lit = quoteValue(f.value, f.op, d);
+      return lit ? `${col} ${f.op} ${lit}` : `${col} ${f.op}`;
+    }
+  }
+}
+
+/** The WHERE clause for the filter chips (including the leading `WHERE`);
+ *  empty when no chip is active. Shared with the exact row count so the
+ *  count matches the grid. */
+export function buildWhereClause(filters: FilterChip[], d: SqlDialect = "postgres"): string {
+  // Skip chips the user has toggled off in the builder. `enabled` is
+  // undefined for legacy persisted chips → treat as enabled.
+  const active = filters.filter((f) => f.enabled !== false);
+  if (!active.length) return "";
+  return `WHERE ${active.map((f) => compileChip(f, d)).join(" AND ")}`;
+}
+
+/** `SELECT * FROM schema.table [WHERE …] [ORDER BY …] LIMIT n;` for the
+ *  table-data view on a SQL connection. */
+export function buildSql(
+  rel: { schema: string; table: string } | undefined,
+  filters: FilterChip[],
+  sort: Tab["sort"],
+  limit: number,
+  d: SqlDialect = "postgres",
+): string {
+  if (!rel) return "";
+  let sql = `SELECT * FROM ${qualify(d, rel.schema, rel.table)}`;
+  const where = buildWhereClause(filters, d);
+  if (where) sql += ` ${where}`;
+  if (sort) sql += ` ORDER BY ${quoteIdent(d, sort.column)} ${sort.dir.toUpperCase()}`;
+  sql += ` LIMIT ${limit}`;
+  return sql + ";";
 }
