@@ -110,12 +110,15 @@ export async function fetchEstimate(
 }
 
 /**
- * Second phase: exact count with a short statement_timeout. Filter clause
- * is optional — when given, it must already be a valid WHERE body
+ * Second phase: exact count, bounded by a short statement_timeout. Filter
+ * clause is optional — when given, it must already be a valid WHERE body
  * (including the leading `WHERE`). Caller is responsible for quoting.
  *
- * Wraps in BEGIN/SET LOCAL/COMMIT so the timeout applies only to this
- * count, not the connection. Returns null on timeout or error.
+ * The timeout and the count travel as ONE multi-statement string: Postgres
+ * runs it as a single implicit transaction, so `SET LOCAL` covers exactly
+ * this count and ends with it — on the same connection, with nothing left
+ * open. (Separate BEGIN / SET LOCAL / SELECT calls can each land on a
+ * different pooled connection.) Returns null on timeout or error.
  */
 export async function fetchExact(
   connId: string,
@@ -124,30 +127,17 @@ export async function fetchExact(
   whereClause?: string,
 ): Promise<number | null> {
   const where = whereClause ? ` ${whereClause}` : "";
-  // SET LOCAL only persists for the transaction, so we don't bleed the
-  // timeout into subsequent queries on the same pooled connection.
-  try {
-    await api.execute(connId, "BEGIN;");
-    await api.execute(connId, `SET LOCAL statement_timeout = ${EXACT_TIMEOUT_MS};`);
-  } catch {
-    return null;
-  }
-  let val: number | null = null;
-  try {
-    await new Promise<void>((res, rej) => {
-      api.stream(
-        connId,
-        `SELECT COUNT(*) FROM "${schema}"."${table}"${where};`,
-        (b) => {
-          if (b.rows.length > 0) val = asNumber(b.rows[0][0]);
-          if (b.done) res();
-        },
-      ).catch(rej);
-    });
-  } catch {
-    val = null;
-  } finally {
-    try { await api.execute(connId, "ROLLBACK;"); } catch { /* ignore */ }
-  }
-  return val;
+  const sql =
+    `SET LOCAL statement_timeout = ${EXACT_TIMEOUT_MS}; ` +
+    `SELECT COUNT(*) FROM "${schema}"."${table}"${where};`;
+  return new Promise((resolve) => {
+    let val: number | null = null;
+    let sawColumns = false;
+    api.stream(connId, sql, (b) => {
+      if (b.columns) sawColumns = true;
+      // An in-band error (e.g. the timeout) arrives as a column-less row.
+      if (sawColumns && b.rows.length > 0) val = asNumber(b.rows[0][0]);
+      if (b.done) resolve(val);
+    }).catch(() => resolve(null));
+  });
 }

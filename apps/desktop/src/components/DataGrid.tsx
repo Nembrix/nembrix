@@ -457,7 +457,7 @@ export default function DataGrid({ tab, engine, onAddColumn }: {
       return;
     }
 
-    const stmts: string[] = ["BEGIN;"];
+    const stmts: string[] = [];
     try {
       for (const [key, raw] of Object.entries(pendingEdits)) {
         const [rStr, cStr] = key.split(":");
@@ -503,10 +503,8 @@ export default function DataGrid({ tab, engine, onAddColumn }: {
         }).join(", ");
         stmts.push(`INSERT INTO ${schemaIdent}.${tableIdent} (${colList}) VALUES (${valList});`);
       }
-      stmts.push("COMMIT;");
-      for (const sql of stmts) {
-        await api.execute(tab.connId, sql);
-      }
+      // One transaction on one connection: every edit lands, or none do.
+      await api.executeBatch(tab.connId, stmts);
       // Clear pending + force a refresh of the data so the user sees
       // the committed values (both updates and inserts).
       updateTab(tab.id, {

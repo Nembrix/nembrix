@@ -151,17 +151,14 @@ export default function RolesTab({ tab }: { tab: Tab }) {
 
   const applyPending = async () => {
     if (!pending.length || !selectedRole) return;
-    const transactional = ["BEGIN;", ...pending.map((p) => grantSql(selectedRole, p)), "COMMIT;"];
     try {
-      for (const stmt of transactional) {
-        await api.execute(tab.connId, stmt);
-      }
+      // All grants in one transaction on one connection.
+      await api.executeBatch(tab.connId, pending.map((p) => grantSql(selectedRole, p)));
       setPending([]);
       refreshMatrixRef.current();
     } catch (e) {
-      // Roll back implicitly by leaving COMMIT off — but the pending list survives so the user can edit.
+      // Nothing was applied; the pending list survives so the user can edit.
       setErr(String(e));
-      try { await api.execute(tab.connId, "ROLLBACK;"); } catch { /* ignore: best-effort */ }
     }
   };
 

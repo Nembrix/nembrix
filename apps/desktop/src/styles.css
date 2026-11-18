@@ -1491,6 +1491,24 @@ tr.grid-filler.row-even > td {
   border-bottom: 1px solid var(--border);
 }
 .script-console-count { color: var(--fg-2); }
+.script-console-errors { color: var(--danger); }
+/* The header doubles as the open/close toggle: reset button chrome so it
+   looks the same as before, full-width and clickable. */
+button.script-console-head {
+  width: 100%;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  color: inherit;
+  /* Family only: font-size / letter-spacing come from .script-console-head. */
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+button.script-console-head:hover { background: var(--bg-2, rgba(255, 255, 255, 0.04)); }
+/* Collapsed: just the header bar, so the grid takes the space. */
+.script-console.is-collapsed { flex: 0 0 auto; min-height: 0; }
+.script-console.is-collapsed .script-console-head { border-bottom: none; }
 .script-console .script-log {
   flex: 1;
   overflow: auto;
@@ -4060,3 +4078,24 @@ table.sessions-table tr.row-active td { background: rgba(255,255,255,0.025); }
   color: var(--fg-2);
   background: var(--bg-elev);
 }
+
+/* Update in the background: a small floating chip, bottom-right above the
+   status bar, standing in for the hidden update dialog. */
+.update-chip {
+  position: fixed;
+  right: 16px;
+  bottom: 40px;
+  z-index: 50;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  color: var(--fg-1, inherit);
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+.update-chip:hover { border-color: var(--accent, var(--border)); }

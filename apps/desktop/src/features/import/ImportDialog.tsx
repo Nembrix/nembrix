@@ -173,23 +173,27 @@ export default function ImportDialog({ connId, schema: schemaProp, onClose }: Pr
     }
   };
 
-  const runSql = async (statements: string[]) => {
-    const initial: JobRow[] = statements.map((_, ix) => ({ ix, status: "pending" }));
-    setJobs(initial);
-    await api.execute(connId, "BEGIN;");
-    let failed = false;
-    for (let i = 0; i < statements.length; i++) {
-      setJobs((cur) => cur.map((j) => j.ix === i ? { ...j, status: "running" } : j));
-      try {
-        await api.execute(connId, statements[i]);
-        setJobs((cur) => cur.map((j) => j.ix === i ? { ...j, status: "done" } : j));
-      } catch (e) {
-        setJobs((cur) => cur.map((j) => j.ix === i ? { ...j, status: "error", error: String(e) } : j));
-        failed = true;
-        break;
-      }
+  /** Run every statement as one transaction on one connection, then mark
+   *  the jobs: all done, or — the batch names the failing statement — that
+   *  one errored and the rest were rolled back. Returns false on failure. */
+  const runBatch = async (statements: string[]): Promise<boolean> => {
+    setJobs(statements.map((_, ix) => ({ ix, status: "running" })));
+    try {
+      await api.executeBatch(connId, statements);
+      setJobs(statements.map((_, ix) => ({ ix, status: "done" })));
+      return true;
+    } catch (e) {
+      const failedAt = api.failedStatementIndex(String(e));
+      setJobs(statements.map((_, ix) => ix === failedAt
+        ? { ix, status: "error", error: String(e) }
+        : { ix, status: "pending" }));
+      if (failedAt == null) setTopErr(String(e));
+      return false;
     }
-    await api.execute(connId, failed ? "ROLLBACK;" : "COMMIT;");
+  };
+
+  const runSql = async (statements: string[]) => {
+    await runBatch(statements);
   };
 
   const runRows = async (p: ParsedTable) => {
@@ -203,29 +207,16 @@ export default function ImportDialog({ connId, schema: schemaProp, onClose }: Pr
     });
     if (targetCols.length === 0) throw new Error("No columns mapped");
 
-    const initial: JobRow[] = p.rows.map((_, ix) => ({ ix, status: "pending" }));
-    setJobs(initial);
-
-    await api.execute(connId, "BEGIN;");
-    let failed = false;
-    for (let i = 0; i < p.rows.length; i++) {
-      setJobs((cur) => cur.map((j) => j.ix === i ? { ...j, status: "running" } : j));
-      const row = srcIdx.map((s) => p.rows[i][s]);
-      const sql = composeInsert(
-        { qualifiedTarget: qt, columns: targetCols, conflictKey, mode },
-        row,
-      );
-      try {
-        await api.execute(connId, sql);
-        setJobs((cur) => cur.map((j) => j.ix === i ? { ...j, status: "done" } : j));
-      } catch (e) {
-        setJobs((cur) => cur.map((j) => j.ix === i ? { ...j, status: "error", error: String(e) } : j));
-        if (mode === "stop") { failed = true; break; }
-      }
-    }
-    await api.execute(connId, failed ? "ROLLBACK;" : "COMMIT;");
+    // All rows in one transaction: duplicates are handled in SQL by the
+    // conflict mode (ON CONFLICT …), so any error left is a real one and
+    // leaves the table untouched rather than half-imported.
+    const statements = p.rows.map((r) => composeInsert(
+      { qualifiedTarget: qt, columns: targetCols, conflictKey, mode },
+      srcIdx.map((s) => r[s]),
+    ));
+    const ok = await runBatch(statements);
     // Refresh schema after a successful import (target table stats etc).
-    if (!failed) {
+    if (ok) {
       try { useStore.getState().setSchema(connId, await api.introspect(connId)); } catch { /* ignore: best-effort */ }
     }
   };

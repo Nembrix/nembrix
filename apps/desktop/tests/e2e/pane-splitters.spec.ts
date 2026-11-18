@@ -213,3 +213,44 @@ test("the View menu ticks the panels that are visible", async ({ page }) => {
     page.locator(".menu-item", { hasText: "Toggle Results Pane" }),
   ).toHaveAttribute("aria-checked", "false");
 });
+
+test("dragging the console to the bottom hides it, and dragging up brings it back", async ({ page }) => {
+  await seedScriptTab(page);
+  const shellBox = (await page.locator(".result-shell").boundingBox())!;
+  const split = page.locator("[data-testid='console-split']");
+
+  let box = (await split.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, shellBox.y + shellBox.height + 40, { steps: 10 });
+  await page.mouse.up();
+
+  // Collapsed to the header: the log is gone, the toggle stays.
+  await expect(page.locator(".script-log")).toHaveCount(0);
+  await expect(page.locator("[data-testid='console-toggle']")).toHaveAttribute("aria-expanded", "false");
+  expect((await page.locator(".script-console").boundingBox())!.height).toBeLessThan(40);
+
+  box = (await split.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, box.y - 150, { steps: 8 });
+  await page.mouse.up();
+  await expect(page.locator(".script-log")).toBeVisible();
+  expect((await page.locator(".script-console").boundingBox())!.height).toBeGreaterThan(120);
+});
+
+test("the console header toggles it, and the choice survives a reload", async ({ page }) => {
+  await seedScriptTab(page);
+  const toggle = page.locator("[data-testid='console-toggle']");
+  await expect(page.locator(".script-log")).toBeVisible();
+
+  await toggle.click();
+  await expect(page.locator(".script-log")).toHaveCount(0);
+
+  await page.reload();
+  await expect(page.locator(".script-console")).toBeVisible({ timeout: 15000 });
+  await expect(page.locator(".script-log")).toHaveCount(0);
+
+  await page.locator("[data-testid='console-toggle']").click();
+  await expect(page.locator(".script-log")).toBeVisible();
+});

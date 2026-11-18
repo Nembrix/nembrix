@@ -360,6 +360,47 @@ impl DbConnection for PgConn {
         })
     }
 
+    async fn execute_batch(&self, statements: &[String]) -> DbResult<ExecSummary> {
+        let started = Instant::now();
+        let client = self.pool.get().await.map_err(pool_err)?;
+        client.simple_query("BEGIN").await.map_err(driver_err)?;
+        let mut rows_affected = 0u64;
+        for (i, stmt) in statements.iter().enumerate() {
+            match client.simple_query(stmt).await {
+                Ok(msgs) => {
+                    for m in &msgs {
+                        if let SimpleQueryMessage::CommandComplete(n) = m {
+                            rows_affected += *n;
+                        }
+                    }
+                }
+                Err(e) => {
+                    let err = DbError::Driver(format!(
+                        "statement {} of {} failed, nothing was applied: {}",
+                        i + 1,
+                        statements.len(),
+                        error_chain(&e)
+                    ));
+                    if client.simple_query("ROLLBACK").await.is_err() {
+                        // Can't prove the session is clean: keep it out of
+                        // the pool rather than hand it to the next caller.
+                        let _ = deadpool_postgres::Object::take(client);
+                    }
+                    return Err(err);
+                }
+            }
+        }
+        if let Err(e) = client.simple_query("COMMIT").await {
+            let _ = deadpool_postgres::Object::take(client);
+            return Err(driver_err(e));
+        }
+        Ok(ExecSummary {
+            rows_affected,
+            last_insert_id: None,
+            elapsed_ms: started.elapsed().as_millis() as u64,
+        })
+    }
+
     async fn stream(&self, query: &str, params: Params, sink: RowSink) -> DbResult<QueryHandle> {
         let handle = QueryHandle::new();
         let sql = inline_params(query, params)?;
