@@ -1,6 +1,6 @@
 import { isTauri } from "@/ipc/commands";
 import { useStore } from "@/store";
-import { isEnabled } from "./availability";
+import { isEnabled, sqlOnlyBlock } from "./availability";
 import type { MenuId } from "./ids";
 
 export type MenuHandler = (suffix?: string) => void | Promise<void>;
@@ -42,6 +42,13 @@ export async function dispatchMenu(id: string, opts: { force?: boolean } = {}) {
   }
   if (!h) {
     console.warn(`[menu] no handler for "${id}"`);
+    return;
+  }
+  // Engine mismatch is a hard stop even when forced: these handlers would
+  // send SQL to a MongoDB / Redis driver. Say why instead of failing later.
+  const blocked = sqlOnlyBlock(id as MenuId, useStore.getState());
+  if (blocked) {
+    alert(blocked);
     return;
   }
   if (!opts.force && !isEnabled(id as MenuId, useStore.getState())) {

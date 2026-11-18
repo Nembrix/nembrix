@@ -4,6 +4,7 @@ import {
   RefreshCcw, Plus, Trash2, Star, X, Database,
 } from "lucide-react";
 import { useStore } from "@/store";
+import { isSqlEngine } from "@/features/connections/engines";
 import * as api from "@/ipc/commands";
 import type { HistoryEntry, SavedQuery } from "@/ipc/types";
 import ContextMenu, { type ContextItem } from "@/components/ContextMenu";
@@ -72,6 +73,9 @@ export default function Inspector() {
     const sess = useStore.getState().sessions.find((s) => s.id === selectedConnId);
     return sess?.connectionId ?? selectedConnId;
   }, [selectedConnId]);
+  // DDL, maintenance and copy actions send SQL; MongoDB / Redis connections
+  // get only the actions that work for them.
+  const isSql = isSqlEngine(connections.find((c) => c.id === realConnId)?.engine);
   const [collapseTick, setCollapseTick] = useState(0);
   const isGroupCollapsed = (kind: ItemKind) =>
     realConnId ? isCollapsed(realConnId, kind) : (kind === "function");
@@ -158,6 +162,13 @@ export default function Inspector() {
     if (!selectedConnId || !currentSchemaName) return;
     useStore.getState().selectTable({ schema: currentSchemaName, name });
     const schema = currentSchemaName;
+    if (!isSql) {
+      setCtx({ x: e.clientX, y: e.clientY, items: [
+        { label: "Open", onClick: () => openTable(name) },
+        { label: "Copy name", onClick: () => navigator.clipboard.writeText(name) },
+      ] });
+      return;
+    }
     const items: ContextItem[] = [
       { label: "Open in new query tab",
         onClick: () => openTable(name) },
@@ -361,6 +372,7 @@ export default function Inspector() {
                 <RefreshCcw size={13} />
               </button>
             </Tooltip>
+            {isSql && (
             <Tooltip label={`Create in ${currentSchemaName ?? "schema"}`} side="top">
               <button
                 className="icon-btn"
@@ -389,6 +401,7 @@ export default function Inspector() {
                 <Plus size={13} />
               </button>
             </Tooltip>
+            )}
             <select
               className="schema-select"
               value={currentSchemaName ?? ""}

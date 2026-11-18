@@ -13,6 +13,7 @@
 
 import { MENU, type MenuId } from "./ids";
 import type { useStore } from "@/store";
+import { engineLabel, isSqlEngine } from "@/features/connections/engines";
 
 type Snapshot = ReturnType<typeof useStore.getState>;
 
@@ -36,6 +37,10 @@ function ctx(s: Snapshot) {
   const tab = s.tabs.find((t) => t.id === s.activeTabId);
   return {
     connSelected: !!conn,
+    engine: conn?.engine,
+    // No connection selected → nothing to gate on engine; the other
+    // predicates already require one.
+    sql: isSqlEngine(conn?.engine),
     connected: status === "connected",
     disconnected: status === "disconnected" || status === "error",
     schemaLoaded: !!s.selectedConnId && !!s.schemas[s.selectedConnId],
@@ -49,6 +54,29 @@ function ctx(s: Snapshot) {
 }
 
 type Predicate = (s: Snapshot) => boolean;
+
+/**
+ * Actions that send SQL (DDL, pg_catalog queries, SELECT-based import/export/
+ * copy) or edit a SQL query. Disabled on non-SQL engines (MongoDB, Redis),
+ * and refused by the dispatcher even when forced — see `sqlOnlyBlock`.
+ */
+export const SQL_ONLY: ReadonlySet<MenuId> = new Set<MenuId>([
+  MENU.IMPORT, MENU.EXPORT,
+  MENU.DB_NEW, MENU.DB_RENAME, MENU.DB_DUPLICATE, MENU.DB_DROP,
+  MENU.DB_MANAGE_ROLES, MENU.DB_ACTIVITY, MENU.DB_ER_DIAGRAM, MENU.DB_SCHEMA_DIFF,
+  MENU.DB_COPY_TO,
+  MENU.TABLE_NEW, MENU.TABLE_RENAME, MENU.TABLE_DUPLICATE, MENU.TABLE_MOVE_SCHEMA,
+  MENU.TABLE_DROP, MENU.TABLE_TRUNCATE, MENU.TABLE_VACUUM, MENU.TABLE_REINDEX,
+  MENU.TABLE_COPY_CREATE, MENU.TABLE_COPY_TO,
+  MENU.QUERY_FORMAT, MENU.QUERY_EXPLAIN, MENU.QUERY_EXPLAIN_ANALYZE, MENU.QUERY_TOGGLE_LIMIT,
+]);
+
+/** Why a SQL-only action can't run on the selected connection, or null. */
+export function sqlOnlyBlock(id: MenuId, s: Snapshot): string | null {
+  const c = ctx(s);
+  if (!SQL_ONLY.has(id) || c.sql) return null;
+  return `This action isn't available for ${engineLabel(c.engine)} connections.`;
+}
 
 /**
  * Map of menu id → predicate. An id absent from this map is treated as
@@ -118,6 +146,7 @@ const RULES: Partial<Record<MenuId, Predicate>> = {
 };
 
 export function isEnabled(id: MenuId, s: Snapshot): boolean {
+  if (sqlOnlyBlock(id, s)) return false;
   const p = RULES[id];
   return p ? p(s) : true;
 }
@@ -128,7 +157,8 @@ export function isEnabled(id: MenuId, s: Snapshot): boolean {
  */
 export function disabledIds(s: Snapshot): string[] {
   const out: string[] = [];
-  for (const id of Object.keys(RULES) as MenuId[]) {
+  const ids = new Set<MenuId>([...(Object.keys(RULES) as MenuId[]), ...SQL_ONLY]);
+  for (const id of ids) {
     if (!isEnabled(id, s)) out.push(id);
   }
   return out;

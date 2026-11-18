@@ -543,7 +543,8 @@ export default function TableDataTab({ tab }: { tab: Tab }) {
       )}
       {exportOpen && tab.columns && tab.rows && (
         <ExportDialog
-          source={rel}
+          // "All rows" re-queries with SELECT *; non-SQL engines export what's loaded.
+          source={isSqlEngine(engine) ? rel : undefined}
           connId={tab.connId}
           columns={tab.columns}
           rows={tab.rows}

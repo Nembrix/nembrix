@@ -937,7 +937,8 @@ export default function DataGrid({ tab, engine, onAddColumn }: {
 
       {exportOpen && (
         <ExportDialog
-          source={tab.sourceRelation}
+          // "All rows" re-queries with SELECT *; non-SQL engines export what's loaded.
+          source={isSqlEngine(engine) ? tab.sourceRelation : undefined}
           connId={tab.connId}
           columns={cols}
           rows={rows}
