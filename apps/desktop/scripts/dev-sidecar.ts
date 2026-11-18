@@ -21,7 +21,7 @@
  */
 
 import express, { Request, Response } from "express";
-import { Client, Pool, PoolClient, QueryResultRow, types as pgTypes } from "pg";
+import { Client, Pool, PoolClient, QueryResult, QueryResultRow, types as pgTypes } from "pg";
 import { randomUUID } from "node:crypto";
 
 /* ───────────────────────── types mirrored from Rust ───────────────────────── */
@@ -419,6 +419,40 @@ app.post("/execute", async (req: Request, res: Response) => {
   }
 });
 
+// One checked-out client for the whole transaction — `pool.query` would run
+// each statement on whichever client is free.
+app.post("/execute-batch", async (req: Request, res: Response) => {
+  const { id, statements } = req.body as { id: string; statements: string[] };
+  const live = conns.get(id);
+  if (!live) return res.status(400).json({ error: "not connected" });
+  const t0 = Date.now();
+  const client = await live.pool.connect();
+  let broken = false;
+  try {
+    await client.query("BEGIN");
+    let affected = 0;
+    for (let i = 0; i < statements.length; i++) {
+      try {
+        const out = await client.query(statements[i]);
+        affected += out.rowCount ?? 0;
+      } catch (e: unknown) {
+        try { await client.query("ROLLBACK"); } catch { broken = true; }
+        return res.status(400).json({
+          error: `statement ${i + 1} of ${statements.length} failed, nothing was applied: ${errMessage(e)}`,
+        });
+      }
+    }
+    await client.query("COMMIT");
+    res.json({ rows_affected: affected, last_insert_id: null, elapsed_ms: Date.now() - t0 });
+  } catch (e: unknown) {
+    broken = true;
+    res.status(400).json({ error: errMessage(e) });
+  } finally {
+    // A client whose state we couldn't restore is destroyed, not pooled.
+    client.release(broken);
+  }
+});
+
 app.post("/stream", async (req: Request, res: Response) => {
   const { id, sql } = req.body as { id: string; sql: string };
   const live = conns.get(id);
@@ -450,7 +484,12 @@ app.post("/stream", async (req: Request, res: Response) => {
       send("handle", handle);
     } catch { /* non-fatal */ }
 
-    const result = await client.query(sql);
+    const raw = (await client.query(sql)) as QueryResult | QueryResult[];
+    // A multi-statement string (e.g. `SET LOCAL …; SELECT …`) yields one
+    // result per statement — show the last one that returned columns.
+    const result = Array.isArray(raw)
+      ? [...raw].reverse().find((r) => (r.fields ?? []).length > 0) ?? raw[raw.length - 1]
+      : raw;
     const fields = result.fields ?? [];
     const typeNames = await typeNamesForRow(client, fields.map((f) => f.dataTypeID));
     const columns: ColMeta[] = fields.map((f, i) => ({

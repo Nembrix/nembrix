@@ -5,7 +5,7 @@ import { useStore } from "@/store";
 import type { ConnectionRecord, SchemaTree } from "@/ipc/types";
 import * as api from "@/ipc/commands";
 import { diffSchemas, type DiffOp } from "./engine";
-import { generateMigration } from "./migrate";
+import { generateMigration, generateMigrationStatements } from "./migrate";
 
 /**
  * Pick (left connection, left schema) and (right connection, right schema),
@@ -110,16 +110,11 @@ export default function SchemaDiffTab({ tab }: { tab: Tab }) {
 
     setApplying(true); setError(null);
     try {
-      // generateMigration already wraps in BEGIN/COMMIT. Send each line as
-      // one execute so a fail surfaces precisely.
-      const lines = migrationSql.split("\n").filter((l) => l.trim() && !l.trim().startsWith("--"));
-      for (const stmt of lines) {
-        await api.execute(leftConnId, stmt);
-      }
+      // One transaction on one connection; the error names the failing step.
+      await api.executeBatch(leftConnId, generateMigrationStatements(selectedOps));
       await refresh();
     } catch (e) {
       setError(`${e}\n(transaction rolled back)`);
-      try { await api.execute(leftConnId, "ROLLBACK;"); } catch { /* ignore: best-effort */ }
     } finally {
       setApplying(false);
     }

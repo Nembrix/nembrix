@@ -118,6 +118,10 @@ export async function sidecarExecute(id: string, sql: string): Promise<ExecSumma
   return await post<ExecSummary>("/execute", { id, sql });
 }
 
+export async function sidecarExecuteBatch(id: string, statements: string[]): Promise<ExecSummary> {
+  return await post<ExecSummary>("/execute-batch", { id, statements });
+}
+
 export async function sidecarCancel(id: string, handle: QueryHandle): Promise<void> {
   await post<void>("/cancel", { id, handle });
 }

@@ -24,8 +24,9 @@
 import type { ColumnNode, IndexNode, RelationNode } from "@/ipc/types";
 import type { DiffOp } from "./engine";
 
-export function generateMigration(ops: DiffOp[]): string {
-  if (ops.length === 0) return "-- Nothing to migrate.\n";
+/** The migration's statements in apply order, without BEGIN/COMMIT — run
+ *  them with `executeBatch`, which supplies the transaction. */
+export function generateMigrationStatements(ops: DiffOp[]): string[] {
   const stages: string[] = [];
   const grouped = groupOps(ops);
   for (const stmt of grouped.dropFks)     stages.push(dropFk(stmt));
@@ -37,7 +38,13 @@ export function generateMigration(ops: DiffOp[]): string {
   for (const stmt of grouped.changeColumns) stages.push(...changeColumn(stmt));
   for (const stmt of grouped.addIndexes)  stages.push(addIndex(stmt));
   for (const stmt of grouped.addFks)      stages.push(addFk(stmt));
-  return ["BEGIN;", ...stages, "COMMIT;"].join("\n");
+  return stages;
+}
+
+/** The migration as previewable SQL text, wrapped in BEGIN/COMMIT. */
+export function generateMigration(ops: DiffOp[]): string {
+  if (ops.length === 0) return "-- Nothing to migrate.\n";
+  return ["BEGIN;", ...generateMigrationStatements(ops), "COMMIT;"].join("\n");
 }
 
 /* ───────────────────────── per-op statement builders ───────────────── */

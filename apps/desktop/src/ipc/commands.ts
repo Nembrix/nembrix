@@ -14,6 +14,7 @@ import {
   sidecarDisconnect,
   sidecarIntrospect,
   sidecarExecute,
+  sidecarExecuteBatch,
   sidecarCancel,
   sidecarStream,
   sidecarTestConnection,
@@ -193,6 +194,11 @@ async function mockInvoke<T>(cmd: string, args: Record<string, unknown> = {}): P
 
     case "execute": {
       return { rows_affected: 1, last_insert_id: null, elapsed_ms: 12 } as unknown as T;
+    }
+
+    case "execute_batch": {
+      const n = (args.statements as string[]).length;
+      return { rows_affected: n, last_insert_id: null, elapsed_ms: 12 } as unknown as T;
     }
 
     case "stream": {
@@ -607,6 +613,12 @@ async function sidecarRoute<T>(
       const out = await withRetry(connId, () => sidecarExecute(connId, args.sql as string));
       return out as unknown as T;
     }
+    case "execute_batch": {
+      // No withRetry: replaying a transaction after an unknown outcome could
+      // apply it twice.
+      const out = await sidecarExecuteBatch(args.connId as string, args.statements as string[]);
+      return out as unknown as T;
+    }
     case "cancel": {
       await sidecarCancel(args.connId as string, args.handle as QueryHandle);
       return undefined as unknown as T;
@@ -669,6 +681,20 @@ export const trustSshHost = (host: string, fingerprint: string) =>
 
 export const execute = (connId: string, sql: string) =>
   invoke<ExecSummary>("execute", { connId: resolveConnId(connId), sql });
+
+/** Run `statements` as ONE transaction on ONE connection: all commit or, on
+ *  the first error, none do. Use this for any multi-statement write — never
+ *  `execute("BEGIN")` … `execute("COMMIT")`: each `execute` may run on a
+ *  different pooled connection, stranding the BEGIN in an open transaction. */
+export const executeBatch = (connId: string, statements: string[]) =>
+  invoke<ExecSummary>("execute_batch", { connId: resolveConnId(connId), statements });
+
+/** The 0-based index of the failing statement in an `executeBatch` error
+ *  ("statement N of M failed, nothing was applied: …"), or null. */
+export function failedStatementIndex(err: string): number | null {
+  const m = /statement (\d+) of \d+ failed/.exec(err);
+  return m ? Number(m[1]) - 1 : null;
+}
 
 export const stream = async (
   connId: string,
