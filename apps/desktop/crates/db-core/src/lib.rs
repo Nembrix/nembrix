@@ -280,6 +280,17 @@ pub trait DbConnection: Send + Sync {
     /// Fire-and-forget statement. Returns rows_affected etc.
     async fn execute(&self, query: &str, params: Params) -> DbResult<ExecSummary>;
 
+    /// Run `statements` as one transaction on **one** connection: all of them
+    /// commit, or — on the first error — none do. `rows_affected` is the sum.
+    ///
+    /// Callers must use this rather than `execute("BEGIN")`, `execute(…)`,
+    /// `execute("COMMIT")`: each `execute` may borrow a different pooled
+    /// connection, which leaves the BEGIN's connection stuck in an open
+    /// transaction that later writes disappear into.
+    async fn execute_batch(&self, _statements: &[String]) -> DbResult<ExecSummary> {
+        Err(DbError::Unsupported("transactions"))
+    }
+
     /// Streamed read. The driver pushes [`RowBatch`]es into `sink` and returns
     /// a handle the caller can later pass to [`cancel`](Self::cancel).
     async fn stream(&self, query: &str, params: Params, sink: RowSink) -> DbResult<QueryHandle>;

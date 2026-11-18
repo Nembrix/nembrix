@@ -29,6 +29,32 @@ pub async fn execute(
     Ok(res)
 }
 
+/// Run `statements` as one transaction on one connection (see
+/// `DbConnection::execute_batch`). The frontend uses this — never separate
+/// `execute("BEGIN")` / `execute("COMMIT")` calls — for multi-statement saves.
+#[tauri::command]
+#[specta::specta]
+pub async fn execute_batch(
+    state: State<'_, AppState>,
+    conn_id: Uuid,
+    statements: Vec<String>,
+) -> Result<ExecSummary, String> {
+    let g = state.conns.read().await;
+    let live = g.get(&conn_id).ok_or("not connected")?;
+    let started = std::time::Instant::now();
+    let res = live
+        .db
+        .execute_batch(&statements)
+        .await
+        .map_err(|e| e.to_string())?;
+    let _ = state.store.record_query(
+        conn_id,
+        &statements.join("\n"),
+        started.elapsed().as_millis() as u64,
+    );
+    Ok(res)
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn stream(
