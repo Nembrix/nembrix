@@ -77,7 +77,7 @@ const rows = await db.query(
 );
 ```
 
-On **MySQL / MariaDB** the placeholder is `?` instead:
+On **MySQL / MariaDB** and **SQLite** the placeholder is `?` instead:
 `db.query("SELECT * FROM users WHERE email = ?", [email])`.
 
 Do **not** build SQL by concatenating values into the string. Use params.

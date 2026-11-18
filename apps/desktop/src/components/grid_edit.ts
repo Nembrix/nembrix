@@ -20,12 +20,14 @@ export function pkLiteral(v: CellValue, d: SqlDialect = "postgres"): string {
     case "raw":   return stringLiteral(d, v.value);
     case "document": {
       const lit = stringLiteral(d, JSON.stringify(v.value));
-      // MySQL compares a JSON column with CAST(… AS JSON); Postgres casts.
-      return d === "mysql" ? `CAST(${lit} AS JSON)` : `${lit}::jsonb`;
+      // MySQL compares a JSON column with CAST(… AS JSON); Postgres casts;
+      // SQLite stores JSON as text.
+      if (d === "mysql") return `CAST(${lit} AS JSON)`;
+      return d === "sqlite" ? lit : `${lit}::jsonb`;
     }
     case "bytes": {
       const hex = v.value.map((b) => b.toString(16).padStart(2, "0")).join("");
-      return d === "mysql" ? `X'${hex}'` : `'\\x${hex}'::bytea`;
+      return d === "postgres" ? `'\\x${hex}'::bytea` : `X'${hex}'`;
     }
   }
 }
@@ -54,7 +56,7 @@ export function valueLiteral(input: string, typeName: string, d: SqlDialect = "p
     return /^(t|true|1|y|yes)$/i.test(input.trim()) ? "TRUE" : "FALSE";
   }
   if (["json", "jsonb"].includes(t)) {
-    return d === "mysql" ? stringLiteral(d, input) : `${stringLiteral(d, input)}::${t}`;
+    return d === "postgres" ? `${stringLiteral(d, input)}::${t}` : stringLiteral(d, input);
   }
   return stringLiteral(d, input);
 }

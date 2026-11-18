@@ -32,6 +32,7 @@ db-postgres.workspace = true
 db-mongo.workspace = true
 db-redis.workspace = true
 db-mysql.workspace = true
+db-sqlite.workspace = true
 db-script.workspace = true
 ssh-tunnel.workspace = true
 secrets.workspace = true

@@ -211,7 +211,10 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
       },
     }));
 
-  const finalInput = (): ConnectionInput => ({ ...v, ssh: useSsh ? v.ssh : null });
+  const finalInput = (): ConnectionInput => ({
+    ...v,
+    ssh: useSsh && !spec?.fileBased ? v.ssh : null,
+  });
 
   // Validate the connection name up front (required + unique). Gates Save
   // / Connect so we never round-trip an invalid record to the backend just
@@ -491,7 +494,16 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
               </>
             )}
 
-            {inputMode === "url" && uriAdapter ? (
+            {spec?.fileBased ? (
+              <>
+                <label htmlFor="cf-file">File</label>
+                <DbFilePicker
+                  path={v.database ?? ""}
+                  placeholder={spec.fieldPlaceholders.database}
+                  onChange={(p) => patch({ database: p || null })}
+                />
+              </>
+            ) : inputMode === "url" && uriAdapter ? (
               <>
                 <label htmlFor="cf-uri">URL</label>
                 <div>
@@ -603,6 +615,8 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
             </datalist>
 
 
+            {/* A local file has nothing to tunnel to. */}
+            {!spec?.fileBased && (<>
             <div className="section-title">SSH tunnel</div>
             <label className="check-row" htmlFor="cf-ssh">
               <input id="cf-ssh" type="checkbox" checked={useSsh} onChange={(e) => setUseSsh(e.target.checked)} />
@@ -661,6 +675,7 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
                   onChange={(e) => patchSsh({ strict_host_key: e.target.checked })} />
                 Strict host key
               </label>
+            </>)}
             </>)}
           </div>
         </div>
@@ -794,6 +809,51 @@ function SshKeyPicker({
         onChange={onFileChange}
         data-testid="ssh-key-input"
       />
+    </div>
+  );
+}
+
+/* Database file field for file-based engines (SQLite): a path box plus a
+   Browse button that opens the native file dialog. The browser dev build has
+   no file-system paths, so there the path is typed. */
+function DbFilePicker({
+  path, placeholder, onChange,
+}: {
+  path: string;
+  placeholder: string;
+  onChange: (path: string) => void;
+}) {
+  const browse = async () => {
+    try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const result = await open({
+        multiple: false,
+        directory: false,
+        filters: [
+          { name: "SQLite database", extensions: ["db", "sqlite", "sqlite3", "db3", "s3db", "sl3"] },
+          { name: "All files", extensions: ["*"] },
+        ],
+      });
+      if (typeof result === "string") onChange(result);
+    } catch (e) {
+      console.error("[db-file-picker]", e);
+    }
+  };
+
+  return (
+    <div className="row-flex" style={{ gap: 4 }}>
+      <input
+        id="cf-file"
+        type="text"
+        style={{ flex: 1 }}
+        spellCheck={false}
+        value={path}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      {isTauri && (
+        <button type="button" className="btn-pill" onClick={() => void browse()}>Browse…</button>
+      )}
     </div>
   );
 }

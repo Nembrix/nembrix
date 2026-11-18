@@ -48,6 +48,9 @@ export type EngineSpec = {
   /** Postgres-specific tooling — roles, activity, DDL editors and object ops,
    *  table stats, schema diff, copy/import, EXPLAIN analysis — works here. */
   pgTools: boolean;
+  /** A local database file: the form asks for a path (kept in `database`)
+   *  instead of host, port, credentials, SSL and SSH. */
+  fileBased?: boolean;
 };
 
 /** Ordered list — drives the engine picker. URI adapters are attached in
@@ -75,10 +78,10 @@ export const ENGINES: Record<EngineKey, EngineSpec> = {
     dialect: "mysql", pgTools: false,
   },
   sqlite: {
-    key: "sqlite", label: "SQLite", supported: false, defaultPort: 0,
-    fieldPlaceholders: { user: "", database: "path/to/file.db" },
+    key: "sqlite", label: "SQLite", supported: true, defaultPort: 0,
+    fieldPlaceholders: { user: "", database: "~/path/to/file.db" },
     hasTls: false, sslDefault: "disable", scripting: true, queryLang: "sql", tlsOnOff: false,
-    dialect: "sqlite", pgTools: false,
+    dialect: "sqlite", pgTools: false, fileBased: true,
   },
   mongo: {
     // TLS off by default: a plain local Mongo has no TLS, and the driver reads

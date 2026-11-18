@@ -24,11 +24,19 @@ describe("engine registry", () => {
     }
   });
 
-  it("marks the shipped drivers supported and the rest coming-soon", () => {
-    for (const key of ["postgres", "mysql", "mariadb", "mongo", "redis"] as const) {
+  it("marks every listed driver supported", () => {
+    for (const key of ["postgres", "mysql", "mariadb", "sqlite", "mongo", "redis"] as const) {
       expect(ENGINES[key].supported).toBe(true);
     }
-    expect(ENGINES.sqlite.supported).toBe(false);
+  });
+
+  it("asks for a file, not a server, only for SQLite", () => {
+    expect(ENGINES.sqlite.fileBased).toBe(true);
+    expect(engineDialect("sqlite")).toBe("sqlite");
+    expect(hasPgTools("sqlite")).toBe(false);
+    for (const key of ["postgres", "mysql", "mariadb", "mongo", "redis"] as const) {
+      expect(ENGINES[key].fileBased).toBeFalsy();
+    }
   });
 
   it("knows each SQL engine's dialect and which have the Postgres tools", () => {

@@ -5,6 +5,7 @@ use db_mongo::{MongoConfig, MongoConn};
 use db_mysql::{MySqlConfig, MySqlConn, MySqlSsl};
 use db_postgres::{PgConfig, PgConn, PgSsl};
 use db_redis::{RedisConfig, RedisConn};
+use db_sqlite::{SqliteConfig, SqliteConn};
 use secrets::{ConnectionRecord, SecretSlot, SshRecord};
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -166,7 +167,9 @@ pub async fn connect(state: State<'_, AppState>, id: Uuid) -> Result<(), String>
 
     let db_password = secrets::get_secret(id, SecretSlot::DbPassword).map_err(|e| e.to_string())?;
 
-    let (host, port, tunnel) = if let Some(ssh) = rec.ssh.as_ref() {
+    // A SQLite file is local: never tunnel, whatever a stale record says.
+    let ssh = rec.ssh.as_ref().filter(|_| rec.engine != "sqlite");
+    let (host, port, tunnel) = if let Some(ssh) = ssh {
         let auth = build_ssh_auth(id, ssh)?;
         let tcfg = TunnelConfig {
             ssh_host: ssh.host.clone(),
@@ -214,6 +217,22 @@ pub async fn connect(state: State<'_, AppState>, id: Uuid) -> Result<(), String>
 /// would silently fall back — so the actionable fix is to relax the SSL mode.
 fn short_connect_error(raw: &str) -> String {
     let low = raw.to_lowercase();
+    // SQLite: the "connection" is a file path.
+    if low.contains("no sqlite file chosen") {
+        return "Choose a database file.".into();
+    }
+    if low.contains("sqlite file not found") {
+        return "File not found — check the path.".into();
+    }
+    if low.contains("connect failed: not a file") {
+        return "That path is a folder — choose a database file.".into();
+    }
+    if low.contains("file is not a database") {
+        return "Not a SQLite database file.".into();
+    }
+    if low.contains("unable to open database file") {
+        return "Can't open the file — check its permissions.".into();
+    }
     if low.contains("server does not support tls") {
         return "Server has no TLS — set SSL to \"prefer\" or \"disable\".".into();
     }
@@ -420,6 +439,16 @@ async fn build_driver(
             .map_err(|e| short_connect_error(&e.to_string()))?;
             Ok(redis as DynConn)
         }
+        // File-based: the Database field holds the path; host, port, user,
+        // password and SSL don't apply.
+        "sqlite" => {
+            let sqlite = SqliteConn::connect(SqliteConfig {
+                path: database.unwrap_or_default(),
+            })
+            .await
+            .map_err(|e| short_connect_error(&e.to_string()))?;
+            Ok(sqlite as DynConn)
+        }
         other => Err(format!("unsupported engine: {other}")),
     }
 }
@@ -443,7 +472,8 @@ pub async fn disconnect(state: State<'_, AppState>, id: Uuid) -> Result<(), Stri
 #[specta::specta]
 pub async fn test_connection(input: ConnectionInput) -> Result<u64, String> {
     let started = std::time::Instant::now();
-    let (host, port, _tunnel) = if let Some(ssh) = input.ssh.as_ref() {
+    let ssh = input.ssh.as_ref().filter(|_| input.engine != "sqlite");
+    let (host, port, _tunnel) = if let Some(ssh) = ssh {
         // Like the DB password, SSH secrets are blanked when the form re-opens
         // for editing — fall back to the keychain when the field is empty and
         // we have a saved id.
@@ -672,6 +702,34 @@ mod tests {
                 out,
                 "Could not connect — check the host, port, and credentials."
             );
+        }
+    }
+
+    #[test]
+    fn sqlite_file_errors_name_the_fix() {
+        for (raw, want) in [
+            (
+                "connect failed: no SQLite file chosen",
+                "Choose a database file.",
+            ),
+            (
+                "connect failed: SQLite file not found: /x/typo.db",
+                "File not found — check the path.",
+            ),
+            (
+                "connect failed: not a file: /x",
+                "That path is a folder — choose a database file.",
+            ),
+            (
+                "connect failed: file is not a database",
+                "Not a SQLite database file.",
+            ),
+            (
+                "connect failed: unable to open database file",
+                "Can't open the file — check its permissions.",
+            ),
+        ] {
+            assert_eq!(short_connect_error(raw), want, "{raw}");
         }
     }
 

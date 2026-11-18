@@ -94,6 +94,8 @@ export async function fetchEstimate(
   table: string,
   d: SqlDialect = "postgres",
 ): Promise<number | null> {
+  // SQLite keeps no row-count statistics; the exact count is all there is.
+  if (d === "sqlite") return null;
   // MySQL / MariaDB: InnoDB's statistics estimate, the same order of
   // accuracy as reltuples.
   const sql = d === "mysql" ? `
@@ -136,43 +138,34 @@ export async function fetchExact(
   d: SqlDialect = "postgres",
 ): Promise<number | null> {
   const where = whereClause ? ` ${whereClause}` : "";
-  if (d === "mysql") return fetchExactMySql(connId, schema, table, where);
-  const sql =
+  if (d === "mysql") {
+    // MySQL bounds the count with an optimizer hint on the statement itself —
+    // no transaction or session state needed. MariaDB doesn't know the hint
+    // and reads it as a comment, so there the count simply runs to completion.
+    return streamCount(
+      connId,
+      `SELECT /*+ MAX_EXECUTION_TIME(${EXACT_TIMEOUT_MS}) */ COUNT(*) FROM ${qualify(d, schema, table)}${where};`,
+    );
+  }
+  // SQLite has no statement timeout; a local file counts quickly enough.
+  if (d === "sqlite") return streamCount(connId, `SELECT COUNT(*) FROM ${qualify(d, schema, table)}${where};`);
+  return streamCount(
+    connId,
     `SET LOCAL statement_timeout = ${EXACT_TIMEOUT_MS}; ` +
-    `SELECT COUNT(*) FROM ${qualify(d, schema, table)}${where};`;
+      `SELECT COUNT(*) FROM ${qualify(d, schema, table)}${where};`,
+  );
+}
+
+/** Run a single-value count; null on an error or time limit. */
+function streamCount(connId: string, sql: string): Promise<number | null> {
   return new Promise((resolve) => {
     let val: number | null = null;
     let sawColumns = false;
     api.stream(connId, sql, (b) => {
       if (b.columns) sawColumns = true;
-      // An in-band error (e.g. the timeout) arrives as a column-less row.
+      // An in-band error (e.g. the time limit) arrives as a column-less row.
       if (sawColumns && b.rows.length > 0) val = asNumber(b.rows[0][0]);
       if (b.done) resolve(val);
     }).catch(() => resolve(null));
-  });
-}
-
-/** MySQL bounds the count with an optimizer hint on the statement itself —
- *  no transaction or session state needed. MariaDB doesn't know the hint
- *  and reads it as a comment, so there the count simply runs to completion. */
-async function fetchExactMySql(
-  connId: string,
-  schema: string,
-  table: string,
-  where: string,
-): Promise<number | null> {
-  return new Promise((resolve) => {
-    let val: number | null = null;
-    let sawColumns = false;
-    api.stream(
-      connId,
-      `SELECT /*+ MAX_EXECUTION_TIME(${EXACT_TIMEOUT_MS}) */ COUNT(*) FROM ${qualify("mysql", schema, table)}${where};`,
-      (b) => {
-        if (b.columns) sawColumns = true;
-        // An in-band error (e.g. the time limit) arrives as a column-less row.
-        if (sawColumns && b.rows.length > 0) val = asNumber(b.rows[0][0]);
-        if (b.done) resolve(val);
-      },
-    ).catch(() => resolve(null));
   });
 }

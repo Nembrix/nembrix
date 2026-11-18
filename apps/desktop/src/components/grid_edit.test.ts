@@ -173,6 +173,22 @@ describe("MySQL dialect", () => {
   });
 });
 
+describe("SQLite dialect", () => {
+  it("quotes like Postgres but takes backslashes literally and has no casts", () => {
+    expect(buildUpdate({
+      schema: "main", table: "t", column: "note",
+      newLiteral: valueLiteral("a\\b", "text", "sqlite"),
+      pkColumns: ["id"], pkValues: { id: { kind: "int", value: 7 } }, dialect: "sqlite",
+    })).toBe(`UPDATE "main"."t" SET "note" = 'a\\b' WHERE "id" = 7;`);
+    expect(pkLiteral({ kind: "bytes", value: [0xff, 0x01] }, "sqlite")).toBe("X'ff01'");
+    expect(pkLiteral({ kind: "document", value: { a: 1 } }, "sqlite")).toBe(`'{"a":1}'`);
+    expect(valueLiteral('{"a":1}', "json", "sqlite")).toBe(`'{"a":1}'`);
+    expect(valueLiteral("42", "integer", "sqlite")).toBe("42");
+    expect(buildInsert({ schema: "main", table: "t", values: [], dialect: "sqlite" }))
+      .toBe(`INSERT INTO "main"."t" DEFAULT VALUES;`);
+  });
+});
+
 describe("valueLiteral numeric guard", () => {
   it("leaves real numbers bare for numeric columns (MySQL type names too)", () => {
     expect(valueLiteral("42", "int", "mysql")).toBe("42");

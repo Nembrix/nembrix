@@ -213,4 +213,11 @@ describe("SQL table-data queries per dialect", () => {
     expect(buildWhereClause([chip("code", "CONTAINS", "50%")], "mysql"))
       .toBe("WHERE `code` LIKE BINARY '%50\\\\%%'");
   });
+
+  it("maps CONTAINS / ICONTAINS to what SQLite has", () => {
+    expect(buildWhereClause([chip("name", "CONTAINS", "Ab")], "sqlite"))
+      .toBe(`WHERE instr("name", 'Ab') > 0`);
+    expect(buildWhereClause([chip("code", "NOT ICONTAINS", "50%")], "sqlite"))
+      .toBe(`WHERE "code" NOT LIKE '%50\\%%' ESCAPE '\\'`);
+  });
 });

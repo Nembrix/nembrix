@@ -1,0 +1,47 @@
+---
+title: SQLite
+description: Open a SQLite database file, browse, query and edit data.
+---
+
+Pick **SQLite** in the connection form's engine picker.
+
+## Connecting
+
+- **File** — the path to an existing database file. **Browse…** opens the
+  file dialog; `~/` stands for your home folder. Nembrix never creates a
+  file: a mistyped path fails with *File not found* instead of opening an
+  empty database somewhere.
+- There's no host, user, password, SSL or SSH — the file is opened directly.
+
+A read-only file opens read-only. Writes wait up to 5 s for another program
+holding the database lock, then fail with *database is locked*.
+
+## What works
+
+- Browsing tables, views, columns, keys and indexes. The sidebar shows
+  `main`, plus any database you `ATTACH`.
+- The table view: filters, sorting, an exact row count, and editing,
+  inserting and deleting rows — saved in one transaction.
+- The SQL editor with SQLite completion, multi-statement scripts and
+  **Cancel**. `BEGIN` in one run and `COMMIT` in a later one reach the
+  same transaction.
+- [JavaScript scripting](../scripting/) — use `?` placeholders.
+- Export to CSV, JSON or SQL `INSERT`s.
+
+## Good to know
+
+- **Foreign keys are enforced.** SQLite leaves them off by default; Nembrix
+  turns them on, so edits honour the declared constraints and
+  `ON DELETE CASCADE`.
+- **Views and triggers in the file can only call harmless functions**
+  (`trusted_schema = OFF`), so opening a database you downloaded can't
+  trigger side effects. Extensions can't be loaded.
+- **Case in filters.** *Contains* is case-sensitive; *contains (ignore
+  case)* and `LIKE` ignore case for ASCII letters only — SQLite's own rule.
+
+## Postgres-only for now
+
+Roles & grants, Activity, Schema Diff, the ER diagram, Import, copying
+between connections, the structure editors, and object operations are built
+on Postgres specifics and are disabled on SQLite connections. Use SQL in a
+query tab for those meanwhile.
