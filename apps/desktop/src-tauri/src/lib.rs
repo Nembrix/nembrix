@@ -18,6 +18,12 @@ pub fn run() {
         )
         .init();
 
+    // One crypto provider for every TLS client in the process. tiberius
+    // compiles in aws-lc-rs as its fallback, and with two providers built in
+    // rustls can no longer pick a default on its own — so install ring (what
+    // every driver already uses) before anything opens a TLS connection.
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
     let builder = Builder::<tauri::Wry>::new().commands(collect_commands![
         commands::connections::list_connections,
         commands::connections::save_connection,

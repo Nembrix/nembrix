@@ -34,7 +34,7 @@ for the workspace structure.
 - **Import / export** — CSV / JSON / SQL, plus a bulk multi-table export.
 - **Command palette** — `⌘P` fuzzy-search across actions, connections,
   schema items, open tabs, and recent SQL.
-- **Engines** — PostgreSQL, MySQL / MariaDB, SQLite, MongoDB, and Redis (browse
+- **Engines** — PostgreSQL, MySQL / MariaDB, SQL Server, SQLite, MongoDB, and Redis (browse
   keys by type, run `redis-cli`-style commands).
 - **Native & private** — Postgres-first, cross-platform (macOS / Windows /
   Linux), no required cloud account, no telemetry by default.
@@ -44,7 +44,7 @@ for the workspace structure.
 Toggle a **Query** tab from SQL to **JavaScript** (the `Lang` picker in
 the editor toolbar) to run JS over your live connection — useful for
 per-row work and quick data munging that's awkward in one statement.
-Scripting is SQL-engine only (Postgres / MySQL / SQLite).
+Scripting is SQL-engine only (Postgres / MySQL / SQL Server / SQLite).
 
 ```js
 // Parameters are bound positionally ($1, $2, …) — never string-interpolated.

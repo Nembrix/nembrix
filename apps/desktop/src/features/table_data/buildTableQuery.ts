@@ -1,8 +1,6 @@
 import type { FilterChip, Tab } from "@/store";
 import type { CellValue } from "@/ipc/types";
-import {
-  contains, qualify, quoteIdent, stringLiteral, type SqlDialect,
-} from "@/lib/sql-dialect";
+import { contains, qualify, quoteIdent, selectStar, stringLiteral, type SqlDialect } from "@/lib/sql-dialect";
 
 /** Build `db.<collection>.find(<filter>).sort(...).limit(N)` for the table-data
  *  view on a MongoDB connection. The SQL path (SELECT …) stays in TableDataTab;
@@ -275,7 +273,7 @@ export function buildWhereClause(filters: FilterChip[], d: SqlDialect = "postgre
 }
 
 /** `SELECT * FROM schema.table [WHERE …] [ORDER BY …] LIMIT n;` for the
- *  table-data view on a SQL connection. */
+ *  table-data view on a SQL connection (`SELECT TOP (n) …` on SQL Server). */
 export function buildSql(
   rel: { schema: string; table: string } | undefined,
   filters: FilterChip[],
@@ -284,10 +282,9 @@ export function buildSql(
   d: SqlDialect = "postgres",
 ): string {
   if (!rel) return "";
-  let sql = `SELECT * FROM ${qualify(d, rel.schema, rel.table)}`;
+  let rest = qualify(d, rel.schema, rel.table);
   const where = buildWhereClause(filters, d);
-  if (where) sql += ` ${where}`;
-  if (sort) sql += ` ORDER BY ${quoteIdent(d, sort.column)} ${sort.dir.toUpperCase()}`;
-  sql += ` LIMIT ${limit}`;
-  return sql + ";";
+  if (where) rest += ` ${where}`;
+  if (sort) rest += ` ORDER BY ${quoteIdent(d, sort.column)} ${sort.dir.toUpperCase()}`;
+  return selectStar(d, rest, limit) + ";";
 }

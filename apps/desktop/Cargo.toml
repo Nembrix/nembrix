@@ -12,6 +12,7 @@ members = [
     "crates/db-redis",
     "crates/db-mysql",
     "crates/db-sqlite",
+    "crates/db-mssql",
     "crates/db-script",
     "crates/ssh-tunnel",
     "crates/secrets",
@@ -26,7 +27,7 @@ publish = false
 
 [workspace.dependencies]
 testcontainers = "0.23"
-testcontainers-modules = { version = "0.11", features = ["postgres", "mongo", "redis", "mysql", "mariadb"] }
+testcontainers-modules = { version = "0.11", features = ["postgres", "mongo", "redis", "mysql", "mariadb", "mssql_server"] }
 
 async-trait = "0.1"
 tokio = { version = "1", features = ["full"] }
@@ -99,6 +100,9 @@ keyring = { version = "3", features = [
     "crypto-rust",
 ] }
 rusqlite = { version = "0.32", features = ["bundled"] }
+# SQL Server. Pure-Rust TDS driver; `rustls` rides tokio-rustls 0.26, so the
+# same single rustls 0.23 as the rest of the tree (no native-tls / OpenSSL).
+tiberius = { version = "0.13", default-features = false, features = ["tds80", "rustls", "chrono"] }
 
 sqlformat = "0.2"
 
@@ -108,6 +112,7 @@ db-mongo = { path = "crates/db-mongo" }
 db-redis = { path = "crates/db-redis" }
 db-mysql = { path = "crates/db-mysql" }
 db-sqlite = { path = "crates/db-sqlite" }
+db-mssql = { path = "crates/db-mssql" }
 db-script = { path = "crates/db-script" }
 ssh-tunnel = { path = "crates/ssh-tunnel" }
 secrets = { path = "crates/secrets" }

@@ -9,7 +9,7 @@
  */
 
 import type { CellValue, ColMeta } from "@/ipc/types";
-import { quoteIdent, stringLiteral, type SqlDialect } from "@/lib/sql-dialect";
+import { boolLiteral, quoteIdent, stringLiteral, type SqlDialect } from "@/lib/sql-dialect";
 
 export type ExportFormat = "csv" | "json" | "jsonl" | "sql";
 
@@ -148,18 +148,20 @@ export function exportSqlInsert(
 function sqlLiteral(v: CellValue, d: SqlDialect): string {
   switch (v.kind) {
     case "null": return "NULL";
-    case "bool": return v.value ? "TRUE" : "FALSE";
+    case "bool": return boolLiteral(d, v.value);
     case "int":
     case "float": return String(v.value);
     case "text":
     case "raw":  return stringLiteral(d, v.value);
     case "document": {
-      // MySQL and SQLite store a JSON value from its text; Postgres casts.
+      // MySQL, SQLite and SQL Server store a JSON value from its text;
+      // Postgres casts.
       const lit = stringLiteral(d, JSON.stringify(v.value));
       return d === "postgres" ? `${lit}::jsonb` : lit;
     }
     case "bytes": {
       const hex = v.value.map((b) => b.toString(16).padStart(2, "0")).join("");
+      if (d === "mssql") return `0x${hex}`;
       return d === "postgres" ? `decode('${hex}', 'hex')` : `X'${hex}'`;
     }
   }

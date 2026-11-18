@@ -1,4 +1,4 @@
-import { sql, MySQL, PostgreSQL, SQLite, SQLConfig } from "@codemirror/lang-sql";
+import { sql, MSSQL, MySQL, PostgreSQL, SQLite, SQLConfig } from "@codemirror/lang-sql";
 import type { SqlDialect } from "@/lib/sql-dialect";
 import type { Extension } from "@codemirror/state";
 import type { SchemaTree } from "@/ipc/types";
@@ -25,9 +25,11 @@ export function buildSqlExtension(
   d: SqlDialect = "postgres",
 ): Extension {
   // Unqualified names resolve against Postgres' `public`, SQLite's `main`,
-  // or — in MySQL, where a database is the schema — the connection's own
-  // database, which the driver lists first.
-  const home = d === "mysql" ? tree?.databases[0]?.schemas[0]?.name : d === "sqlite" ? "main" : "public";
+  // or the schema the driver lists first: in MySQL, where a database is the
+  // schema, the connection's own; in SQL Server, the login's default (`dbo`).
+  const home =
+    d === "mysql" || d === "mssql" ? tree?.databases[0]?.schemas[0]?.name
+    : d === "sqlite" ? "main" : "public";
   type SchemaItem = string | { label: string; type: string; info?: string };
   const schema: Record<string, SchemaItem[]> = {};
   const tableTypeByName = new Map<string, "table" | "view" | "type">();
@@ -77,7 +79,7 @@ export function buildSqlExtension(
     : undefined;
 
   return sql({
-    dialect: { postgres: PostgreSQL, mysql: MySQL, sqlite: SQLite }[d],
+    dialect: { postgres: PostgreSQL, mysql: MySQL, sqlite: SQLite, mssql: MSSQL }[d],
     upperCaseKeywords: true,
     schema: schema as SQLConfig["schema"],
     defaultTable: defaultTable[0],

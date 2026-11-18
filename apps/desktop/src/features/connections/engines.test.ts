@@ -25,7 +25,7 @@ describe("engine registry", () => {
   });
 
   it("marks every listed driver supported", () => {
-    for (const key of ["postgres", "mysql", "mariadb", "sqlite", "mongo", "redis"] as const) {
+    for (const key of ["postgres", "mysql", "mariadb", "mssql", "sqlite", "mongo", "redis"] as const) {
       expect(ENGINES[key].supported).toBe(true);
     }
   });
@@ -34,7 +34,7 @@ describe("engine registry", () => {
     expect(ENGINES.sqlite.fileBased).toBe(true);
     expect(engineDialect("sqlite")).toBe("sqlite");
     expect(hasPgTools("sqlite")).toBe(false);
-    for (const key of ["postgres", "mysql", "mariadb", "mongo", "redis"] as const) {
+    for (const key of ["postgres", "mysql", "mariadb", "mssql", "mongo", "redis"] as const) {
       expect(ENGINES[key].fileBased).toBeFalsy();
     }
   });
@@ -43,6 +43,8 @@ describe("engine registry", () => {
     expect(engineDialect("postgres")).toBe("postgres");
     expect(engineDialect("mysql")).toBe("mysql");
     expect(engineDialect("mariadb")).toBe("mysql");
+    expect(engineDialect("mssql")).toBe("mssql");
+    expect(hasPgTools("mssql")).toBe(false);
     expect(hasPgTools("postgres")).toBe(true);
     expect(hasPgTools("mysql")).toBe(false);
     expect(hasPgTools("redis")).toBe(false);
@@ -64,6 +66,7 @@ describe("engine registry", () => {
     expect(ENGINES.mongo.defaultPort).toBe(27017);
     expect(ENGINES.mysql.defaultPort).toBe(3306);
     expect(ENGINES.redis.defaultPort).toBe(6379);
+    expect(ENGINES.mssql.defaultPort).toBe(1433);
   });
 
   it("defaults Mongo to TLS-off so a plain local Mongo connects", () => {

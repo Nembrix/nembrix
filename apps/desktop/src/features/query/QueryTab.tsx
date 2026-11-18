@@ -21,6 +21,7 @@ import { destructiveReason, redisDestructiveReason } from "@/features/connection
 import {
   engineDialect, engineQueryLang, engineSpec, hasPgTools,
 } from "@/features/connections/engines";
+import { withRowLimit } from "@/lib/sql-dialect";
 import RunningTimer from "@/components/RunningTimer";
 import AnalysisPane from "@/features/query/AnalysisPane";
 import { recordSlowQuery } from "@/features/query/slowQueries";
@@ -82,19 +83,11 @@ export default function QueryTab({ tab }: { tab: Tab }) {
   const queryLang = engineQueryLang(conn?.engine);
   const isSql = queryLang === "sql";
 
-  /** Tack a LIMIT onto the SQL when the picker is set, the query
-   *  looks like a SELECT, and the user didn't already type one. We
-   *  parse very loosely — anything with a SELECT keyword and no LIMIT
-   *  qualifies. False positives (e.g. a CTE-wrapped statement) are
-   *  fine; the server gracefully accepts an outer LIMIT. */
+  /** Cap the rows when the picker is set (see `withRowLimit`). */
   const attachLimit = (raw: string, limit: number | undefined): string => {
     // Not SQL: Redis even has a SELECT command (`SELECT 2` picks a database).
     if (!isSql || !limit || limit <= 0) return raw;
-    const trimmed = raw.trimEnd().replace(/;\s*$/, "");
-    const upper = trimmed.toUpperCase();
-    if (!upper.includes("SELECT")) return raw;
-    if (/\bLIMIT\b\s+\d+/.test(upper)) return raw;
-    return `${trimmed}\nLIMIT ${limit};`;
+    return withRowLimit(engineDialect(conn?.engine), raw, limit);
   };
 
   const runScriptMode = async () => {

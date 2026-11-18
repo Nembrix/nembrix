@@ -128,7 +128,7 @@ export interface SshInput {
 export interface ConnectionInput {
   id: string | null;
   name: string;
-  // Engine key: "postgres" | "mysql" | "sqlite" | "mongo" | "redis". Kept a
+  // Engine key: "postgres" | "mysql" | "mariadb" | "mssql" | "sqlite" | "mongo" | "redis". Kept a
   // string (not a literal union) so the form can switch engines freely; the
   // backend validates the concrete value.
   engine: string;

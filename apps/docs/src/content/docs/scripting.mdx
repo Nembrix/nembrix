@@ -9,7 +9,7 @@ the database with `await db.query(...)`, loops, branches, and logs —
 useful for per-row work, small migrations, and quick data munging that's
 awkward in a single statement.
 
-Scripting works on **SQL engines** (PostgreSQL / MySQL / SQLite) **and
+Scripting works on **SQL engines** (PostgreSQL / MySQL / SQL Server / SQLite) **and
 MongoDB**. On SQL, `db.query(...)` takes SQL; on MongoDB it takes a
 mongo-shell command string (`db.coll.find({…})`). The toggle is hidden for
 Redis.
@@ -78,7 +78,9 @@ const rows = await db.query(
 ```
 
 On **MySQL / MariaDB** and **SQLite** the placeholder is `?` instead:
-`db.query("SELECT * FROM users WHERE email = ?", [email])`.
+`db.query("SELECT * FROM users WHERE email = ?", [email])`. On **SQL
+Server** it's `@P1`, `@P2`, …:
+`db.query("SELECT * FROM users WHERE email = @P1", [email])`.
 
 Do **not** build SQL by concatenating values into the string. Use params.
 
