@@ -4,7 +4,7 @@ import { keymap, EditorView } from "@codemirror/view";
 import { EditorSelection, Prec, StateEffect } from "@codemirror/state";
 import { buildJsScriptExtension } from "@/editor/js-completion";
 import { buildMongoExtension } from "@/editor/mongo-completion";
-import { Play, Square, Sparkles, Star, PanelBottom } from "lucide-react";
+import { Play, Square, Sparkles, Star, PanelBottom, ChevronDown, ChevronUp } from "lucide-react";
 import { buildSqlExtension } from "@/editor/sql-completion";
 import { looksLikeJavaScript } from "./looksLikeJavaScript";
 import { toggleLineComment } from "./toggleLineComment";
@@ -361,6 +361,15 @@ export default function QueryTab({ tab }: { tab: Tab }) {
   useEffect(() => {
     try { localStorage.setItem("nembrix.console.pct", String(consolePct)); } catch { /* ignore: best-effort */ }
   }, [consolePct]);
+  // Collapsed, the console shrinks to its header so the grid gets the room;
+  // the header still shows line and error counts. Persisted like the size.
+  const [consoleOpen, setConsoleOpen] = useState<boolean>(() => {
+    try { return localStorage.getItem("nembrix.console.open") !== "0"; } catch { return true; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("nembrix.console.open", consoleOpen ? "1" : "0"); } catch { /* ignore: best-effort */ }
+  }, [consoleOpen]);
+  const consoleErrors = tab.logs?.filter((l) => l.level === "error").length ?? 0;
   const shellRef = useRef<HTMLDivElement>(null);
   const resultShellRef = useRef<HTMLDivElement>(null);
   // Ref to the CodeMirror EditorView so the wrapper's click handler
@@ -388,7 +397,9 @@ export default function QueryTab({ tab }: { tab: Tab }) {
     view.focus();
   };
   // Drag the console taller/shorter. Measured from the shell's BOTTOM edge
-  // because the console is the bottom pane — dragging up grows it.
+  // because the console is the bottom pane — dragging up grows it. Dragging
+  // it (nearly) to the bottom collapses it to its header; dragging back up
+  // reopens it at the dropped height.
   const onConsoleDrag = (e: React.MouseEvent) => {
     e.preventDefault();
     const shell = resultShellRef.current;
@@ -396,8 +407,12 @@ export default function QueryTab({ tab }: { tab: Tab }) {
     const rect = shell.getBoundingClientRect();
     const onMove = (ev: MouseEvent) => {
       const fromBottom = rect.bottom - ev.clientY;
-      const pct = Math.max(10, Math.min(90, (fromBottom / rect.height) * 100));
-      setConsolePct(pct);
+      if (fromBottom < CONSOLE_COLLAPSE_PX) {
+        setConsoleOpen(false);
+        return;
+      }
+      setConsoleOpen(true);
+      setConsolePct(Math.max(10, Math.min(90, (fromBottom / rect.height) * 100)));
     };
     const onUp = () => {
       window.removeEventListener("mousemove", onMove);
@@ -741,28 +756,46 @@ export default function QueryTab({ tab }: { tab: Tab }) {
         {/* Script console strip: sits below the data grid and is always
             visible in script mode, so console.log output and the return-value
             echo show alongside the result set (no tab-switching). */}
+        {/* Stays while collapsed, so the console can be dragged back open. */}
         {isScript && (
           <div
             className="pane-split is-horizontal"
             data-testid="console-split"
             onMouseDown={onConsoleDrag}
-            onDoubleClick={() => setConsolePct(33)}
-            title="Drag to resize · double-click to reset"
+            onDoubleClick={() => { setConsolePct(33); setConsoleOpen(true); }}
+            title="Drag to resize · drag to the bottom to hide · double-click to reset"
             role="separator"
             aria-orientation="horizontal"
           />
         )}
         {isScript && (
-          <div className="script-console" style={{ flexBasis: `${consolePct}%` }}>
-            <div className="script-console-head">
+          <div
+            className={`script-console${consoleOpen ? "" : " is-collapsed"}`}
+            style={consoleOpen ? { flexBasis: `${consolePct}%` } : undefined}
+            data-testid="script-console"
+          >
+            <button
+              type="button"
+              className="script-console-head"
+              onClick={() => setConsoleOpen((o) => !o)}
+              aria-expanded={consoleOpen}
+              title={consoleOpen ? "Hide the console" : "Show the console"}
+              data-testid="console-toggle"
+            >
+              {consoleOpen ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
               <span className="muted">Console</span>
               {(tab.logs?.length ?? 0) > 0 && (
                 <span className="script-console-count">
                   {tab.logs!.length} line{tab.logs!.length === 1 ? "" : "s"}
                 </span>
               )}
-            </div>
-            <div className="script-log" ref={consoleRef}>
+              {consoleErrors > 0 && (
+                <span className="script-console-errors">
+                  {consoleErrors} error{consoleErrors === 1 ? "" : "s"}
+                </span>
+              )}
+            </button>
+            {consoleOpen && <div className="script-log" ref={consoleRef}>
               {(tab.logs?.length ?? 0) > 0 ? (
                 tab.logs!.map((l, i) => (
                   <div key={i} className={`log-line log-${l.level}`}>
@@ -776,7 +809,7 @@ export default function QueryTab({ tab }: { tab: Tab }) {
                     : "No console output yet. Use console.log(...) in your script."}
                 </div>
               )}
-            </div>
+            </div>}
           </div>
         )}
       </div>
@@ -784,3 +817,7 @@ export default function QueryTab({ tab }: { tab: Tab }) {
     </div>
   );
 }
+
+/** Dragging the console splitter within this many px of the bottom collapses
+ *  the console to its header. */
+const CONSOLE_COLLAPSE_PX = 48;
