@@ -1,4 +1,4 @@
-import type { ConnectionInput } from "@/ipc/types";
+import type { ConnectionInput, QueryLang } from "@/ipc/types";
 
 /** The single source of truth for per-engine metadata. Every UI surface (the
  *  connection form, the status bar, the table-data query builder, …) reads from
@@ -37,6 +37,11 @@ export type EngineSpec = {
   sslDefault: ConnectionInput["ssl_mode"];
   /** Whether JS scripting mode (db.query) is offered for this engine. */
   scripting: boolean;
+  /** The engine's native editor language. Everything SQL-specific (LIMIT
+   *  injection, pg_catalog stats, DDL editors, row edits) is gated on "sql". */
+  queryLang: Exclude<QueryLang, "script">;
+  /** TLS is a plain on/off switch rather than the libpq sslmode ladder. */
+  tlsOnOff: boolean;
 };
 
 /** Ordered list — drives the engine picker. URI adapters are attached in
@@ -46,29 +51,33 @@ export const ENGINES: Record<EngineKey, EngineSpec> = {
   postgres: {
     key: "postgres", label: "PostgreSQL", supported: true, defaultPort: 5432,
     fieldPlaceholders: { user: "postgres", database: "postgres" },
-    hasTls: true, sslDefault: "prefer", scripting: true,
+    hasTls: true, sslDefault: "prefer", scripting: true, queryLang: "sql", tlsOnOff: false,
   },
   mysql: {
     key: "mysql", label: "MySQL", supported: false, defaultPort: 3306,
     fieldPlaceholders: { user: "root", database: "mysql" },
-    hasTls: true, sslDefault: "prefer", scripting: true,
+    hasTls: true, sslDefault: "prefer", scripting: true, queryLang: "sql", tlsOnOff: false,
   },
   sqlite: {
     key: "sqlite", label: "SQLite", supported: false, defaultPort: 0,
     fieldPlaceholders: { user: "", database: "path/to/file.db" },
-    hasTls: false, sslDefault: "disable", scripting: true,
+    hasTls: false, sslDefault: "disable", scripting: true, queryLang: "sql", tlsOnOff: false,
   },
   mongo: {
     // TLS off by default: a plain local Mongo has no TLS, and the driver reads
     // `tls: ssl_mode != "disable"`. Users with a TLS Mongo flip SSL on.
     key: "mongo", label: "MongoDB", supported: true, defaultPort: 27017,
     fieldPlaceholders: { user: "(optional)", database: "test" },
-    hasTls: true, sslDefault: "disable", scripting: true,
+    hasTls: true, sslDefault: "disable", scripting: true, queryLang: "mongo_shell",
+    tlsOnOff: true,
   },
   redis: {
-    key: "redis", label: "Redis", supported: false, defaultPort: 6379,
+    // Database is the logical DB index (SELECT n). TLS off by default for the
+    // same reason as Mongo: a plain local Redis has none.
+    key: "redis", label: "Redis", supported: true, defaultPort: 6379,
     fieldPlaceholders: { user: "(optional)", database: "0" },
-    hasTls: true, sslDefault: "disable", scripting: false,
+    hasTls: true, sslDefault: "disable", scripting: false, queryLang: "redis_cmd",
+    tlsOnOff: true,
   },
 };
 
@@ -78,6 +87,17 @@ export const ENGINE_ORDER: EngineKey[] = ["postgres", "mysql", "sqlite", "mongo"
 /** Look up a spec by (possibly unknown) engine string. */
 export function engineSpec(engine: string | undefined): EngineSpec | undefined {
   return engine ? ENGINES[engine as EngineKey] : undefined;
+}
+
+/** The engine's native query language; unknown engines are treated as SQL. */
+export function engineQueryLang(engine: string | undefined): EngineSpec["queryLang"] {
+  return engineSpec(engine)?.queryLang ?? "sql";
+}
+
+/** True for engines that speak SQL — where LIMIT injection, pg_catalog stats,
+ *  DDL editors and SQL row edits apply. */
+export function isSqlEngine(engine: string | undefined): boolean {
+  return engineQueryLang(engine) === "sql";
 }
 
 /** Display label for an engine string, falling back to the raw key. */

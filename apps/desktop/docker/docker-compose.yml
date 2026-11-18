@@ -11,6 +11,9 @@
 #   host=db port=5432 user=app password=app db=demo
 #   ssh: host=localhost port=2222 user=demo
 #        auth=password password=demo  (strict_host_key=false on first run)
+#
+# Redis behind the same bastion (also not published to the host):
+#   engine=Redis host=redis port=6379 password=app db=0, same SSH settings.
 
 services:
   db:
@@ -21,6 +24,12 @@ services:
       POSTGRES_DB: demo
     volumes:
       - ./initdb:/docker-entrypoint-initdb.d:ro
+    networks:
+      - internal
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--requirepass", "app"]
     networks:
       - internal
 
@@ -40,6 +49,7 @@ services:
       - internal
     depends_on:
       - db
+      - redis
 
 networks:
   internal:

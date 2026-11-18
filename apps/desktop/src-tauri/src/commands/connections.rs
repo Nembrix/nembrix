@@ -3,6 +3,7 @@ use chrono::Utc;
 use db_core::DynConn;
 use db_mongo::{MongoConfig, MongoConn};
 use db_postgres::{PgConfig, PgConn, PgSsl};
+use db_redis::{RedisConfig, RedisConn};
 use secrets::{ConnectionRecord, SecretSlot, SshRecord};
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -227,7 +228,12 @@ fn short_connect_error(raw: &str) -> String {
     {
         return "TLS mismatch — toggle SSL to match the server (on vs off).".into();
     }
-    if low.contains("password authentication failed") || low.contains("invalid_password") {
+    if low.contains("password authentication failed")
+        || low.contains("invalid_password")
+        // Redis: a password-protected server reached without a password. (A
+        // wrong one already reads "Password authentication failed".)
+        || low.contains("noauth")
+    {
         return "Authentication failed — check the user and password.".into();
     }
     if low.contains("no pool configured") {
@@ -369,6 +375,29 @@ async fn build_driver(
             .await
             .map_err(|e| short_connect_error(&e.to_string()))?;
             Ok(mongo as DynConn)
+        }
+        "redis" => {
+            // The form's Database field is the logical DB index; blank means 0.
+            let db =
+                match database.as_deref().map(str::trim).filter(|d| !d.is_empty()) {
+                    None => 0,
+                    Some(d) => d.parse::<i64>().ok().filter(|n| *n >= 0).ok_or_else(|| {
+                        format!("Database must be a number (0, 1, …), not \"{d}\".")
+                    })?,
+                };
+            // Like Mongo, TLS is on/off: anything but "disable" means rediss://.
+            let redis = RedisConn::connect(RedisConfig {
+                host,
+                port,
+                user: (!username.is_empty()).then(|| username.to_string()),
+                password,
+                db,
+                tls: ssl_mode != "disable",
+                connect_timeout_ms,
+            })
+            .await
+            .map_err(|e| short_connect_error(&e.to_string()))?;
+            Ok(redis as DynConn)
         }
         other => Err(format!("unsupported engine: {other}")),
     }
@@ -531,6 +560,14 @@ mod tests {
         for (raw, needle) in [
             (
                 "FATAL: password authentication failed for user \"x\"",
+                "Authentication",
+            ),
+            (
+                "connect failed: Password authentication failed - AuthenticationFailed",
+                "Authentication",
+            ),
+            (
+                "connect failed: NOAUTH: Authentication required.",
                 "Authentication",
             ),
             ("Connection refused (os error 61)", "refused"),

@@ -2,6 +2,7 @@ import { MENU } from "./ids";
 import { dispatchMenu, registerMenu, registerMenuPrefix, unregisterMenu } from "./dispatch";
 import { useStore } from "@/store";
 import * as api from "@/ipc/commands";
+import type { SshInput } from "@/ipc/types";
 import { forgetRecent } from "@/features/connections/recent";
 
 /**
@@ -121,14 +122,24 @@ export function registerAllMenuHandlers() {
     s().openConnectionForm(connId);
   });
   registerMenu(MENU.DUPLICATE_CONNECTION, async () => {
-    const id = s().selectedConnId; if (!id) return;
-    const c = s().connections.find((c) => c.id === id);
+    // selectedConnId is a SESSION id — resolve it like EDIT_CONNECTION does.
+    const sel = s().selectedConnId; if (!sel) return;
+    const connId = s().sessions.find((x) => x.id === sel)?.connectionId ?? sel;
+    const c = s().connections.find((c) => c.id === connId);
     if (!c) return;
+    // Everything but the secrets, which live in the keychain under the
+    // original's id — the copy asks for its passwords on first connect/edit.
     await api.saveConnection({
-      id: null, name: `${c.name} copy`, engine: "postgres",
+      id: null, name: `${c.name} copy`, engine: c.engine,
       host: c.host, port: c.port, username: c.username, password: null,
       database: c.database, ssl_mode: c.ssl_mode as never,
-      ssh: null, color: c.color,
+      ssh: c.ssh && {
+        host: c.ssh.host, port: c.ssh.port, user: c.ssh.user,
+        auth_kind: c.ssh.auth_kind as SshInput["auth_kind"], password: null,
+        key_path: c.ssh.key_path, key_data: null, key_passphrase: null,
+        strict_host_key: c.ssh.strict_host_key,
+      },
+      color: c.color, environment: c.environment, group: c.group,
     });
     s().setConnections(await api.listConnections());
   });

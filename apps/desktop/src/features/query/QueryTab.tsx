@@ -4,6 +4,7 @@ import { keymap, EditorView } from "@codemirror/view";
 import { EditorSelection, Prec, StateEffect } from "@codemirror/state";
 import { buildJsScriptExtension } from "@/editor/js-completion";
 import { buildMongoExtension } from "@/editor/mongo-completion";
+import { buildRedisExtension } from "@/editor/redis-completion";
 import { Play, Square, Sparkles, Star, PanelBottom, ChevronDown, ChevronUp } from "lucide-react";
 import { buildSqlExtension } from "@/editor/sql-completion";
 import { looksLikeJavaScript } from "./looksLikeJavaScript";
@@ -16,7 +17,8 @@ import FilterBar from "@/features/grid/FilterBar";
 import ChartPane from "@/features/grid/ChartPane";
 import { rewriteSqlWithFilters } from "@/features/grid/filter-sql";
 import { rememberRecentSql } from "@/palette/items";
-import { destructiveReason } from "@/features/connections/environment";
+import { destructiveReason, redisDestructiveReason } from "@/features/connections/environment";
+import { engineQueryLang } from "@/features/connections/engines";
 import RunningTimer from "@/components/RunningTimer";
 import AnalysisPane from "@/features/query/AnalysisPane";
 import { recordSlowQuery } from "@/features/query/slowQueries";
@@ -74,6 +76,10 @@ export default function QueryTab({ tab }: { tab: Tab }) {
   const scriptEngines = new Set(["postgres", "mysql", "sqlite", "mongo"]);
   const scriptingAvailable = scriptEngines.has(conn?.engine ?? "");
   const isMongo = conn?.engine === "mongo";
+  // SQL-only tooling (LIMIT injection, Beautify, EXPLAIN analysis, filter
+  // chips that rewrite the query) is gated on the engine's native language.
+  const queryLang = engineQueryLang(conn?.engine);
+  const isSql = queryLang === "sql";
 
   /** Tack a LIMIT onto the SQL when the picker is set, the query
    *  looks like a SELECT, and the user didn't already type one. We
@@ -81,7 +87,8 @@ export default function QueryTab({ tab }: { tab: Tab }) {
    *  qualifies. False positives (e.g. a CTE-wrapped statement) are
    *  fine; the server gracefully accepts an outer LIMIT. */
   const attachLimit = (raw: string, limit: number | undefined): string => {
-    if (!limit || limit <= 0) return raw;
+    // Not SQL: Redis even has a SELECT command (`SELECT 2` picks a database).
+    if (!isSql || !limit || limit <= 0) return raw;
     const trimmed = raw.trimEnd().replace(/;\s*$/, "");
     const upper = trimmed.toUpperCase();
     if (!upper.includes("SELECT")) return raw;
@@ -169,7 +176,9 @@ export default function QueryTab({ tab }: { tab: Tab }) {
     }
     const sql = attachLimit(rawSql, tab.limit);
     // Production / staging guard — type the connection name to confirm.
-    const reason = destructiveReason(conn?.environment, sql);
+    const reason = queryLang === "redis_cmd"
+      ? redisDestructiveReason(conn?.environment, sql)
+      : destructiveReason(conn?.environment, sql);
     if (reason && conn) {
       const typed = prompt(
         `⚠ ${reason} against ${conn.environment?.toUpperCase()}\n\n` +
@@ -248,6 +257,8 @@ export default function QueryTab({ tab }: { tab: Tab }) {
   };
 
   const format = async () => {
+    // The formatter is SQL-only; it would mangle a Mongo or Redis command.
+    if (!isSql) return;
     try {
       const out = await api.formatSql(tab.sql ?? "");
       updateTab(tab.id, { sql: out });
@@ -317,20 +328,23 @@ export default function QueryTab({ tab }: { tab: Tab }) {
   // effect (never during render) so it's lint-safe.
   const commentTokenRef = useRef("--");
   useEffect(() => {
-    // JS script and Mongo shell both use // comments; only SQL uses --.
-    commentTokenRef.current = isScript || isMongo ? "//" : "--";
-  }, [isScript, isMongo]);
+    // JS script and Mongo shell use //, Redis #, SQL --.
+    commentTokenRef.current = isScript || isMongo ? "//" : queryLang === "redis_cmd" ? "#" : "--";
+  }, [isScript, isMongo, queryLang]);
 
   // Language extension: schema-aware completion, picked by (lang, engine):
   //  - script mode → JS + db/console API,
   //  - Mongo non-script → mongo-shell completion (db.<coll>.<method>()),
+  //  - Redis → command + key completion,
   //  - SQL engines non-script → Postgres dialect + schema completion.
-  // A Mongo tab must NOT get SQL keyword completion, and vice-versa.
+  // A Mongo or Redis tab must NOT get SQL keyword completion, and vice-versa.
   const langExt = isScript
     ? buildJsScriptExtension(tree)
     : isMongo
       ? buildMongoExtension(tree)
-      : buildSqlExtension(tree);
+      : queryLang === "redis_cmd"
+        ? buildRedisExtension(tree)
+        : buildSqlExtension(tree);
   const rowCount = tab.rows?.length ?? 0;
 
   // Editor height — user-draggable via the separator between the
@@ -614,7 +628,7 @@ export default function QueryTab({ tab }: { tab: Tab }) {
             "No limit" lets the user opt out per tab — defensive
             queries (DELETE etc.) keep their own semantics. Not shown in
             script mode: the LIMIT rewrite only makes sense for raw SQL. */}
-        {!isScript && (
+        {!isScript && isSql && (
         <label className="limit-picker">
           <span className="muted">Limit</span>
           <select
@@ -634,7 +648,7 @@ export default function QueryTab({ tab }: { tab: Tab }) {
           </select>
         </label>
         )}
-        {!isScript && (
+        {!isScript && isSql && (
         <button className="btn-pill" onClick={format} title="Format (⌘I)">
           <Sparkles size={12} /> Beautify <span className="kbd">⌘I</span>
         </button>
@@ -692,7 +706,9 @@ export default function QueryTab({ tab }: { tab: Tab }) {
               <button className={view === "message" ? "active" : ""} onClick={() => setView("message")}>Message</button>
             )}
             <button className={view === "chart" ? "active" : ""} onClick={() => setView("chart")}>Chart</button>
-            <button className={view === "analysis" ? "active" : ""} onClick={() => setView("analysis")}>Analysis</button>
+            {isSql && (
+              <button className={view === "analysis" ? "active" : ""} onClick={() => setView("analysis")}>Analysis</button>
+            )}
           </div>
           <span className="meta">
             {/* Row count + timer moved to the footer below the grid (calmer
@@ -703,7 +719,7 @@ export default function QueryTab({ tab }: { tab: Tab }) {
           <span className="muted">{statusMsg}</span>
         </div>
 
-        <FilterBar filters={filters} onRemove={removeFilter} onClear={clearFilters} />
+        {isSql && <FilterBar filters={filters} onRemove={removeFilter} onClear={clearFilters} />}
 
         {/* The JS scripting engine runs in Rust and only exists in the desktop
             app. In browser / sidecar dev there's nothing to execute scripts, so
@@ -729,7 +745,7 @@ export default function QueryTab({ tab }: { tab: Tab }) {
           {view === "chart" && tab.columns && tab.rows && (
             <ChartPane columns={tab.columns} rows={tab.rows} />
           )}
-          {view === "analysis" && (
+          {view === "analysis" && isSql && (
             <AnalysisPane connId={tab.connId} sql={tab.sql ?? ""} />
           )}
         </div>

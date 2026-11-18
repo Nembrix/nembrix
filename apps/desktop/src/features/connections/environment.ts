@@ -59,3 +59,28 @@ export function destructiveReason(env: Environment | undefined, sql: string): st
   // UPDATE/DELETE with a WHERE is less catastrophic but still warrants a tap.
   return "destructive statement";
 }
+
+/** Redis commands that delete data or reconfigure/stop the server, matched as
+ *  the command name at the start of an editor line. */
+const REDIS_WIPE = new Set(["FLUSHALL", "FLUSHDB"]);
+const REDIS_DESTRUCTIVE = new Set([
+  "DEL", "UNLINK", "GETDEL", "HDEL", "LREM", "LTRIM", "SREM", "ZREM",
+  "ZREMRANGEBYSCORE", "ZREMRANGEBYRANK", "ZREMRANGEBYLEX", "XDEL", "XTRIM",
+  "RENAME", "EXPIRE", "PEXPIRE", "EXPIREAT", "PEXPIREAT",
+  "CONFIG", "SHUTDOWN", "DEBUG", "SCRIPT", "FUNCTION", "SWAPDB", "MIGRATE",
+  "EVAL", "EVALSHA", "FCALL",
+]);
+
+/** `destructiveReason` for a Redis command buffer (one command per line). */
+export function redisDestructiveReason(env: Environment | undefined, text: string): string | null {
+  if (!isProtected(env)) return null;
+  const names = text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith("#") && !l.startsWith("//"))
+    .map((l) => l.split(/\s+/)[0].toUpperCase());
+  const wipe = names.find((n) => REDIS_WIPE.has(n));
+  if (wipe) return `${wipe} (deletes every key in the database)`;
+  const hit = names.find((n) => REDIS_DESTRUCTIVE.has(n));
+  return hit ? `${hit} command` : null;
+}

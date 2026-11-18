@@ -1,0 +1,60 @@
+---
+title: Redis
+description: Connect to Redis, browse keys by type, and run commands.
+---
+
+Pick **Redis** in the connection form's engine picker.
+
+## Connecting
+
+- **Host / Port** — `6379` by default.
+- **User** — optional; an ACL user on Redis 6+. Leave it blank to
+  authenticate as `default` (or not at all, on a server with no password).
+- **Password** — stored in the OS keychain like every other password.
+- **Database** — the logical database index (`0`, `1`, …). Blank means `0`.
+- **TLS** — on or off. With TLS on, Nembrix connects with `rediss://` and
+  verifies the server's certificate against the system trust store.
+- **SSH tunnel** works the same as for any other engine.
+
+## Browsing keys
+
+The sidebar lists the database's keys, sorted, with each key's type. Keys
+are listed with `SCAN`, never `KEYS`, and the list stops at 2,000 keys —
+use `SCAN 0 MATCH pattern` in the editor to look further.
+
+Opening a key shows its contents with a read sized to the grid's row limit:
+
+| Type | Command | Columns |
+| --- | --- | --- |
+| string | `GET` | value |
+| hash | `HSCAN … COUNT n` | field, value |
+| list | `LRANGE 0 n-1` | index, value |
+| set | `SSCAN … COUNT n` | member |
+| sorted set | `ZRANGE 0 n-1 WITHSCORES` | member, score |
+| stream | `XRANGE - + COUNT n` | id, fields |
+
+The row count comes from `HLEN`, `LLEN`, `SCARD`, `ZCARD` or `XLEN`. The
+grid is read-only for Redis — change data with commands in the editor.
+
+## Running commands
+
+The editor takes `redis-cli` syntax: one command per line, arguments
+separated by spaces, `"double quotes"` with `\n`, `\t`, `\"` and `\xHH`
+escapes, `'single quotes'` taken literally, and `#` comment lines.
+
+- **One command** — its reply as a table, shaped by the command
+  (`HGETALL` → field/value, `… WITHSCORES` → member/score, `SCAN` →
+  key, with the next cursor shown in the column header).
+- **Several commands** — one row per command with its result. An error
+  doesn't stop the rest, as in `redis-cli`.
+- **`SELECT n`** applies to that run only; the sidebar keeps showing the
+  connection's own database.
+- **Cancel** stops a blocking command (`BLPOP key 0`) for real: each run
+  has its own connection, which is closed.
+- `SUBSCRIBE`, `PSUBSCRIBE`, `SSUBSCRIBE`, `MONITOR`, `SYNC`, `PSYNC` and
+  `HELLO` aren't supported: they switch the connection into a mode that
+  doesn't return a result.
+
+On a **Production** or **Staging** connection, commands that delete data
+or change the server — `FLUSHALL`, `FLUSHDB`, `DEL`, `UNLINK`, `EXPIRE`,
+`CONFIG`, `EVAL`, … — ask you to type the connection name first.

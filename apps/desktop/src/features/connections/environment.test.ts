@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { colorFor, destructiveReason, ENV_COLOR, isProtected } from "./environment";
+import {
+  colorFor, destructiveReason, ENV_COLOR, isProtected, redisDestructiveReason,
+} from "./environment";
 
 describe("colorFor", () => {
   it("returns the env preset when no override is provided", () => {
@@ -66,5 +68,28 @@ describe("destructiveReason", () => {
       .toBe("destructive statement");
     expect(destructiveReason("production", "UPDATE users SET x = 1 WHERE id = 1;"))
       .toBe("destructive statement");
+  });
+});
+
+describe("redisDestructiveReason", () => {
+  it("never fires outside protected environments", () => {
+    expect(redisDestructiveReason("development", "FLUSHALL")).toBeNull();
+  });
+
+  it("lets reads through", () => {
+    expect(redisDestructiveReason("production", "GET user:1\nHGETALL s\nSCAN 0")).toBeNull();
+  });
+
+  it("calls out a full wipe first", () => {
+    expect(redisDestructiveReason("production", "DEL a\nflushdb")).toMatch(/FLUSHDB/);
+  });
+
+  it("flags deletes and server changes anywhere in the buffer", () => {
+    expect(redisDestructiveReason("staging", "GET a\n  del a b")).toMatch(/DEL/);
+    expect(redisDestructiveReason("production", "CONFIG SET maxmemory 1mb")).toMatch(/CONFIG/);
+  });
+
+  it("ignores commented-out lines and SQL-ish words in values", () => {
+    expect(redisDestructiveReason("production", "# FLUSHALL\nSET note \"DROP TABLE\"")).toBeNull();
   });
 });

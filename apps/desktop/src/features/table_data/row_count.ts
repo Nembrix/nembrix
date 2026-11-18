@@ -23,7 +23,7 @@
 import * as api from "@/ipc/commands";
 import type { CellValue } from "@/ipc/types";
 import type { FilterChip } from "@/store";
-import { buildMongoCount } from "./buildTableQuery";
+import { buildMongoCount, buildRedisCount } from "./buildTableQuery";
 
 /** Result of a single phase. `value` is null when the phase failed. */
 export interface CountPhase {
@@ -56,6 +56,27 @@ export async function fetchMongoCount(
   filters: FilterChip[],
 ): Promise<number | null> {
   const cmd = buildMongoCount(rel, filters);
+  return new Promise((resolve) => {
+    let val: number | null = null;
+    api.stream(connId, cmd, (b) => {
+      if (b.rows.length > 0) val = asNumber(b.rows[0][0]);
+      if (b.done) resolve(val);
+    }).catch(() => resolve(null));
+  });
+}
+
+/**
+ * Redis key size via the type's cardinality command (`HLEN`, `LLEN`, `SCARD`,
+ * `ZCARD`, `XLEN`). A string — or a module type with no such command — counts
+ * as the single value the grid shows. Returns null on error.
+ */
+export async function fetchRedisCount(
+  connId: string,
+  key: string,
+  type: string | undefined,
+): Promise<number | null> {
+  const cmd = buildRedisCount(key, type);
+  if (!cmd) return 1;
   return new Promise((resolve) => {
     let val: number | null = null;
     api.stream(connId, cmd, (b) => {

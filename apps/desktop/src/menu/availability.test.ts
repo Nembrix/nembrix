@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { useStore } from "@/store";
-import { isEnabled, disabledIds } from "./availability";
+import { isEnabled, disabledIds, sqlOnlyBlock } from "./availability";
 import { MENU } from "./ids";
 
 function reset() {
@@ -106,5 +106,33 @@ describe("menu availability", () => {
       status: { [baseConn.id]: "connecting" },
     });
     expect(isEnabled(MENU.EXPORT, useStore.getState())).toBe(true);
+  });
+
+  it("SQL-only actions are off for MongoDB / Redis and on for Postgres", () => {
+    const connected = (engine: string) => {
+      useStore.setState({
+        connections: [{ ...baseConn, engine } as never],
+        selectedConnId: baseConn.id,
+        selectedTable: { schema: "db0", name: "k" } as never,
+        status: { [baseConn.id]: "connected" },
+      });
+      return useStore.getState();
+    };
+    const sqlOnly = [MENU.TABLE_DROP, MENU.DB_MANAGE_ROLES, MENU.IMPORT, MENU.DB_ACTIVITY];
+
+    let s = connected("postgres");
+    for (const id of sqlOnly) expect(isEnabled(id, s)).toBe(true);
+    expect(sqlOnlyBlock(MENU.TABLE_DROP, s)).toBeNull();
+
+    for (const engine of ["redis", "mongo"]) {
+      s = connected(engine);
+      for (const id of sqlOnly) expect(isEnabled(id, s)).toBe(false);
+      // Engine-neutral actions stay available.
+      expect(isEnabled(MENU.REFRESH_SCHEMA, s)).toBe(true);
+      expect(isEnabled(MENU.NEW_QUERY_TAB, s)).toBe(true);
+      // Reported to the native menu sync too, even without a RULES entry.
+      expect(disabledIds(s)).toContain(MENU.TABLE_COPY_TO);
+    }
+    expect(sqlOnlyBlock(MENU.TABLE_DROP, connected("redis"))).toMatch(/Redis/);
   });
 });

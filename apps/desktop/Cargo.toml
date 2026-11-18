@@ -9,6 +9,7 @@ members = [
     "crates/db-core",
     "crates/db-postgres",
     "crates/db-mongo",
+    "crates/db-redis",
     "crates/db-script",
     "crates/ssh-tunnel",
     "crates/secrets",
@@ -23,7 +24,7 @@ publish = false
 
 [workspace.dependencies]
 testcontainers = "0.23"
-testcontainers-modules = { version = "0.11", features = ["postgres", "mongo"] }
+testcontainers-modules = { version = "0.11", features = ["postgres", "mongo", "redis"] }
 
 async-trait = "0.1"
 tokio = { version = "1", features = ["full"] }
@@ -68,6 +69,11 @@ rustls-platform-verifier = "0.7"
 # separate top-level `bson` dep, which would risk a v2/v3 type split.
 mongodb = "3"
 
+# Redis. Multiplexed async connection over tokio; `tokio-rustls-comp` gives
+# `rediss://` with certificate verification against the OS trust store (no
+# `tls-rustls-insecure`). Same single rustls 0.23 as the rest of the tree.
+redis = { version = "1", default-features = false, features = ["aio", "tokio-comp", "tokio-rustls-comp"] }
+
 # Pinned to 0.43.x — 0.44 reorganized the public re-exports and 0.45
 # renamed several auth methods. Migrating is a sizeable lift we don't
 # want to do today; 0.43 has the API this code was written against and
@@ -93,6 +99,7 @@ sqlformat = "0.2"
 db-core = { path = "crates/db-core" }
 db-postgres = { path = "crates/db-postgres" }
 db-mongo = { path = "crates/db-mongo" }
+db-redis = { path = "crates/db-redis" }
 db-script = { path = "crates/db-script" }
 ssh-tunnel = { path = "crates/ssh-tunnel" }
 secrets = { path = "crates/secrets" }

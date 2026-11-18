@@ -522,7 +522,7 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
                       Parsed → {v.username || "(no user)"}@{v.host}:{v.port}
                       {v.database ? `/${v.database}` : ""}
                       {v.ssl_mode && v.ssl_mode !== "prefer" && v.ssl_mode !== "disable"
-                        ? ` · ${v.engine === "mongo" ? "tls" : `sslmode=${v.ssl_mode}`}`
+                        ? ` · ${spec?.tlsOnOff ? "tls" : `sslmode=${v.ssl_mode}`}`
                         : ""}
                     </div>
                   )}
@@ -563,18 +563,18 @@ export default function ConnectionForm({ onClose }: { onClose: () => void }) {
                   </div>
                   {spec?.hasTls && (
                     <div className="field">
-                      {/* Mongo's TLS is a simple on/off, so we show a TLS select
+                      {/* Mongo's and Redis' TLS is a simple on/off, so we show a TLS select
                           with disable/require. SQL engines keep the libpq
                           sslmode ladder (disable/prefer/require/verify-full). Both
                           reuse the ssl_mode field — the driver treats non-disable
                           as TLS. Only verify-full authenticates the server. */}
-                      <label htmlFor="cf-ssl">{v.engine === "mongo" ? "TLS" : "SSL"}</label>
+                      <label htmlFor="cf-ssl">{spec.tlsOnOff ? "TLS" : "SSL"}</label>
                       <select id="cf-ssl" value={v.ssl_mode}
                         onChange={(e) => patch({ ssl_mode: e.target.value as never })}>
-                        <option value="disable">{v.engine === "mongo" ? "off" : "disable"}</option>
-                        {v.engine !== "mongo" && <option value="prefer">prefer</option>}
-                        <option value="require">{v.engine === "mongo" ? "on" : "require"}</option>
-                        {v.engine !== "mongo" && (
+                        <option value="disable">{spec.tlsOnOff ? "off" : "disable"}</option>
+                        {!spec.tlsOnOff && <option value="prefer">prefer</option>}
+                        <option value="require">{spec.tlsOnOff ? "on" : "require"}</option>
+                        {!spec.tlsOnOff && (
                           <option value="verify-full">verify-full</option>
                         )}
                       </select>
