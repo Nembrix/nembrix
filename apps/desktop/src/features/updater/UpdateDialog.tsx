@@ -165,8 +165,9 @@ export default function UpdateDialog() {
         // Opted into hands-off updating: fetch and apply without prompting,
         // then surface the result. Only on the silent launch check — when the
         // user asked explicitly, show them what was found first.
+        // It runs in the background — only the floating chip shows — so the
+        // launch isn't interrupted; the chip offers the restart when ready.
         if (!manual && loadPrefs().updates.auto) {
-          setOpen(true);
           void startDownload("relaunch");
           return;
         }
@@ -216,12 +217,23 @@ export default function UpdateDialog() {
     }
   };
 
-  // Don't allow closing mid-download — the install is staging files.
+  // Closing mid-download only hides the dialog: the download carries on and
+  // the floating chip tracks it. Otherwise closing ends the flow.
   const close = () => {
-    if (phase === "downloading") return;
     setOpen(false);
+    if (phase === "downloading") return;
     setPhase("idle");
   };
+
+  // Esc closes (or, mid-download, sends it to the background).
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   /** Persist the auto-update choice immediately — the user may never press
    *  a button, and the checkbox shouldn't silently forget. */
@@ -241,7 +253,29 @@ export default function UpdateDialog() {
     close();
   };
 
-  if (!open) return null;
+  if (!open) {
+    // Hidden while work is in flight or waiting on the user: a small chip
+    // keeps it findable without blocking the app.
+    if (phase !== "downloading" && phase !== "ready") return null;
+    return (
+      <button
+        type="button"
+        className="update-chip"
+        onClick={() => setOpen(true)}
+        data-testid="update-chip"
+        title={phase === "ready" ? "Restart to finish the update" : "Show update progress"}
+      >
+        {phase === "ready" ? (
+          <><RefreshCw size={12} /> Restart to update{info ? ` to ${info.version}` : ""}</>
+        ) : (
+          <>
+            <Download size={12} /> Updating
+            {progress != null ? ` ${Math.round(progress * 100)}%` : "…"}
+          </>
+        )}
+      </button>
+    );
+  }
 
   return (
     <div className="modal-backdrop" onClick={close}>
@@ -259,8 +293,7 @@ export default function UpdateDialog() {
           <button
             className="icon-btn"
             onClick={close}
-            aria-label="Close"
-            disabled={phase === "downloading"}
+            aria-label={phase === "downloading" ? "Continue in background" : "Close"}
           >
             <X size={14} />
           </button>
@@ -313,7 +346,10 @@ export default function UpdateDialog() {
 
           {phase === "downloading" && (
             <>
-              <p style={{ margin: "8px 0" }}>Downloading update…</p>
+              <p style={{ margin: "8px 0" }}>
+                Downloading update… You can keep working — it continues in the
+                background.
+              </p>
               <div className="export-progress-bar" aria-label="download progress">
                 <div
                   className={`export-progress-fill ${progress == null ? "indeterminate" : ""}`}
@@ -408,7 +444,9 @@ export default function UpdateDialog() {
             </>
           )}
           {phase === "downloading" && (
-            <button className="btn-pill" disabled>Installing…</button>
+            <button className="btn-pill primary" onClick={close} data-testid="update-background">
+              Continue in Background
+            </button>
           )}
           {phase === "ready" && (
             <>

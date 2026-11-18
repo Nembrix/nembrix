@@ -4060,3 +4060,24 @@ table.sessions-table tr.row-active td { background: rgba(255,255,255,0.025); }
   color: var(--fg-2);
   background: var(--bg-elev);
 }
+
+/* Update in the background: a small floating chip, bottom-right above the
+   status bar, standing in for the hidden update dialog. */
+.update-chip {
+  position: fixed;
+  right: 16px;
+  bottom: 40px;
+  z-index: 50;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  color: var(--fg-1, inherit);
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+.update-chip:hover { border-color: var(--accent, var(--border)); }
