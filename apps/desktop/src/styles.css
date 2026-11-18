@@ -1491,6 +1491,24 @@ tr.grid-filler.row-even > td {
   border-bottom: 1px solid var(--border);
 }
 .script-console-count { color: var(--fg-2); }
+.script-console-errors { color: var(--danger); }
+/* The header doubles as the open/close toggle: reset button chrome so it
+   looks the same as before, full-width and clickable. */
+button.script-console-head {
+  width: 100%;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  color: inherit;
+  /* Family only: font-size / letter-spacing come from .script-console-head. */
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+button.script-console-head:hover { background: var(--bg-2, rgba(255, 255, 255, 0.04)); }
+/* Collapsed: just the header bar, so the grid takes the space. */
+.script-console.is-collapsed { flex: 0 0 auto; min-height: 0; }
+.script-console.is-collapsed .script-console-head { border-bottom: none; }
 .script-console .script-log {
   flex: 1;
   overflow: auto;
