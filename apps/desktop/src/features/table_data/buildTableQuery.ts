@@ -1,7 +1,7 @@
 import type { FilterChip, Tab } from "@/store";
 import type { CellValue } from "@/ipc/types";
 import {
-  ilike, like, qualify, quoteIdent, stringLiteral, type SqlDialect,
+  contains, qualify, quoteIdent, stringLiteral, type SqlDialect,
 } from "@/lib/sql-dialect";
 
 /** Build `db.<collection>.find(<filter>).sort(...).limit(N)` for the table-data
@@ -240,17 +240,9 @@ function quoteValue(v: string | null, op: FilterChip["op"], d: SqlDialect): stri
   return stringLiteral(d, v);
 }
 
-/** Escape % and _ in a substring so the user's value can't accidentally
- *  match more than intended in a LIKE/ILIKE pattern. Backslash is the LIKE
- *  escape character in both Postgres and MySQL; `stringLiteral` then makes
- *  sure the backslashes survive MySQL's own literal escaping. */
-function escapeLike(v: string): string {
-  return v.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
-}
-
 /** Compile one chip to a SQL predicate. Some user-facing operators don't
  *  map 1:1 to SQL — CONTAINS becomes LIKE '%value%', NOT CONTAINS becomes
- *  NOT LIKE, ICONTAINS a case-insensitive match (see `like` / `ilike`). */
+ *  NOT LIKE, ICONTAINS a case-insensitive match (see `contains`). */
 function compileChip(f: FilterChip, d: SqlDialect): string {
   const col = quoteIdent(d, f.column);
   switch (f.op) {
@@ -259,13 +251,11 @@ function compileChip(f: FilterChip, d: SqlDialect): string {
     case "CONTAINS":
     case "NOT CONTAINS":
     case "ICONTAINS":
-    case "NOT ICONTAINS": {
-      const pattern = stringLiteral(d, `%${escapeLike(f.value ?? "")}%`);
-      const negate = f.op.startsWith("NOT");
-      return f.op.endsWith("ICONTAINS")
-        ? ilike(d, col, pattern, negate)
-        : like(d, col, pattern, negate);
-    }
+    case "NOT ICONTAINS":
+      return contains(d, col, f.value ?? "", {
+        caseInsensitive: f.op.endsWith("ICONTAINS"),
+        negate: f.op.startsWith("NOT"),
+      });
     default: {
       const lit = quoteValue(f.value, f.op, d);
       return lit ? `${col} ${f.op} ${lit}` : `${col} ${f.op}`;

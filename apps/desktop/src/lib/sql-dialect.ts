@@ -1,4 +1,4 @@
-/** SQL dialect helpers: the few places Postgres and MySQL/MariaDB differ in
+/** SQL dialect helpers: the few places Postgres, MySQL/MariaDB and SQLite differ in
  *  the SQL Nembrix generates (table browsing, filters, row edits, counts,
  *  exports). Postgres-specific tooling (roles, activity, DDL editors) stays
  *  Postgres-only and isn't routed through here. */
@@ -31,15 +31,40 @@ export function stringLiteral(d: SqlDialect, s: string): string {
 
 /** Case-insensitive `LIKE`: Postgres has ILIKE; MySQL has none, so compare
  *  lower-cased (its `LIKE` already ignores case under the default `_ci`
- *  collations, but not under `_bin`/`_cs` ones). */
+ *  collations, but not under `_bin`/`_cs` ones). SQLite's `LIKE` ignores
+ *  case already (ASCII only — and so does its LOWER()). */
 export function ilike(d: SqlDialect, expr: string, pattern: string, negate: boolean): string {
+  const verb = negate ? "NOT LIKE" : "LIKE";
   if (d === "postgres") return `${expr} ${negate ? "NOT ILIKE" : "ILIKE"} ${pattern}`;
-  return `LOWER(${expr}) ${negate ? "NOT LIKE" : "LIKE"} LOWER(${pattern})`;
+  if (d === "sqlite") return `${expr} ${verb} ${pattern}`;
+  return `LOWER(${expr}) ${verb} LOWER(${pattern})`;
 }
 
-/** Case-sensitive `LIKE`: MySQL's `LIKE` follows the column collation, which
- *  is case-insensitive by default; `LIKE BINARY` compares bytes. */
-export function like(d: SqlDialect, expr: string, pattern: string, negate: boolean): string {
+/** Escape `%`, `_` and `\` so user input matches literally inside a LIKE
+ *  pattern. `\` is the escape character: the default in Postgres and MySQL,
+ *  declared with `ESCAPE` in SQLite (which has no default one). */
+function escapeLike(v: string): string {
+  return v.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+}
+
+/** `expr` contains `value` as a substring — the grid's CONTAINS filters.
+ *  Case-sensitive: plain `LIKE` in Postgres, `LIKE BINARY` in MySQL (whose
+ *  `LIKE` follows the column collation, case-insensitive by default), and
+ *  `instr()` in SQLite (whose `LIKE` always ignores ASCII case). */
+export function contains(
+  d: SqlDialect,
+  expr: string,
+  value: string,
+  opts: { caseInsensitive: boolean; negate: boolean },
+): string {
+  const { caseInsensitive, negate } = opts;
+  if (d === "sqlite") {
+    if (!caseInsensitive) return `instr(${expr}, ${stringLiteral(d, value)}) ${negate ? "=" : ">"} 0`;
+    const pattern = stringLiteral(d, `%${escapeLike(value)}%`);
+    return `${expr} ${negate ? "NOT LIKE" : "LIKE"} ${pattern} ESCAPE '\\'`;
+  }
+  const pattern = stringLiteral(d, `%${escapeLike(value)}%`);
+  if (caseInsensitive) return ilike(d, expr, pattern, negate);
   const verb = negate ? "NOT LIKE" : "LIKE";
   return d === "mysql" ? `${expr} ${verb} BINARY ${pattern}` : `${expr} ${verb} ${pattern}`;
 }

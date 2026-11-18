@@ -81,3 +81,19 @@ test("Beautify uppercases SQL keywords", async ({ page }) => {
   await page.getByRole("button", { name: /Beautify/ }).click();
   await expect(editor).toContainText("SELECT * FROM users WHERE id = 1;");
 });
+
+test("a SQLite connection asks for a file instead of a server", async ({ page }) => {
+  await seedEmpty(page);
+  await page.locator(".rail-add").first().click();
+  await page.locator("#cf-engine").selectOption("sqlite");
+
+  await expect(page.locator("#cf-file")).toBeVisible();
+  await expect(page.locator("#cf-host")).toHaveCount(0);
+  await expect(page.locator("#cf-password")).toHaveCount(0);
+  await expect(page.locator("#cf-ssh")).toHaveCount(0);
+
+  await page.getByLabel("Name").fill("Local file");
+  await page.locator("#cf-file").fill("~/data/app.db");
+  await page.getByRole("button", { name: "Connect", exact: true }).click();
+  await expect(page.locator(".rail-avatar")).toHaveCount(1);
+});

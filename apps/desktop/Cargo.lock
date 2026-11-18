@@ -1293,6 +1293,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "db-sqlite"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "dashmap",
+ "db-core",
+ "rusqlite",
+ "serde",
+ "specta",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "dbus"
 version = "0.9.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3714,6 +3729,7 @@ dependencies = [
  "db-postgres",
  "db-redis",
  "db-script",
+ "db-sqlite",
  "secrets",
  "serde",
  "serde_json",

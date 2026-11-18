@@ -154,13 +154,13 @@ function sqlLiteral(v: CellValue, d: SqlDialect): string {
     case "text":
     case "raw":  return stringLiteral(d, v.value);
     case "document": {
-      // MySQL stores a JSON value from its text; Postgres casts to jsonb.
+      // MySQL and SQLite store a JSON value from its text; Postgres casts.
       const lit = stringLiteral(d, JSON.stringify(v.value));
-      return d === "mysql" ? lit : `${lit}::jsonb`;
+      return d === "postgres" ? `${lit}::jsonb` : lit;
     }
     case "bytes": {
       const hex = v.value.map((b) => b.toString(16).padStart(2, "0")).join("");
-      return d === "mysql" ? `X'${hex}'` : `decode('${hex}', 'hex')`;
+      return d === "postgres" ? `decode('${hex}', 'hex')` : `X'${hex}'`;
     }
   }
 }

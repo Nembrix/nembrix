@@ -11,6 +11,7 @@ members = [
     "crates/db-mongo",
     "crates/db-redis",
     "crates/db-mysql",
+    "crates/db-sqlite",
     "crates/db-script",
     "crates/ssh-tunnel",
     "crates/secrets",
@@ -106,6 +107,7 @@ db-postgres = { path = "crates/db-postgres" }
 db-mongo = { path = "crates/db-mongo" }
 db-redis = { path = "crates/db-redis" }
 db-mysql = { path = "crates/db-mysql" }
+db-sqlite = { path = "crates/db-sqlite" }
 db-script = { path = "crates/db-script" }
 ssh-tunnel = { path = "crates/ssh-tunnel" }
 secrets = { path = "crates/secrets" }

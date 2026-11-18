@@ -11,7 +11,7 @@
  */
 
 import type { FilterChip } from "@/store";
-import { ilike, like, quoteIdent, stringLiteral, type SqlDialect } from "@/lib/sql-dialect";
+import { contains, ilike, quoteIdent, stringLiteral, type SqlDialect } from "@/lib/sql-dialect";
 
 const MARKER_START = "/*__dbclient_filters__*/";
 const MARKER_END = "/*__/dbclient_filters__*/";
@@ -26,19 +26,12 @@ export function clauseFor(chip: FilterChip, d: SqlDialect = "postgres"): string 
     case "CONTAINS":
     case "NOT CONTAINS":
     case "ICONTAINS":
-    case "NOT ICONTAINS": {
-      // Substring search — escape user input so a literal % / _ doesn't
-      // sneak in as a wildcard.
-      const v = (chip.value ?? "")
-        .replace(/\\/g, "\\\\")
-        .replace(/%/g, "\\%")
-        .replace(/_/g, "\\_");
-      const pattern = stringLiteral(d, `%${v}%`);
-      const negate = chip.op.startsWith("NOT");
-      return chip.op.endsWith("ICONTAINS")
-        ? ilike(d, col, pattern, negate)
-        : like(d, col, pattern, negate);
-    }
+    case "NOT ICONTAINS":
+      // Substring search — user input matches literally, never as a wildcard.
+      return contains(d, col, chip.value ?? "", {
+        caseInsensitive: chip.op.endsWith("ICONTAINS"),
+        negate: chip.op.startsWith("NOT"),
+      });
     default: {
       const v = chip.value ?? "";
       // Numeric literals pass through; other values get quoted.

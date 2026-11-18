@@ -60,6 +60,7 @@ export default defineConfig({
             { label: "Saving a connection", link: "/connect/" },
             { label: "SSH tunneling", link: "/ssh/" },
             { label: "MySQL & MariaDB", link: "/mysql/" },
+            { label: "SQLite", link: "/sqlite/" },
             { label: "Redis", link: "/redis/" },
             { label: "Groups & recents", link: "/groups-recents/" },
             { label: "Multiple sessions", link: "/sessions/" },
