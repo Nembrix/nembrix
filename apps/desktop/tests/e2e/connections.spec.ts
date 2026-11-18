@@ -97,3 +97,15 @@ test("a SQLite connection asks for a file instead of a server", async ({ page })
   await page.getByRole("button", { name: "Connect", exact: true }).click();
   await expect(page.locator(".rail-avatar")).toHaveCount(1);
 });
+
+test("a SQL Server connection takes a server on port 1433", async ({ page }) => {
+  await seedEmpty(page);
+  await page.locator(".rail-add").first().click();
+  await page.locator("#cf-engine").selectOption("mssql");
+
+  await expect(page.locator("#cf-port")).toHaveValue("1433");
+  await expect(page.locator("#cf-host")).toBeVisible();
+  await expect(page.locator("#cf-ssl")).toHaveValue("prefer");
+  await expect(page.locator("#cf-ssh")).toHaveCount(1);
+  await expect(page.locator("#cf-file")).toHaveCount(0);
+});

@@ -4,7 +4,7 @@ import type { CellValue, ColMeta, ForeignKey } from "@/ipc/types";
 import * as api from "@/ipc/commands";
 import { useStore } from "@/store";
 import { pkLiteral } from "@/components/grid_edit";
-import { qualify, quoteIdent } from "@/lib/sql-dialect";
+import { qualify, quoteIdent, selectStar } from "@/lib/sql-dialect";
 import { dialectFor } from "@/features/connections/dialectFor";
 
 interface Props {
@@ -25,7 +25,7 @@ export default function ForeignKeyPanel({ connId, fk, cellValue, onClose }: Prop
   }>(
     async (isCancelled) => {
       const { target, where } = fkWhere(connId, fk, cellValue);
-      const sql = `SELECT * FROM ${target} WHERE ${where} LIMIT 5;`;
+      const sql = `${selectStar(dialectFor(connId), `${target} WHERE ${where}`, 5)};`;
 
       const rows: CellValue[][] = [];
       let cols: ColMeta[] = [];

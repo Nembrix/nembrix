@@ -5,7 +5,7 @@ import type { SqlDialect } from "@/lib/sql-dialect";
  *  connection form, the status bar, the table-data query builder, …) reads from
  *  here, so adding a new engine is ONE entry — not a scattered set of `if
  *  engine === "…"` branches. */
-export type EngineKey = "postgres" | "mysql" | "mariadb" | "sqlite" | "mongo" | "redis";
+export type EngineKey = "postgres" | "mysql" | "mariadb" | "mssql" | "sqlite" | "mongo" | "redis";
 
 /** A connection-URL adapter: parse a pasted URL into form fields, build one
  *  back, plus the placeholder + example shown to the user. Engines without one
@@ -77,6 +77,14 @@ export const ENGINES: Record<EngineKey, EngineSpec> = {
     hasTls: true, sslDefault: "prefer", scripting: true, queryLang: "sql", tlsOnOff: false,
     dialect: "mysql", pgTools: false,
   },
+  // Database is optional: blank opens the login's default database. The tree
+  // shows the database the connection is in.
+  mssql: {
+    key: "mssql", label: "SQL Server", supported: true, defaultPort: 1433,
+    fieldPlaceholders: { user: "sa", database: "(optional)" },
+    hasTls: true, sslDefault: "prefer", scripting: true, queryLang: "sql", tlsOnOff: false,
+    dialect: "mssql", pgTools: false,
+  },
   sqlite: {
     key: "sqlite", label: "SQLite", supported: true, defaultPort: 0,
     fieldPlaceholders: { user: "", database: "~/path/to/file.db" },
@@ -102,7 +110,7 @@ export const ENGINES: Record<EngineKey, EngineSpec> = {
 };
 
 /** Engine order for the picker. */
-export const ENGINE_ORDER: EngineKey[] = ["postgres", "mysql", "mariadb", "sqlite", "mongo", "redis"];
+export const ENGINE_ORDER: EngineKey[] = ["postgres", "mysql", "mariadb", "mssql", "sqlite", "mongo", "redis"];
 
 /** Look up a spec by (possibly unknown) engine string. */
 export function engineSpec(engine: string | undefined): EngineSpec | undefined {

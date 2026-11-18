@@ -2,6 +2,7 @@ use crate::state::{AppState, LiveConn};
 use chrono::Utc;
 use db_core::DynConn;
 use db_mongo::{MongoConfig, MongoConn};
+use db_mssql::{MssqlConfig, MssqlConn, MssqlSsl};
 use db_mysql::{MySqlConfig, MySqlConn, MySqlSsl};
 use db_postgres::{PgConfig, PgConn, PgSsl};
 use db_redis::{RedisConfig, RedisConn};
@@ -233,8 +234,17 @@ fn short_connect_error(raw: &str) -> String {
     if low.contains("unable to open database file") {
         return "Can't open the file — check its permissions.".into();
     }
-    if low.contains("server does not support tls") {
+    // SQL Server: `require`/`verify-full` against a server without TLS.
+    if low.contains("server does not support tls")
+        || low.contains("does not allow the requested encryption level")
+    {
         return "Server has no TLS — set SSL to \"prefer\" or \"disable\".".into();
+    }
+    // `verify-full` against a certificate the OS doesn't trust — typically
+    // SQL Server's self-signed one. Before the TLS-mismatch rule below, whose
+    // advice ("toggle SSL") would be wrong here.
+    if low.contains("certificate was rejected") || low.contains("invalid peer certificate") {
+        return "Server certificate not trusted — use SSL \"require\", or install its CA.".into();
     }
     // Mongo TLS mismatches: the client sent a TLS handshake to a plaintext
     // server, or vice-versa. Both surface as a garbled handshake / TLS error.
@@ -255,6 +265,8 @@ fn short_connect_error(raw: &str) -> String {
         || low.contains("noauth")
         // MySQL / MariaDB: ERROR 1045 (28000): Access denied for user …
         || low.contains("access denied for user")
+        // SQL Server: Login failed for user 'sa'. (error 18456)
+        || low.contains("login failed for user")
     {
         return "Authentication failed — check the user and password.".into();
     }
@@ -266,6 +278,8 @@ fn short_connect_error(raw: &str) -> String {
     if (low.contains("does not exist") && low.contains("database"))
         // MySQL / MariaDB: ERROR 1049 (42000): Unknown database 'x'
         || low.contains("unknown database")
+        // SQL Server: Cannot open database "x" requested by the login.
+        || low.contains("cannot open database")
     {
         return "Database not found — check the database name.".into();
     }
@@ -415,6 +429,20 @@ async fn build_driver(
             .await
             .map_err(|e| short_connect_error(&e.to_string()))?;
             Ok(mysql as DynConn)
+        }
+        "mssql" => {
+            let mssql = MssqlConn::connect(MssqlConfig {
+                host,
+                port,
+                user: username.to_string(),
+                password,
+                database,
+                ssl_mode: MssqlSsl::from_mode_str(ssl_mode),
+                connect_timeout_ms,
+            })
+            .await
+            .map_err(|e| short_connect_error(&e.to_string()))?;
+            Ok(mssql as DynConn)
         }
         "redis" => {
             // The form's Database field is the logical DB index; blank means 0.
@@ -727,6 +755,33 @@ mod tests {
             (
                 "connect failed: unable to open database file",
                 "Can't open the file — check its permissions.",
+            ),
+        ] {
+            assert_eq!(short_connect_error(raw), want, "{raw}");
+        }
+    }
+
+    #[test]
+    fn sql_server_errors_name_the_fix() {
+        for (raw, want) in [
+            (
+                "connect failed: Login failed for user 'sa'. (error 18456)",
+                "Authentication failed — check the user and password.",
+            ),
+            (
+                "connect failed: Cannot open database \"nope\" requested by the login. \
+                 The login failed. (error 4060)",
+                "Database not found — check the database name.",
+            ),
+            (
+                "connect failed: Protocol error: Server does not allow the requested \
+                 encryption level.",
+                "Server has no TLS — set SSL to \"prefer\" or \"disable\".",
+            ),
+            (
+                "connect failed: TLS error: the server's certificate was rejected during \
+                 the TLS handshake: invalid peer certificate: UnknownIssuer.",
+                "Server certificate not trusted — use SSL \"require\", or install its CA.",
             ),
         ] {
             assert_eq!(short_connect_error(raw), want, "{raw}");

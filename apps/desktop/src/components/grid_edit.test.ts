@@ -201,3 +201,20 @@ describe("valueLiteral numeric guard", () => {
     expect(valueLiteral("abc", "int", "mysql")).toBe("'abc'");
   });
 });
+
+describe("SQL Server dialect", () => {
+  it("edits rows with brackets, N'…' and 1/0 bits", () => {
+    expect(buildUpdate({
+      schema: "dbo", table: "users", column: "active",
+      newLiteral: valueLiteral("true", "bit", "mssql"),
+      pkColumns: ["id"], pkValues: { id: { kind: "int", value: 7 } }, dialect: "mssql",
+    })).toBe("UPDATE [dbo].[users] SET [active] = 1 WHERE [id] = 7;");
+    expect(valueLiteral("héllo", "nvarchar", "mssql")).toBe("N'héllo'");
+    expect(valueLiteral("9.99", "smallmoney", "mssql")).toBe("9.99");
+    expect(pkLiteral({ kind: "bool", value: false }, "mssql")).toBe("0");
+    expect(pkLiteral({ kind: "bytes", value: [0xde, 0xad] }, "mssql")).toBe("0xdead");
+    expect(buildInsert({ schema: "dbo", table: "t", values: [], dialect: "mssql" }))
+      .toBe("INSERT INTO [dbo].[t] DEFAULT VALUES;");
+  });
+});
+

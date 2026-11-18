@@ -7,13 +7,13 @@
  */
 
 import type { CellValue, ColMeta } from "@/ipc/types";
-import { qualify, quoteIdent, stringLiteral, type SqlDialect } from "@/lib/sql-dialect";
+import { boolLiteral, qualify, quoteIdent, stringLiteral, type SqlDialect } from "@/lib/sql-dialect";
 
 /** Render a CellValue as a SQL literal suitable for a WHERE clause. */
 export function pkLiteral(v: CellValue, d: SqlDialect = "postgres"): string {
   switch (v.kind) {
     case "null":  return "NULL"; // not valid in equality; caller checks
-    case "bool":  return v.value ? "TRUE" : "FALSE";
+    case "bool":  return boolLiteral(d, v.value);
     case "int":
     case "float": return String(v.value);
     case "text":
@@ -21,12 +21,13 @@ export function pkLiteral(v: CellValue, d: SqlDialect = "postgres"): string {
     case "document": {
       const lit = stringLiteral(d, JSON.stringify(v.value));
       // MySQL compares a JSON column with CAST(… AS JSON); Postgres casts;
-      // SQLite stores JSON as text.
+      // SQLite and SQL Server store JSON as text.
       if (d === "mysql") return `CAST(${lit} AS JSON)`;
-      return d === "sqlite" ? lit : `${lit}::jsonb`;
+      return d === "postgres" ? `${lit}::jsonb` : lit;
     }
     case "bytes": {
       const hex = v.value.map((b) => b.toString(16).padStart(2, "0")).join("");
+      if (d === "mssql") return `0x${hex}`;
       return d === "postgres" ? `'\\x${hex}'::bytea` : `X'${hex}'`;
     }
   }
@@ -36,7 +37,8 @@ export function pkLiteral(v: CellValue, d: SqlDialect = "postgres"): string {
  * Render a user-entered string as a SQL literal for the SET clause.
  * Empty string → empty string literal '' (not NULL — call setNullSql for that).
  * Numeric-typed columns accept bare numeric literals (no quotes); booleans
- * use TRUE/FALSE; jsonb gets ::jsonb cast; everything else quotes.
+ * use TRUE/FALSE (1/0 for a SQL Server `bit`); jsonb gets ::jsonb cast;
+ * everything else quotes.
  */
 export function valueLiteral(input: string, typeName: string, d: SqlDialect = "postgres"): string {
   const t = typeName.toLowerCase().replace(/\(.+\)$/, "").replace(/ unsigned$/, "").trim();
@@ -46,14 +48,16 @@ export function valueLiteral(input: string, typeName: string, d: SqlDialect = "p
     "float4", "float8", "real", "double precision", "numeric", "decimal", "money",
     // MySQL / MariaDB names
     "tinyint", "mediumint", "int", "double", "float",
+    // SQL Server names
+    "smallmoney",
   ];
   // Bare only when it really is a number — anything else is quoted, so the
   // input can never end up as SQL syntax.
   if (numeric.includes(t) && /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(input.trim())) {
     return input.trim();
   }
-  if (["bool", "boolean"].includes(t)) {
-    return /^(t|true|1|y|yes)$/i.test(input.trim()) ? "TRUE" : "FALSE";
+  if (["bool", "boolean"].includes(t) || (d === "mssql" && t === "bit")) {
+    return boolLiteral(d, /^(t|true|1|y|yes)$/i.test(input.trim()));
   }
   if (["json", "jsonb"].includes(t)) {
     return d === "postgres" ? `${stringLiteral(d, input)}::${t}` : stringLiteral(d, input);
@@ -125,8 +129,8 @@ export function buildDelete(opts: {
 /**
  * Build an INSERT for a draft row. `values` maps column name → the
  * already-rendered SQL literal; columns left out get their DB default. An
- * empty map inserts a row of defaults — `DEFAULT VALUES` in Postgres,
- * `() VALUES ()` in MySQL (which has no DEFAULT VALUES).
+ * empty map inserts a row of defaults — `DEFAULT VALUES` in Postgres, SQLite
+ * and SQL Server, `() VALUES ()` in MySQL (which has no DEFAULT VALUES).
  */
 export function buildInsert(opts: {
   schema: string;

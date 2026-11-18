@@ -1,0 +1,61 @@
+---
+title: SQL Server
+description: Connect to Microsoft SQL Server or Azure SQL, browse, query and edit data.
+---
+
+Pick **SQL Server** in the connection form's engine picker. Tested with SQL
+Server 2022; earlier versions back to 2008 and Azure SQL Database speak the
+same protocol.
+
+## Connecting
+
+- **Host / Port** — `1433` by default. For a named instance
+  (`server\SQLEXPRESS`), enter the instance's TCP port instead of its name.
+- **User / Password** — a SQL Server login (SQL authentication); the
+  password is stored in the OS keychain. Windows and Microsoft Entra sign-in
+  aren't supported yet.
+- **Database** — optional; blank opens the login's default database. The
+  sidebar shows the database the connection is in, with your default schema
+  (usually `dbo`) first.
+- **SSL mode**
+  - `disable` — plaintext, the login included.
+  - `prefer` — TLS when the server offers it, plaintext otherwise.
+  - `require` — TLS; the server's certificate isn't checked.
+  - `verify-full` — TLS, and the certificate must chain to a CA in the
+    system trust store and match the host name.
+
+  SQL Server encrypts with a self-signed certificate unless one is installed,
+  so `prefer` or `require` is what connects out of the box; `verify-full`
+  reports *Server certificate not trusted* until the server has a real one.
+- **SSH tunnel** works the same as for any other engine.
+
+## What works
+
+- Browsing schemas, tables, views, columns (with `IDENTITY` and defaults),
+  keys, indexes, functions and procedures.
+- The table view: filters, sorting, the row count (SQL Server's stored
+  count, then an exact `COUNT_BIG(*)`), and editing, inserting and deleting
+  rows — saved in one transaction.
+- The SQL editor with T-SQL completion, multi-statement batches and
+  **Cancel**, which stops the query on the server and keeps the connection.
+  `BEGIN TRANSACTION` in one run and `COMMIT` in a later one reach the same
+  transaction. The row-limit picker adds `TOP (n)` to a query that starts
+  with `SELECT`.
+- [JavaScript scripting](../scripting/) — use `@P1`, `@P2`, … placeholders.
+- Export to CSV, JSON or SQL `INSERT`s.
+
+## Good to know
+
+- **`GO` isn't T-SQL.** It's a batch separator that SSMS and `sqlcmd` handle
+  themselves; here, run each batch on its own (`CREATE VIEW`,
+  `CREATE PROCEDURE` and friends must be alone in their run).
+- **Text is Unicode.** Values Nembrix writes are `N'…'` literals, so
+  characters outside the database's code page survive.
+
+## Postgres-only for now
+
+Roles & grants, Activity, Schema Diff, the ER diagram, Import, copying
+between connections, the structure editors, and object operations (create,
+rename, duplicate, move, drop) are built on Postgres specifics and are
+disabled on SQL Server connections. Use SQL in a query tab for those
+meanwhile.

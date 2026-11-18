@@ -220,4 +220,10 @@ describe("SQL table-data queries per dialect", () => {
     expect(buildWhereClause([chip("code", "NOT ICONTAINS", "50%")], "sqlite"))
       .toBe(`WHERE "code" NOT LIKE '%50\\%%' ESCAPE '\\'`);
   });
+
+  it("caps SQL Server with TOP, not LIMIT", () => {
+    expect(buildSql(rel, [chip("note", "=", "é")], { column: "id", dir: "desc" }, 50, "mssql"))
+      .toBe("SELECT TOP (50) * FROM [shop].[orders] WHERE [note] = N'é' ORDER BY [id] DESC;");
+  });
 });
+

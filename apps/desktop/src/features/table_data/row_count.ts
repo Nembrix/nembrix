@@ -96,6 +96,16 @@ export async function fetchEstimate(
 ): Promise<number | null> {
   // SQLite keeps no row-count statistics; the exact count is all there is.
   if (d === "sqlite") return null;
+  // SQL Server: the row counts kept per partition of the heap / clustered
+  // index — what SSMS shows, maintained without a scan.
+  if (d === "mssql") {
+    return streamCount(
+      connId,
+      `SELECT SUM(p.rows) FROM sys.partitions p ` +
+        `WHERE p.object_id = OBJECT_ID(${stringLiteral(d, qualify(d, schema, table))}) ` +
+        `AND p.index_id IN (0, 1);`,
+    );
+  }
   // MySQL / MariaDB: InnoDB's statistics estimate, the same order of
   // accuracy as reltuples.
   const sql = d === "mysql" ? `
@@ -147,6 +157,9 @@ export async function fetchExact(
       `SELECT /*+ MAX_EXECUTION_TIME(${EXACT_TIMEOUT_MS}) */ COUNT(*) FROM ${qualify(d, schema, table)}${where};`,
     );
   }
+  // SQL Server has no per-statement time limit; COUNT_BIG because COUNT is
+  // an int and overflows past 2^31 rows.
+  if (d === "mssql") return streamCount(connId, `SELECT COUNT_BIG(*) FROM ${qualify(d, schema, table)}${where};`);
   // SQLite has no statement timeout; a local file counts quickly enough.
   if (d === "sqlite") return streamCount(connId, `SELECT COUNT(*) FROM ${qualify(d, schema, table)}${where};`);
   return streamCount(
