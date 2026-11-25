@@ -1927,77 +1927,77 @@
   resolved "https://registry.npmjs.org/@tauri-apps/api/-/api-2.12.5.tgz#e7484e38aede505c74ec258b10b703262dcda787"
   integrity sha512-G9QIMt5fzED+aS4QhVK3w1HWLKpLIwH/MnpCr9z1ugGEHnS2ORmqrLkc0uALOjRK4qXJy+4Yiw8LDl/KicC1Hg==
 
-"@tauri-apps/cli-darwin-arm64@2.12.5":
-  version "2.12.5"
-  resolved "https://registry.npmjs.org/@tauri-apps/cli-darwin-arm64/-/cli-darwin-arm64-2.12.5.tgz#51779c6e0d0176ed7154f2fc5633cbc1a2762d08"
-  integrity sha512-VVvBRBdTFF7BP7RqGeItp9yDiyXj0DI1laRCEN2q6GLrNkw4wrHeWAxHp23PwtQtn/XET+yTN1jOKrq+Yor5PQ==
+"@tauri-apps/cli-darwin-arm64@2.12.6":
+  version "2.12.6"
+  resolved "https://registry.yarnpkg.com/@tauri-apps/cli-darwin-arm64/-/cli-darwin-arm64-2.12.6.tgz#fad17ffc73fd7971bb670317f4d1615351218111"
+  integrity sha512-Uokwk1hFfJoG54+kD8iU0St33jAIkNvojnjEfBZ6UbL5rnM10AiFwUS/2DHTJ9R4/Kba4U44v7djfMuWFTQgeg==
 
-"@tauri-apps/cli-darwin-x64@2.12.5":
-  version "2.12.5"
-  resolved "https://registry.npmjs.org/@tauri-apps/cli-darwin-x64/-/cli-darwin-x64-2.12.5.tgz#0d1ec70d607d1e9f85e1197e14c7b0db4d2c22d6"
-  integrity sha512-A84QYNj93kaG06N2mIFBRZM/X3lf9TyAVQeQwOmP2AJZ2wCt1WLDJgHRCvjeJmwJjJ5Ud0jUbIKbXg8NEGvsVQ==
+"@tauri-apps/cli-darwin-x64@2.12.6":
+  version "2.12.6"
+  resolved "https://registry.yarnpkg.com/@tauri-apps/cli-darwin-x64/-/cli-darwin-x64-2.12.6.tgz#054d1f964881008c16519ff7fec10c10c5be24e4"
+  integrity sha512-WhahqzcyHCpCzh4Taf0ZbBm6nGkvuOSh5ffrgOO7EdYaYe+RBQK8LOlFu+bbjul5v9cdLDi3kco+0+7IlZtTVA==
 
-"@tauri-apps/cli-linux-arm-gnueabihf@2.12.5":
-  version "2.12.5"
-  resolved "https://registry.npmjs.org/@tauri-apps/cli-linux-arm-gnueabihf/-/cli-linux-arm-gnueabihf-2.12.5.tgz#c3650e101e5f41de38246664952ebac83e8a1b4e"
-  integrity sha512-tb/5xG5HV6CJR9AZBmTyI2GCi05vcH8XUjUIjBquAx7x+AE4f1vMWngvq7JW2AqYK8nNl79LJH1GR9Hf5QQc5g==
+"@tauri-apps/cli-linux-arm-gnueabihf@2.12.6":
+  version "2.12.6"
+  resolved "https://registry.yarnpkg.com/@tauri-apps/cli-linux-arm-gnueabihf/-/cli-linux-arm-gnueabihf-2.12.6.tgz#7064d4f13b42638d790f3bf4c51ec3895fda80a5"
+  integrity sha512-GB6weN+iFHxiFZ9SOKW6fINis7gnxohoOldR7sryBe7uaavkFGaMCa0yQs5njeXPWvzlE9WTQ13z8oDjmqK+Ww==
 
-"@tauri-apps/cli-linux-arm64-gnu@2.12.5":
-  version "2.12.5"
-  resolved "https://registry.npmjs.org/@tauri-apps/cli-linux-arm64-gnu/-/cli-linux-arm64-gnu-2.12.5.tgz#fd3bfd0aa5b2a0165e15801f40da24983d5196e6"
-  integrity sha512-Vb7SlbIWlmIqekfsGYT64wH1cQNg5MET8XFyT6pUlVJ7Y/z6LsOIh4MUal0Z5FCPL83GMuEUNxpYUHpt36teHQ==
+"@tauri-apps/cli-linux-arm64-gnu@2.12.6":
+  version "2.12.6"
+  resolved "https://registry.yarnpkg.com/@tauri-apps/cli-linux-arm64-gnu/-/cli-linux-arm64-gnu-2.12.6.tgz#3248579c669549bd8552f3764ae683f5da0086a8"
+  integrity sha512-mdHoUFYKfztUtPKE0C2hhGkEo7j6swXjg+5yRRKSD7A2gLkRPQFIXWD/DAYhiJdeAkyA8MCP6nvvKvg/4YryWQ==
 
-"@tauri-apps/cli-linux-arm64-musl@2.12.5":
-  version "2.12.5"
-  resolved "https://registry.npmjs.org/@tauri-apps/cli-linux-arm64-musl/-/cli-linux-arm64-musl-2.12.5.tgz#c25d4f2184697f35d8dd8933e261d3f4626a01ff"
-  integrity sha512-b/YfVGueoTOtENQHY1STBF9XlU4uZDtOiMUErp2Nao/YrDWCKggjxxBZU3ycbeDWUYxl8U8M9seE4HYag1xjiQ==
+"@tauri-apps/cli-linux-arm64-musl@2.12.6":
+  version "2.12.6"
+  resolved "https://registry.yarnpkg.com/@tauri-apps/cli-linux-arm64-musl/-/cli-linux-arm64-musl-2.12.6.tgz#0d1d8968b26ad6a91a37b231522f7253f090a3db"
+  integrity sha512-2BxB+9a3JRN0eJ0t0qGe8IKJfgBLOZDE8a499OXH+yg4J9bMpSK1oHXBxnHuSHFWhby4QnQ/t+sBf7tRC0UZeA==
 
-"@tauri-apps/cli-linux-riscv64-gnu@2.12.5":
-  version "2.12.5"
-  resolved "https://registry.npmjs.org/@tauri-apps/cli-linux-riscv64-gnu/-/cli-linux-riscv64-gnu-2.12.5.tgz#a8d9e355e33877a5fad85fc6adc67a2058e18ae9"
-  integrity sha512-/EXbTfE9FM9GKSSRL9YTRHcMglTVNzbcwegXM0MBR3ozVgoE+pFq46Ej/InJBs1l+sjSpu6jyi38MZ+xyU/3NQ==
+"@tauri-apps/cli-linux-riscv64-gnu@2.12.6":
+  version "2.12.6"
+  resolved "https://registry.yarnpkg.com/@tauri-apps/cli-linux-riscv64-gnu/-/cli-linux-riscv64-gnu-2.12.6.tgz#220e1285fe49e3eaa7df270ec7c1cf58af591cce"
+  integrity sha512-sb58RsNHex9QVqHdN1cf9MMlamUWAtk1NzuxTZalUnBUHfblIbe71hfmdI6whDZ84MufgOdeg/bzvhrbZS1r0w==
 
-"@tauri-apps/cli-linux-x64-gnu@2.12.5":
-  version "2.12.5"
-  resolved "https://registry.npmjs.org/@tauri-apps/cli-linux-x64-gnu/-/cli-linux-x64-gnu-2.12.5.tgz#25c013bf94f1ac8aea3772e28d7e4fcae596554a"
-  integrity sha512-OIun574QsULxaZ5SmPDX4D8bO95RBmYJshu8yGFy0RSyCMKEs/y+o3BThot4fbCv4ttC1Tq6Hzt0QRHXCIgp7w==
+"@tauri-apps/cli-linux-x64-gnu@2.12.6":
+  version "2.12.6"
+  resolved "https://registry.yarnpkg.com/@tauri-apps/cli-linux-x64-gnu/-/cli-linux-x64-gnu-2.12.6.tgz#5106ef1e556c364a6a224deea79c3167b1d2319d"
+  integrity sha512-ZAb4/CHRma3ErjL2RGfHjITTUBIs4zySf0hIli9BddOtEdSx0ze0hEgxl+HfBVc5OEW/QmbiZ2E2+CkkHc8Pcg==
 
-"@tauri-apps/cli-linux-x64-musl@2.12.5":
-  version "2.12.5"
-  resolved "https://registry.npmjs.org/@tauri-apps/cli-linux-x64-musl/-/cli-linux-x64-musl-2.12.5.tgz#c387878499dd6866052a06ad2d513233a95112af"
-  integrity sha512-GDzWcb/6OzJrHnVGQ/n3XndLan67bZ7cu4zJN9+zFmV10nBgKz5jDDm8sRQO4sGb7bu6Ztiy+Al2XY2ptRY0RQ==
+"@tauri-apps/cli-linux-x64-musl@2.12.6":
+  version "2.12.6"
+  resolved "https://registry.yarnpkg.com/@tauri-apps/cli-linux-x64-musl/-/cli-linux-x64-musl-2.12.6.tgz#fe553ca47376de770ebc76f033e0207d7c147ec2"
+  integrity sha512-ueSzM2Du6r4i1d/lby9kEvrhPnXw5zM/VYvcW1ldEWSpkUyVohsBXkmD+U7vMskEW5tXeCUenki7nYVxyGBGpQ==
 
-"@tauri-apps/cli-win32-arm64-msvc@2.12.5":
-  version "2.12.5"
-  resolved "https://registry.npmjs.org/@tauri-apps/cli-win32-arm64-msvc/-/cli-win32-arm64-msvc-2.12.5.tgz#535ff54a78f622c145ac5fe821fc857fc6018e5a"
-  integrity sha512-61KCX5vo0vex7P/P7sbXdfFhHqs+rFaG+UXK/UBwz/VlLveDx6vgpHkF+rfUIfCqj0VvLArpxR3+rQIzRwxKgw==
+"@tauri-apps/cli-win32-arm64-msvc@2.12.6":
+  version "2.12.6"
+  resolved "https://registry.yarnpkg.com/@tauri-apps/cli-win32-arm64-msvc/-/cli-win32-arm64-msvc-2.12.6.tgz#c7733774241751325baa0fea7cb0671cf3317255"
+  integrity sha512-6bmOt2BQSe0Bba+5CJcTKSML7VOYDxyiAKyBrjo86VxMdC1usIQmklu3Xc83s3QoK1rOMwwbANlPF6i5R2mvIg==
 
-"@tauri-apps/cli-win32-ia32-msvc@2.12.5":
-  version "2.12.5"
-  resolved "https://registry.npmjs.org/@tauri-apps/cli-win32-ia32-msvc/-/cli-win32-ia32-msvc-2.12.5.tgz#3aff88290919cbc135ef77e8aeb19f6b9dba7b17"
-  integrity sha512-mGujjR/MlXwJiQcue4wlXrBYlIEdDCoap0g+GNPlLCb75ilSbWMC8qTsXVuGcLIMumIJvc2v+veDnCHnels/Zg==
+"@tauri-apps/cli-win32-ia32-msvc@2.12.6":
+  version "2.12.6"
+  resolved "https://registry.yarnpkg.com/@tauri-apps/cli-win32-ia32-msvc/-/cli-win32-ia32-msvc-2.12.6.tgz#bbf783fdcca5d24e272899c341783dc7f1f2d914"
+  integrity sha512-9q9ZFNuFreBczwyJuhhlrEOBzGClwWUYirQ2GBl66Y6EaNl17IdLH8TRqoY9wYB1LnctNBi+Fa/WMGtFA4BtFQ==
 
-"@tauri-apps/cli-win32-x64-msvc@2.12.5":
-  version "2.12.5"
-  resolved "https://registry.npmjs.org/@tauri-apps/cli-win32-x64-msvc/-/cli-win32-x64-msvc-2.12.5.tgz#5b67daf070c8c957746af4b2958655c623c7ca18"
-  integrity sha512-o1+EOjvi/nFwKx5XamCXSr+GUr2ko8TH7+0wnWuZjE+lZwE+/VWCbE49HPHa3/V59M3bJ0dlK1yhogGQ15OVPg==
+"@tauri-apps/cli-win32-x64-msvc@2.12.6":
+  version "2.12.6"
+  resolved "https://registry.yarnpkg.com/@tauri-apps/cli-win32-x64-msvc/-/cli-win32-x64-msvc-2.12.6.tgz#d99d6728af84c34a6db4b340e53ef28f1ee54f88"
+  integrity sha512-ion7Chbj21ROxMRpjQ7G8rz5sIOaI7IoBQum1oq5sl1V5zGWyc/oYnCrQhVqO2TxK/lBDWxt648BzLi02SY3Xg==
 
-"@tauri-apps/cli@^2.12.2":
-  version "2.12.5"
-  resolved "https://registry.npmjs.org/@tauri-apps/cli/-/cli-2.12.5.tgz#6f18e78a5ac54b4cb97f5703178e0955003e9a30"
-  integrity sha512-Dm8s/4aiE52HsBh+Gz3uSrh+fEykRICA1VoAnQA80IqHoTRncPg+q4rGvuhmyNsHUPg3QrPjUrTUSfWmXLVVEw==
+"@tauri-apps/cli@^2.12.6":
+  version "2.12.6"
+  resolved "https://registry.yarnpkg.com/@tauri-apps/cli/-/cli-2.12.6.tgz#99434b41a0a7bec8135ee85c45079abb384581d4"
+  integrity sha512-/cOeQgqq8PBDPODOjjT0YHs4qxKCHcQMWMiBm4rLM3JNr9mZE+PHNKOK4zAkhIUtYMNL/0fweW48VNvzD1AbqA==
   optionalDependencies:
-    "@tauri-apps/cli-darwin-arm64" "2.12.5"
-    "@tauri-apps/cli-darwin-x64" "2.12.5"
-    "@tauri-apps/cli-linux-arm-gnueabihf" "2.12.5"
-    "@tauri-apps/cli-linux-arm64-gnu" "2.12.5"
-    "@tauri-apps/cli-linux-arm64-musl" "2.12.5"
-    "@tauri-apps/cli-linux-riscv64-gnu" "2.12.5"
-    "@tauri-apps/cli-linux-x64-gnu" "2.12.5"
-    "@tauri-apps/cli-linux-x64-musl" "2.12.5"
-    "@tauri-apps/cli-win32-arm64-msvc" "2.12.5"
-    "@tauri-apps/cli-win32-ia32-msvc" "2.12.5"
-    "@tauri-apps/cli-win32-x64-msvc" "2.12.5"
+    "@tauri-apps/cli-darwin-arm64" "2.12.6"
+    "@tauri-apps/cli-darwin-x64" "2.12.6"
+    "@tauri-apps/cli-linux-arm-gnueabihf" "2.12.6"
+    "@tauri-apps/cli-linux-arm64-gnu" "2.12.6"
+    "@tauri-apps/cli-linux-arm64-musl" "2.12.6"
+    "@tauri-apps/cli-linux-riscv64-gnu" "2.12.6"
+    "@tauri-apps/cli-linux-x64-gnu" "2.12.6"
+    "@tauri-apps/cli-linux-x64-musl" "2.12.6"
+    "@tauri-apps/cli-win32-arm64-msvc" "2.12.6"
+    "@tauri-apps/cli-win32-ia32-msvc" "2.12.6"
+    "@tauri-apps/cli-win32-x64-msvc" "2.12.6"
 
 "@tauri-apps/plugin-dialog@^2.8.4":
   version "2.8.4"
@@ -2041,35 +2041,35 @@
   dependencies:
     "@tauri-apps/api" "^2.12.0"
 
-"@turbo/darwin-64@2.11.11":
-  version "2.11.11"
-  resolved "https://registry.npmjs.org/@turbo/darwin-64/-/darwin-64-2.11.11.tgz#f54afab188ad774a6f644a5bd30190ff2a72cf8f"
-  integrity sha512-HMMeUIEAsmyIbSYn1ySvF/4gGMa0joiTMq4dQDuloIAnOpbtFT3JEiVsYnASdTWDXvplbRbZlqjU1EBeSR9G1A==
+"@turbo/darwin-64@2.11.13":
+  version "2.11.13"
+  resolved "https://registry.yarnpkg.com/@turbo/darwin-64/-/darwin-64-2.11.13.tgz#5f210722a970027af9df9b17f76680c8c542a383"
+  integrity sha512-5IT29i4j55E5O66+la7L8Y46ut7dFaNZqrgUIYYNtcpMt9Ql7aYnSQb/6tZ+prE2AfX1RBCAtRJE41txS2rG3w==
 
-"@turbo/darwin-arm64@2.11.11":
-  version "2.11.11"
-  resolved "https://registry.npmjs.org/@turbo/darwin-arm64/-/darwin-arm64-2.11.11.tgz#6ade4488f35562ac95742eaad4403990d4f59ef8"
-  integrity sha512-+8iySNgqYWY6PZYUQzYu6zn0C04z2OEq1vQ6oMGsJ9sxN6wOpg1gzi1AJ5VKDHviWvMUjhqng51hTEQZOuiqYQ==
+"@turbo/darwin-arm64@2.11.13":
+  version "2.11.13"
+  resolved "https://registry.yarnpkg.com/@turbo/darwin-arm64/-/darwin-arm64-2.11.13.tgz#cb26baa63183fdf34f1b03f1a4cb4014dd5f7a5c"
+  integrity sha512-YFJPayVNlhSPRIZSeERiZYGKKqPs6N6qGhim8J3GtBdv5ZjUNF1ixfnAAyCVTqFEnMSkn1W7F0Y07kca8EjWsg==
 
-"@turbo/linux-64@2.11.11":
-  version "2.11.11"
-  resolved "https://registry.npmjs.org/@turbo/linux-64/-/linux-64-2.11.11.tgz#d6d7df203c3ddcdc982e7ca8ea699bf86cac95fd"
-  integrity sha512-uImTKFYCFKsoFxjaXeJXlMPv4uU3OIIDjyzoIwYVqOtu9LnCZ/5/fzu/WP6+G9YfwGAPRplTHkKFfcI5t97RGw==
+"@turbo/linux-64@2.11.13":
+  version "2.11.13"
+  resolved "https://registry.yarnpkg.com/@turbo/linux-64/-/linux-64-2.11.13.tgz#aa29eddd82ed8325e79b9783703d7e066dbca844"
+  integrity sha512-R5RIQflV4ffBDNuUwjmtmzIr6Y2UeyeeHTtultYF7cnFn3tG1RZ4GRBlpjUhHB6JxuR7l1B450hlbzdtlD3ghg==
 
-"@turbo/linux-arm64@2.11.11":
-  version "2.11.11"
-  resolved "https://registry.npmjs.org/@turbo/linux-arm64/-/linux-arm64-2.11.11.tgz#f939d5c7af979e25dd613fd05895f4f3344df704"
-  integrity sha512-Y7xffSVfyyYRGzNy6PLdrFL4xXN6iTuR3W0SyJvH/yd3d4defA6dansZwJpPDVnIpD8a2Qn256DwY/Qin4Ip4g==
+"@turbo/linux-arm64@2.11.13":
+  version "2.11.13"
+  resolved "https://registry.yarnpkg.com/@turbo/linux-arm64/-/linux-arm64-2.11.13.tgz#e4389992df976505cba4ae365b138dff124e91fe"
+  integrity sha512-AwV8pVO/cH/lwx1B7SGfzUA/3e6vmPaygFp9NOSRESs6t3Wr63zrBuXlluDogAOIxIMlHDB2ZbBueDsBnQxh2Q==
 
-"@turbo/windows-64@2.11.11":
-  version "2.11.11"
-  resolved "https://registry.npmjs.org/@turbo/windows-64/-/windows-64-2.11.11.tgz#9270b3639f6996e1dc19f479f031ff305980293b"
-  integrity sha512-e2WqNtkPGo3QDwNNwwBo89Dx3PtSJ9Wp9QuRNzn80rrRnSHB+1mfBMZTpdHjA8/G/sG9rl76TdWdpgVsimjRdg==
+"@turbo/windows-64@2.11.13":
+  version "2.11.13"
+  resolved "https://registry.yarnpkg.com/@turbo/windows-64/-/windows-64-2.11.13.tgz#782e59a9e482a125ddaa8540fb558971989f1cf9"
+  integrity sha512-PGXYTaFaN3FZloe4RffNGJmfB+TIWlqQgKK1PVyKwPN+PUzxGa+byxHBWFHredMaVbnUc6L/F6/QR4iHyM/wug==
 
-"@turbo/windows-arm64@2.11.11":
-  version "2.11.11"
-  resolved "https://registry.npmjs.org/@turbo/windows-arm64/-/windows-arm64-2.11.11.tgz#0c1dcd65200ed64f4d288cd9730f80ab9ee2b439"
-  integrity sha512-LURivfmgv34Osm8NR1gZGx4vdlux9KAgRM+FoooXNG0838ff0+akWZ76iPSke0NS2rsf7Z4Gw+YSaygzNTZuRA==
+"@turbo/windows-arm64@2.11.13":
+  version "2.11.13"
+  resolved "https://registry.yarnpkg.com/@turbo/windows-arm64/-/windows-arm64-2.11.13.tgz#e7a9849c506d0695473870a5f3d6cc3435fd86ed"
+  integrity sha512-YdRHWstBUHWt/eChOEM4f9LT0dPiWK5SNgtV77bLCr3JNke9M5E7metqelNYj+tXe36dH0BZrk2CMnFlWqHKng==
 
 "@tybys/wasm-util@^0.10.3":
   version "0.10.3"
@@ -2121,10 +2121,10 @@
     "@types/node" "*"
     "@types/ssh2" "*"
 
-"@types/dockerode@^4.0.1":
-  version "4.0.1"
-  resolved "https://registry.npmjs.org/@types/dockerode/-/dockerode-4.0.1.tgz"
-  integrity sha512-cmUpB+dPN955PxBEuXE3f6lKO1hHiIGYJA46IVF3BJpNsZGvtBDcRnlrHYHtOH/B6vtDOyl2kZ2ShAu3mgc27Q==
+"@types/dockerode@^4.0.2":
+  version "4.0.2"
+  resolved "https://registry.yarnpkg.com/@types/dockerode/-/dockerode-4.0.2.tgz#ced50a0b9c2633edd5a0c6e7b0a21537d38e427d"
+  integrity sha512-hA4myZ0XzwHG/p/eCLElYsQS3y1XZfvi6AfLFKVp1SNpPkO6J3xLatacAFVkReTxXRoIa3eHJmhJi9w6I3+zNA==
   dependencies:
     "@types/docker-modem" "*"
     "@types/node" "*"
@@ -2286,27 +2286,12 @@
     "@types/http-errors" "*"
     "@types/node" "*"
 
-"@types/ssh2-streams@*":
-  version "0.1.13"
-  resolved "https://registry.npmjs.org/@types/ssh2-streams/-/ssh2-streams-0.1.13.tgz"
-  integrity sha512-faHyY3brO9oLEA0QlcO8N2wT7R0+1sHWZvQ+y3rMLwdY1ZyS1z0W3t65j9PqT4HmQ6ALzNe7RZlNuCNE0wBSWA==
-  dependencies:
-    "@types/node" "*"
-
 "@types/ssh2@*":
   version "1.15.5"
   resolved "https://registry.npmjs.org/@types/ssh2/-/ssh2-1.15.5.tgz"
   integrity sha512-N1ASjp/nXH3ovBHddRJpli4ozpk6UdDYIX4RJWFa9L1YKnzdhTlVmiGHm4DZnj/jLbqZpes4aeR30EFGQtvhQQ==
   dependencies:
     "@types/node" "^18.11.18"
-
-"@types/ssh2@^0.5.48":
-  version "0.5.52"
-  resolved "https://registry.npmjs.org/@types/ssh2/-/ssh2-0.5.52.tgz"
-  integrity sha512-lbLLlXxdCZOSJMCInKH2+9V/77ET2J6NPQHpFI0kda61Dd1KglJs+fPQBchizmzYSOJBgdTajhPqBO1xxLywvg==
-  dependencies:
-    "@types/node" "*"
-    "@types/ssh2-streams" "*"
 
 "@types/trusted-types@^2.0.7":
   version "2.0.7"
@@ -2456,20 +2441,20 @@
   dependencies:
     "@rolldown/pluginutils" "^1.0.1"
 
-"@vitest/mocker@5.1.0":
-  version "5.1.0"
-  resolved "https://registry.npmjs.org/@vitest/mocker/-/mocker-5.1.0.tgz#fba68dd77810c2f053b2ad7ea7ffc56e8d94eb8e"
-  integrity sha512-5umB9/jlWcqVS6fsrFmv5Gdnpu6wAUio/lEOwAmvB7v+lFo/IW2B9FhAD0p19GCULTgMzLCdUmuCDCnAzWgppQ==
+"@vitest/mocker@5.1.1":
+  version "5.1.1"
+  resolved "https://registry.yarnpkg.com/@vitest/mocker/-/mocker-5.1.1.tgz#47b7815458abceb17e3b12218a7868376e02db56"
+  integrity sha512-b2OgTB4+3ImWIVafXKazJXwLKwQxUNnix6b3xUvUTMh7RyXlrtzoxfZr8aEz9zkHOMAS4K5lu3TvFWoiVeVTQg==
   dependencies:
     "@jridgewell/trace-mapping" "0.3.31"
-    "@vitest/spy" "5.1.0"
+    "@vitest/spy" "5.1.1"
     estree-walker "^3.0.3"
-    magic-string "^1.4.3"
+    magic-string "^1.4.5"
 
-"@vitest/spy@5.1.0":
-  version "5.1.0"
-  resolved "https://registry.npmjs.org/@vitest/spy/-/spy-5.1.0.tgz#0a10d0ca39c0df70951715ba1081dd186a451c23"
-  integrity sha512-2DPO5OMHWKrBngC+fCmTQqemNF0gidRhp3lxbBmRhW+M1XJrfgPpqNqWVevXtn2f2ufD5ZaR1B6B641aAlcX5A==
+"@vitest/spy@5.1.1":
+  version "5.1.1"
+  resolved "https://registry.yarnpkg.com/@vitest/spy/-/spy-5.1.1.tgz#9bdbcaf0b0d60486a10a03c3ba5a752ec80b3ca9"
+  integrity sha512-6K8C6alQG1/Yc8/ZI22iJS7JEsxPdVzqtqDq+/xM4Z0mGVykemMVjLhqMy/q6/IHYG3kKD8hKSwRen/ZdyI9vQ==
 
 abort-controller@^3.0.0:
   version "3.0.0"
@@ -2674,10 +2659,10 @@ astro@^7.4.8:
   optionalDependencies:
     sharp "^0.35.4"
 
-async-lock@^1.4.1:
-  version "1.4.1"
-  resolved "https://registry.npmjs.org/async-lock/-/async-lock-1.4.1.tgz"
-  integrity sha512-Az2ZTpuytrtqENulXwO3GGv1Bztugx6TT37NIo7imr/Qo0gsYiGtSdBa2B6fsXhTpVZDNfu1Qn3pk531e3q+nQ==
+async-lock@^1.5.0:
+  version "1.5.0"
+  resolved "https://registry.yarnpkg.com/async-lock/-/async-lock-1.5.0.tgz#8522efd4364fe071b4f70ed945344a05068e1935"
+  integrity sha512-JgULma1mWaHlyJ67lvicyel5Cq+k55bXafE0gyvJBdHkH0vdE/IGGDF1glNyRInisNS6pZL2oho96S6Hw68kfQ==
 
 async@^3.2.4:
   version "3.2.6"
@@ -3117,7 +3102,7 @@ cookie-signature@^1.2.1:
 
 cookie@2.0.2, cookie@^0.7.1, cookie@^2.0.2:
   version "2.0.2"
-  resolved "https://registry.npmjs.org/cookie/-/cookie-2.0.2.tgz#b2bedc2ea3bd858df56dbbed1d82c24a77a9471b"
+  resolved "https://registry.yarnpkg.com/cookie/-/cookie-2.0.2.tgz#b2bedc2ea3bd858df56dbbed1d82c24a77a9471b"
   integrity sha512-SL0cVuEdETEp7pN0FuZb01toc3vnODEfVUCooxG1SJN0yIirh7JMb9X9bvfCFf0vzzbT68RdbKDHYTiWy7a7iw==
 
 core-js@^3.6.0, core-js@^3.8.3:
@@ -3360,9 +3345,9 @@ domhandler@^5.0.2, domhandler@^5.0.3:
     domelementtype "^2.3.0"
 
 dompurify@^3.3.1, dompurify@^3.4.18:
-  version "3.4.18"
-  resolved "https://registry.npmjs.org/dompurify/-/dompurify-3.4.18.tgz#82161003672c8780ad1db0335787e6aa6587e5d2"
-  integrity sha512-ofe3wI/uNm68HInABYFJYqQxRw1EaKAjNdrFVKqjUY+UZurvNd2L/HuQe097s/4RivWiZyP6tT7aoT8atjfhwg==
+  version "3.5.0"
+  resolved "https://registry.yarnpkg.com/dompurify/-/dompurify-3.5.0.tgz#4df6b4440b60c8ce3de64d743a11aef9fd4a2891"
+  integrity sha512-LYC0ZkE8P1V42JsRYTwMdme/2ET8SpOc5AA2eOFjP/IadvRd2fwiT4TVz5vkfy0XUx12aS2UaRkTnfVPNOv9vw==
   optionalDependencies:
     "@types/trusted-types" "^2.0.7"
 
@@ -4616,7 +4601,7 @@ lucide-react@^1.70.0:
   resolved "https://registry.npmjs.org/lucide-react/-/lucide-react-1.74.0.tgz#b537db2e3db7cdc63e71f2b3f0cb24d61d410ed2"
   integrity sha512-A1doIs/1fj1WnPbtIT7WRiM6Kvw5NUg+BtkoOh3Shpr4obwSDVt6WxCEcNH56EWprzuCoKle1OF0RqIkojwL1A==
 
-magic-string@^1.2.3, magic-string@^1.4.2, magic-string@^1.4.3, magic-string@^1.4.5:
+magic-string@^1.2.3, magic-string@^1.4.2, magic-string@^1.4.5:
   version "1.4.5"
   resolved "https://registry.npmjs.org/magic-string/-/magic-string-1.4.5.tgz#201c852d51eb0664d6f66cf7ab93b20b416e48d9"
   integrity sha512-oLLC2+YvQUfAa+vxoufE/yc1icb87M9iXIRqAoR/2EhE/8cb3SF/+Gi0c2By1B+5Vz2e2vQtUvHiu1+63Znh+w==
@@ -5322,12 +5307,7 @@ picomatch@^2.0.4:
   resolved "https://registry.npmjs.org/picomatch/-/picomatch-2.3.2.tgz"
   integrity sha512-V7+vQEJ06Z+c5tSye8S+nHUfI51xoXIXjHQ99cQtKUkQqqO1kO/KCJUfZXuB47h/YBlDhah2H3hdUGXn8ie0oA==
 
-picomatch@^4.0.4:
-  version "4.0.4"
-  resolved "https://registry.npmjs.org/picomatch/-/picomatch-4.0.4.tgz"
-  integrity sha512-QP88BAKvMam/3NxH6vj2o21R6MjxZUAd6nlwAS/pnGvN9IVLocLHxGYIzFhg6fUQ+5th6P4dv4eW9jX3DSIj7A==
-
-picomatch@^4.0.7:
+picomatch@^4.0.4, picomatch@^4.0.7:
   version "4.0.7"
   resolved "https://registry.npmjs.org/picomatch/-/picomatch-4.0.7.tgz#6313360034ccb36b3dc61ecbdff78121f90fe21f"
   integrity sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA==
@@ -6041,15 +6021,7 @@ split2@^4.1.0:
   resolved "https://registry.npmjs.org/split2/-/split2-4.2.0.tgz"
   integrity sha512-UcjcJOWknrNkF6PLX83qcHM6KHgVKNkV62Y8a5uYDVv9ydGQVwAHMKqHdJje1VTWpljG0WYpCDhrCdAOYH4TWg==
 
-ssh-remote-port-forward@^1.0.4:
-  version "1.0.4"
-  resolved "https://registry.npmjs.org/ssh-remote-port-forward/-/ssh-remote-port-forward-1.0.4.tgz"
-  integrity sha512-x0LV1eVDwjf1gmG7TTnfqIzf+3VPRz7vrNIjX6oYLbeCrf/PeVY6hkT68Mg+q02qXxQhrLjB0jfgvhevoCRmLQ==
-  dependencies:
-    "@types/ssh2" "^0.5.48"
-    ssh2 "^1.4.0"
-
-ssh2@^1.15.0, ssh2@^1.4.0:
+ssh2@^1.15.0, ssh2@^1.17.0:
   version "1.17.0"
   resolved "https://registry.npmjs.org/ssh2/-/ssh2-1.17.0.tgz"
   integrity sha512-wPldCk3asibAjQ/kziWQQt1Wh3PgDFpC0XpwclzKcdT1vql6KeYxf5LIt4nlFkUeR8WuphYMKqUA56X4rjbfgQ==
@@ -6240,15 +6212,15 @@ teex@^1.0.1:
   dependencies:
     streamx "^2.12.5"
 
-testcontainers@^12.2.0:
-  version "12.2.1"
-  resolved "https://registry.npmjs.org/testcontainers/-/testcontainers-12.2.1.tgz#4da0f33ffffd9732e610139d39e212e11c387ebf"
-  integrity sha512-JfbCyOvLdzatwgqUI3AvYCwRW0P5mCkKQVBPO8U5qSH1efC2kHvnfWmi9VHloy1rAFG2MEqWZObRH4bq0gU1kQ==
+testcontainers@^12.2.2:
+  version "12.2.2"
+  resolved "https://registry.yarnpkg.com/testcontainers/-/testcontainers-12.2.2.tgz#b72c402c18961ad580a2f6bafd678a09b5550d50"
+  integrity sha512-ndmRB+wQnCd7YkelXoUtLVUFUQ3CrbIPmldSWzY8p1pXy09lBC/Hm99RYRCL2brHve/xNWCJX35173peMj5LUg==
   dependencies:
     "@balena/dockerignore" "^1.0.2"
-    "@types/dockerode" "^4.0.1"
+    "@types/dockerode" "^4.0.2"
     archiver "^7.0.1"
-    async-lock "^1.4.1"
+    async-lock "^1.5.0"
     byline "^5.0.0"
     debug "^4.4.3"
     docker-compose "^1.5.0"
@@ -6256,10 +6228,10 @@ testcontainers@^12.2.0:
     get-port "^5.1.1"
     proper-lockfile "^4.1.2"
     properties-reader "^3.0.1"
-    ssh-remote-port-forward "^1.0.4"
+    ssh2 "^1.17.0"
     tar-fs "^3.1.3"
     tmp "^0.2.7"
-    undici "^8.11.2"
+    undici "^8.12.4"
 
 text-decoder@^1.1.0:
   version "1.2.7"
@@ -6280,22 +6252,17 @@ tiny-inflate@^1.0.3:
   resolved "https://registry.npmjs.org/tiny-inflate/-/tiny-inflate-1.0.3.tgz"
   integrity sha512-pkY1fj1cKHb2seWDy0B16HeWyczlJA9/WW3u3c4z/NiWDsO3DOU5D7nhTLE9CF0yXv/QZFY7sEJmj24dK+Rrqw==
 
-tinybench@^6.2.2:
-  version "6.2.3"
-  resolved "https://registry.npmjs.org/tinybench/-/tinybench-6.2.3.tgz#2e560dfbf17f83ddbe0be0681f8ed0553d2136d5"
-  integrity sha512-Al01C2JIBnO2CXCAPbpAl6sUiOZHeThGtHYNTa51JRw9PyWOCdr+9Ong05R4qg/Sk3+H645E8ov1h2c58ityNw==
+tinybench@^6.2.3:
+  version "6.2.5"
+  resolved "https://registry.yarnpkg.com/tinybench/-/tinybench-6.2.5.tgz#b7be4ab85a6a2d82f32ecaeea5e76a3a7cfb1b9c"
+  integrity sha512-b/8GRMdnY4cqkfCLyaFpTGIv1qwfi3oT0mWaepwT++6Z/ZrYehNfZZ2JDKVLKGhNoEkS3IIB1ELtCT0XS5DtOA==
 
 tinyclip@^1.0.3:
   version "1.0.3"
   resolved "https://registry.npmjs.org/tinyclip/-/tinyclip-1.0.3.tgz#828333bd904eca37e60363ce21d888e21d6351c3"
   integrity sha512-nTv2raKFMzGG6JJp0lpNDsRPdfFE6UHlu2rVEjXo8vkx1ZS3LW2CVXqIaLu8xZlu+6tbFs9V58Qc/Jmk/Ii7wA==
 
-tinyexec@^1.0.0:
-  version "1.2.4"
-  resolved "https://registry.npmjs.org/tinyexec/-/tinyexec-1.2.4.tgz"
-  integrity sha512-SHf/r48b7vOrjve9PxJo3MN5v5yuyjHvdUcrQffT3WXMUfnGmHDVbC4k3sHJaJTgZCwpUplIaAo5ANtMyp3YHg==
-
-tinyexec@^1.3.1:
+tinyexec@^1.0.0, tinyexec@^1.3.1:
   version "1.3.1"
   resolved "https://registry.npmjs.org/tinyexec/-/tinyexec-1.3.1.tgz#16a2e3c6e23fafce72640e678e651db36145b9c6"
   integrity sha512-GCvB3aoys96IuDFBMcTB46JOR6mdMtAToqwiW8JlWhsoh1mhHi/xn9ss/Dg7N555GiJyEt2qzoG/NHCwM6h1EA==
@@ -6357,17 +6324,17 @@ tsx@^4.23.15:
   optionalDependencies:
     fsevents "~2.3.3"
 
-turbo@^2.11.7:
-  version "2.11.11"
-  resolved "https://registry.npmjs.org/turbo/-/turbo-2.11.11.tgz#57b3f26ccc6ba5a082c9844038555eece4c043ad"
-  integrity sha512-AI4UJbUE/2cVZdoXJ4PODc8qvrjhQQX9Fa93eKGOI6Ims/w7+kUIb9T1jhlgSnZcf+gtUruci/ohSwqtNNC5Yw==
+turbo@^2.11.13:
+  version "2.11.13"
+  resolved "https://registry.yarnpkg.com/turbo/-/turbo-2.11.13.tgz#53e5cc8acce47dd8cedf6af70e3bf3a79ea51cf1"
+  integrity sha512-2EZ8StW6tqaj71HGF60oUOmJrPQHidmZ5dcwv2VORofya9JthVrfZhxbzRMx/QxjPwYi754i2h5RFsZSDzpnaQ==
   optionalDependencies:
-    "@turbo/darwin-64" "2.11.11"
-    "@turbo/darwin-arm64" "2.11.11"
-    "@turbo/linux-64" "2.11.11"
-    "@turbo/linux-arm64" "2.11.11"
-    "@turbo/windows-64" "2.11.11"
-    "@turbo/windows-arm64" "2.11.11"
+    "@turbo/darwin-64" "2.11.13"
+    "@turbo/darwin-arm64" "2.11.13"
+    "@turbo/linux-64" "2.11.13"
+    "@turbo/linux-arm64" "2.11.13"
+    "@turbo/windows-64" "2.11.13"
+    "@turbo/windows-arm64" "2.11.13"
 
 tweetnacl@^0.14.3:
   version "0.14.5"
@@ -6440,15 +6407,10 @@ undici-types@~8.9.0:
   resolved "https://registry.npmjs.org/undici-types/-/undici-types-8.9.0.tgz#e240d97c8b5d85e5347ce73d25865c7906c1ec9f"
   integrity sha512-KTDyRTYX8sWmKXAikPHHSyc63CRPETMctyjKFupcC6OBLXT3xsN0e9aF7m+mIXutFWpUXuedtowG7iLOzp0kQg==
 
-undici@^8.0.0:
-  version "8.10.2"
-  resolved "https://registry.yarnpkg.com/undici/-/undici-8.10.2.tgz#960bcb0b43c267f86910ea7ca408ada843a44bc7"
-  integrity sha512-/y4/bH9YNU5hi9NIrpOuvGXFcxrj3CMrV+/AYpowAYTpHn8gX/XPFjNy766FPoYY0miQhdW977JFWKGNhBdwyQ==
-
-undici@^8.11.2:
-  version "8.12.4"
-  resolved "https://registry.npmjs.org/undici/-/undici-8.12.4.tgz#0c0cabeafd9a9c3139f9ace62ee9436c0d355c72"
-  integrity sha512-8Mx+uNKKER2bA4AdtedkqRbwUCIJFr2nJckXRe5yrDqzePqwLP7VNcctN8/XdmDSbF7mS+jJKIszlL+vbam1VA==
+undici@^8.0.0, undici@^8.12.4:
+  version "8.13.1"
+  resolved "https://registry.yarnpkg.com/undici/-/undici-8.13.1.tgz#2bcd614161e93a4e33b25e792514a70c67d927cc"
+  integrity sha512-Kt7EaPjh0s93lJH/PmW3d5rhkcpUa6fS3jqZ7+YGxNd9L7Xy/i827xe4C2uhhq+pJebM4tQOl5AgHmW11G5Skg==
 
 unified@^11.0.0, unified@^11.0.5:
   version "11.0.5"
@@ -6614,21 +6576,21 @@ vitefu@^1.1.3:
   resolved "https://registry.npmjs.org/vitefu/-/vitefu-1.1.4.tgz#4cb72879498f8a44b7573c0df36478cb3ba6490f"
   integrity sha512-qbEIDswfXH3x3IYRMScl/bf1AVW0dn7Z8qkr7g7nohkusfuC7tcFa7t5EoTOz60AunosLM9sDrDjHxsX+Up+CQ==
 
-vitest@^5.1.0:
-  version "5.1.0"
-  resolved "https://registry.npmjs.org/vitest/-/vitest-5.1.0.tgz#5c6d94179dcb84bb153e87c3fc4e73cf7f29f9a0"
-  integrity sha512-MzmNFnrwa8v8lF1bLxw3UJ4EREwVOVb75VqJZmUDRjJ6EluK/x9th7qTbaeDk41WxE1GxWqmTXcdsfobfH5sOA==
+vitest@^5.1.1:
+  version "5.1.1"
+  resolved "https://registry.yarnpkg.com/vitest/-/vitest-5.1.1.tgz#6e823eba09e832ccdf85c00b9702e6eef9dab370"
+  integrity sha512-trVmzUFOSraCZcI3uZIMD5FqBh4atFkC/XuJP/IU7qtyQay0FCs3Ia+0QiQ2JJwGyWG/xrcBoJNel2+O7kEZ0g==
   dependencies:
     "@types/chai" "^5.2.2"
-    "@vitest/mocker" "5.1.0"
+    "@vitest/mocker" "5.1.1"
     chai "^6.3.0"
     es-module-lexer "^2.3.2"
     expect-type "^1.4.0"
-    magic-string "^1.4.3"
+    magic-string "^1.4.5"
     obug "^3.0.0"
     picomatch "^4.0.7"
     std-env "^4.3.0"
-    tinybench "^6.2.2"
+    tinybench "^6.2.3"
     tinyexec "^1.3.1"
     tinyglobby "^0.2.17"
     why-is-node-running "3.2.1"
