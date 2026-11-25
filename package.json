@@ -49,6 +49,6 @@
     "@commitlint/config-conventional": "^21.2.4",
     "husky": "^9.1.7",
     "tsx": "^4.23.15",
-    "turbo": "^2.11.7"
+    "turbo": "^2.11.13"
   }
 }
